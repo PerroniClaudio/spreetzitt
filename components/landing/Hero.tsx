@@ -13,7 +13,7 @@ function Hero() {
       </h3>
       <div className="lg:w-1/2">
         <p className="text-2xl text-center mt-4">
-          Centralizza, automatizza e risolvi ogni richiesta in un'unica
+          Centralizza, automatizza e risolvi ogni richiesta in un&apos;unica
           piattaforma intuitiva, per un supporto IT rapido ed efficiente.
         </p>
       </div>

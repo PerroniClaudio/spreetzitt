@@ -1,6 +1,3 @@
-import Logo from "@/components/ui/logo";
-import { ModeToggle } from "@/components/ModeToggle";
-import { Button } from "@/components/ui/button";
 import Hero from "@/components/landing/Hero";
 import Image from "next/image";
 import Panoramic from "@/components/landing/Panoramic";

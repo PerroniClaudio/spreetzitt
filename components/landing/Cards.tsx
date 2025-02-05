@@ -49,9 +49,9 @@ function Cards() {
             </div>
           </CardTitle>
           <CardDescription>
-            Gestisci l'intero ciclo di vita dei tuoi asset IT: da inventario a
-            manutenzione, Spreetzitt centralizza le informazioni e ottimizza
-            costi e performance.
+            Gestisci l&apos;intero ciclo di vita dei tuoi asset IT: da
+            inventario a manutenzione, Spreetzitt centralizza le informazioni e
+            ottimizza costi e performance.
           </CardDescription>
         </CardHeader>
       </Card>
