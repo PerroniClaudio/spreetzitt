@@ -9,11 +9,14 @@ import {
 
 import { BentoGrid, BentoGridItem } from "../ui/bento-grid";
 
+import Image from "next/image";
+
 type FeatureItem = {
   title: string;
   description: string;
   icon: React.ReactNode;
   classname: string;
+  image: string;
 };
 
 const items: FeatureItem[] = [
@@ -23,6 +26,7 @@ const items: FeatureItem[] = [
       "La piattaforma consente di centralizzare tutte le richieste di supporto, distinguendo tra ticket di tipo request e problem. Questo permette di trattare in modo specifico le richieste di servizio (request) e le segnalazioni di problemi (problem), garantendo che ogni tipologia segua il percorso più adeguato per la risoluzione.",
     icon: <Ticket />,
     classname: "md:col-span-2",
+    image: "screenshot-0.png",
   },
   {
     title: "Webform Personalizzabili",
@@ -30,6 +34,7 @@ const items: FeatureItem[] = [
       "Grazie a webform configurabili, è possibile definire le tipologie di ticket in base alle esigenze aziendali, raccogliendo tutte le informazioni necessarie per accelerare il processo di assegnazione e risoluzione.",
     icon: <SquarePenIcon />,
     classname: "md:col-span-1",
+    image: "screenshot-1.png",
   },
   {
     title: "Gestione della SLA",
@@ -37,6 +42,7 @@ const items: FeatureItem[] = [
       "Imposta e monitora i livelli di servizio (SLA) per assicurare che ogni ticket venga gestito entro i tempi stabiliti. Spreetzitt invia notifiche e alert in caso di violazione degli SLA, permettendo interventi proattivi e mantenendo elevati standard di qualità nel supporto IT.",
     icon: <Clock />,
     classname: "md:col-span-1",
+    image: "screenshot-2.png",
   },
   {
     title: "Gestione del Personale",
@@ -44,6 +50,7 @@ const items: FeatureItem[] = [
       "Organizza il team di supporto in gruppi dedicati, in modo da assegnare automaticamente i ticket agli operatori più competenti. La piattaforma permette di configurare le squadre e monitorare il carico di lavoro, garantendo una distribuzione equilibrata e una risposta tempestiva alle richieste.",
     icon: <Users />,
     classname: "md:col-span-2",
+    image: "screenshot-3.png",
   },
   {
     title: "Reportizzazione delle Attività",
@@ -51,6 +58,7 @@ const items: FeatureItem[] = [
       "Accedi a strumenti avanzati di reportistica che forniscono una visione dettagliata delle performance del service desk. I report permettono di analizzare l'andamento delle attività, identificare eventuali criticità e intervenire per ottimizzare i processi e migliorare continuamente il servizio.",
     icon: <ChartLineIcon />,
     classname: "md:col-span-2",
+    image: "screenshot-4.png",
   },
   {
     title: "Associazione e Gestione dell'Hardware agli Utenti",
@@ -58,12 +66,24 @@ const items: FeatureItem[] = [
       "Integra la gestione degli asset IT associando gli hardware agli utenti. Questa funzionalità centralizza le informazioni relative ai dispositivi, facilitando il monitoraggio, la manutenzione e la gestione dei costi, per avere sempre sotto controllo il parco tecnologico aziendale.",
     icon: <Computer />,
     classname: "md:col-span-1",
+    image: "screenshot-5.png",
   },
 ];
 
-const Skeleton = () => (
-  <div className="flex flex-1 w-full h-full min-h-[6rem] rounded-xl bg-gradient-to-br from-neutral-200 dark:from-neutral-900 dark:to-neutral-800 to-neutral-100"></div>
-);
+const SkeletonWithImage = ({ src }: { src: string }) => {
+  return (
+    <div className="relative w-full h-full min-h-[6rem] rounded-xl overflow-hidden">
+      <Image
+        src={"/" + src}
+        alt="Background Image"
+        layout="fill"
+        objectFit="cover"
+        className="rounded-xl"
+      />
+      <div className="flex flex-1 inset-0 rounded-xl bg-gradient-to-br from-neutral-200 dark:from-neutral-900 dark:to-neutral-800 to-neutral-100 opacity-45 w-full h-full min-h-[6rem]"></div>
+    </div>
+  );
+};
 
 function Features() {
   return (
@@ -74,7 +94,7 @@ function Features() {
           title={item.title}
           description={item.description}
           icon={item.icon}
-          header={<Skeleton />}
+          header={<SkeletonWithImage src={item.image} />}
           className={item.classname}
         />
       ))}
