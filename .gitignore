@@ -22,3 +22,42 @@ yarn-error.log
 /storage/fonts/*
 start.sh
 /cloud-run/config/.env.prod
+
+# Docker Development Environment
+.env.local
+.env.docker
+docker-compose.override.yml
+/docker/logs/
+/docker/data/
+/docker/volumes/
+
+# Docker volumes and data
+mysql_data/
+redis_data/
+meilisearch_data/
+
+# Database backups
+backup_*.sql
+*.dump
+
+# Local development files
+.docker/
+local/
+dev/
+
+# IDE Docker configurations
+.docker-compose.override.yml
+docker-compose.local.yml
+/docker/*
+docker-compose.yml
+DOCKER.md
+Dockerfile
+.dockerignore
+Makefile
+
+# Container logs
+*.log
+
+# OS specific files for Docker
+.DS_Store
+Thumbs.db
