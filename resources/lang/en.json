@@ -1,0 +1,9 @@
+{
+  "Reset Password Notification": "Notifica di reset password",
+  "You are receiving this email because we received a password reset request for your account.": "Stai ricevendo questa email perchè abbiamo ricevuto una richiesta di reset password dal tuo account. Clicca sul bottone sottostante per procedere.",
+  "This password reset link will expire in :count minutes.": "Questo link di reset password scadrà tra :count minuti.",
+  "If you did not request a password reset, no further action is required.": "Se non hai richiesto un reset password, non è necessaria alcuna azione.",
+  "Verify Email Address": "Verifica indirizzo email",
+  "Please click the button below to verify your email address.": "Clicca il bottone sottostante per verificare il tuo indirizzo email",
+  "If you did not create an account, no further action is required.": "Se non hai creato un account non è richiesta alcuna ulteriore azione."
+}
