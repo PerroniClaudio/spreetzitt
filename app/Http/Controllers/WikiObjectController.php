@@ -278,12 +278,8 @@ class WikiObjectController extends Controller
 
     public function downloadFile(WikiObject $wikiObject)
     {
-        /**
-         * @disregard P1009 Undefined type
-         */
-        $url = Storage::disk('gcs')->temporaryUrl(
-            'wiki_objects'.$wikiObject->path.$wikiObject->uploaded_name,
-            now()->addMinutes(65)
+        $url = FileUploadController::generateSignedUrlForFile(
+            'wiki_objects'.$wikiObject->path.$wikiObject->uploaded_name
         );
 
         return response([

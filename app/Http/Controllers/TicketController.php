@@ -1268,16 +1268,9 @@ class TicketController extends Controller
 
     public function generatedSignedUrlForFile($id)
     {
-
         $ticketFile = TicketFile::where('id', $id)->first();
 
-        /**
-         * @disregard Intelephense non rileva il metodo mimeType
-         */
-        $url = Storage::disk('gcs')->temporaryUrl(
-            $ticketFile->path,
-            now()->addMinutes(65)
-        );
+        $url = FileUploadController::generateSignedUrlForFile($ticketFile->path);
 
         return response([
             'url' => $url,

@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use App\Http\Controllers\FileUploadController;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
-class Company extends Model {
+class Company extends Model
+{
     use HasFactory;
 
     /**
@@ -42,7 +43,8 @@ class Company extends Model {
         'reading_delay_notice',
     ];
 
-    public function users() {
+    public function users()
+    {
         return $this->belongsToMany(User::class, 'company_user', 'company_id', 'user_id');
     }
 
@@ -50,61 +52,69 @@ class Company extends Model {
     //     return $this->belongsToMany(TicketType::class, 'company_ticket_types')->withPivot('sla_taking_charge', 'sla_resolving');;
     // }
 
-    public function ticketTypes() {
+    public function ticketTypes()
+    {
         return $this->hasMany(TicketType::class);
     }
 
-    public function tickets() {
+    public function tickets()
+    {
         return $this->hasMany(Ticket::class)->with([
             'user' => function ($query) {
                 $query->select(['id', 'name', 'surname', 'is_admin', 'is_company_admin', 'is_deleted']); // Specify the columns you want to include
             },
-            'user.companies:id,name'
+            'user.companies:id,name',
         ]);
     }
 
-    public function offices() {
+    public function offices()
+    {
         return $this->hasMany(Office::class);
     }
 
-    public function expenses() {
+    public function expenses()
+    {
         return $this->hasMany(BusinessTripExpense::class);
     }
 
-    public function transfers() {
+    public function transfers()
+    {
         return $this->hasMany(BusinessTripTransfer::class);
     }
 
-    public function brands() {
-        return  $this->ticketTypes()->get()->map(function ($ticketType) {
+    public function brands()
+    {
+        return $this->ticketTypes()->get()->map(function ($ticketType) {
             return Brand::where('id', $ticketType->brand_id)->first();
         })->unique('id');
     }
 
-    public function hardware() {
+    public function hardware()
+    {
         return $this->hasMany(Hardware::class);
     }
 
-    public function weeklyTimes() {
+    public function weeklyTimes()
+    {
         return $this->hasMany(WeeklyTime::class);
     }
 
-    public function temporaryLogoUrl() {
+    public function temporaryLogoUrl()
+    {
         if ($this->logo_url) {
-            return Storage::disk('gcs')->temporaryUrl(
-                $this->logo_url,
-                now()->addMinutes(70)
-            );
+            return FileUploadController::generateSignedUrlForFile($this->logo_url, 70);
         }
 
         return '';
     }
 
-    public function customUserGroups() {
+    public function customUserGroups()
+    {
         return $this->hasMany(CustomUserGroup::class);
     }
 
-    public function properties() {
+    public function properties()
+    {
         return $this->hasMany(Property::class);
     }
 }

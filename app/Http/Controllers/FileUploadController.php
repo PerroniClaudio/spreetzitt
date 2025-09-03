@@ -30,6 +30,27 @@ class FileUploadController extends Controller
         return $file->storeAs($path, $fileName, $disk);
     }
 
+    /**
+     * Genera un URL temporaneo per scaricare un file
+     * basandosi sul disco configurato
+     */
+    public static function generateSignedUrlForFile(string $filePath, int $minutesValid = 65): string
+    {
+        $disk = self::getStorageDisk();
+
+        if ($disk === 'gcs') {
+            // Per Google Cloud Storage, usa temporaryUrl
+            /**
+             * @disregard Intelephense non rileva il metodo temporaryUrl
+             */
+            return Storage::disk('gcs')->temporaryUrl($filePath, now()->addMinutes($minutesValid));
+        } else {
+            // Per il disco di default (locale), ritorna il path diretto
+            // In produzione potresti voler implementare una logica diversa
+            return Storage::url($filePath);
+        }
+    }
+
     public function uploadFileToCloud(Request $request)
     {
         try {
@@ -41,6 +62,9 @@ class FileUploadController extends Controller
             $disk = self::getStorageDisk();
             if ($disk === 'gcs') {
                 $diskInstance = Storage::disk('gcs');
+                /**
+                 * @disregard Intelephense non rileva il metodo url
+                 */
                 $fetchFile = $diskInstance->url($storeFile);
             } else {
                 $fetchFile = Storage::url($storeFile);

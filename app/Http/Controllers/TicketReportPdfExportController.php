@@ -2,29 +2,29 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Jobs\GeneratePdfReport;
 use App\Models\Company;
 use App\Models\TicketReportPdfExport;
-use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 
-class TicketReportPdfExportController extends Controller {
+class TicketReportPdfExportController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index() {
+    public function index()
+    {
         //
     }
 
     /**
      * Lista per company singola
      */
-
-    public function pdfCompany(Company $company, Request $request) {
+    public function pdfCompany(Company $company, Request $request)
+    {
         $user = $request->user();
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -43,10 +43,10 @@ class TicketReportPdfExportController extends Controller {
     /**
      * Lista approvati per azienda singola
      */
-
-    public function approvedPdfCompany(Company $company, Request $request) {
+    public function approvedPdfCompany(Company $company, Request $request)
+    {
         $user = $request->user();
-        if ($user["is_admin"] != 1 && ($user["is_company_admin"] != 1 || !$user->companies()->where('companies.id', $company->id)->exists())) {
+        if ($user['is_admin'] != 1 && ($user['is_company_admin'] != 1 || ! $user->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -64,27 +64,26 @@ class TicketReportPdfExportController extends Controller {
         ], 200);
     }
 
-    public function generic() {
-    }
+    public function generic() {}
 
     /**
      * Nuovo report
      */
-
-    public function storePdfExport(Request $request) {
+    public function storePdfExport(Request $request)
+    {
 
         try {
             $user = $request->user();
-            if ($user["is_admin"] != 1) {
+            if ($user['is_admin'] != 1) {
                 // non è admin
-                if ($user["is_company_admin"] != 1) {
+                if ($user['is_company_admin'] != 1) {
                     // non è company admin
                     return response([
                         'message' => 'The user must be at least company admin.',
                     ], 401);
                 }
                 // è company admin
-                if (!$user->companies()->where('companies.id', $request->company_id)->exists()) {
+                if (! $user->companies()->where('companies.id', $request->company_id)->exists()) {
                     return response([
                         'message' => 'You can only request reports for your company.',
                     ], 401);
@@ -94,14 +93,14 @@ class TicketReportPdfExportController extends Controller {
             $company = Company::find($request->company_id);
 
             // $name = preg_replace('/[^a-zA-Z0-9_-]/', '', strtolower($company->name)) . '_' . time() . '_' . $request->company_id . '_tickets.pdf';
-            $name = time() . '_' . $request->company_id . '_tickets.pdf';
+            $name = time().'_'.$request->company_id.'_tickets.pdf';
 
             // $file =  Excel::store(new TicketsExport($company, $request->start_date, $request->end_date), 'exports/' . $request->company_id . '/' . $name, 'gcs');
 
             $report = TicketReportPdfExport::create([
                 'company_id' => $company->id,
                 'file_name' => $name,
-                'file_path' => 'pdf_exports/' . $request->company_id . '/' . $name,
+                'file_path' => 'pdf_exports/'.$request->company_id.'/'.$name,
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'optional_parameters' => json_encode($request->optional_parameters),
@@ -112,12 +111,12 @@ class TicketReportPdfExportController extends Controller {
 
             return response([
                 'message' => 'Report created successfully',
-                'report' => $report
+                'report' => $report,
             ], 200);
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error generating the report',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -125,13 +124,13 @@ class TicketReportPdfExportController extends Controller {
     /**
      * Preview (restituisce il link generato da google cloud storage)
      */
-
-    public function pdfPreview(TicketReportPdfExport $ticketReportPdfExport, Request $request) {
+    public function pdfPreview(TicketReportPdfExport $ticketReportPdfExport, Request $request)
+    {
 
         $user = $request->user();
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             // non è admin
-            if ($user["is_company_admin"] != 1) {
+            if ($user['is_company_admin'] != 1) {
                 // non è company admin
                 return response([
                     'message' => 'The user must be at least company admin.',
@@ -151,22 +150,22 @@ class TicketReportPdfExportController extends Controller {
 
         return response([
             'url' => $url,
-            'filename' => $ticketReportPdfExport->file_name
+            'filename' => $ticketReportPdfExport->file_name,
         ], 200);
     }
 
     /**
      * Download (restituisce il file)
      */
-
-    public function pdfDownload(TicketReportPdfExport $ticketReportPdfExport, Request $request) {
+    public function pdfDownload(TicketReportPdfExport $ticketReportPdfExport, Request $request)
+    {
 
         $user = $request->user();
-        // il controllo è così perchè altrimenti stefano che è sia admin che company admin non può scaricare i report 
+        // il controllo è così perchè altrimenti stefano che è sia admin che company admin non può scaricare i report
         // perchè se è company admin controllava sempre il company_id, che nel suo caso può essere diverso essendo comunque admin.
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             // non è admin
-            if ($user["is_company_admin"] != 1) {
+            if ($user['is_company_admin'] != 1) {
                 // non è company admin
                 return response([
                     'message' => 'The user must be at least company admin.',
@@ -183,63 +182,58 @@ class TicketReportPdfExportController extends Controller {
 
         $filePath = $ticketReportPdfExport->file_path;
 
-        if (!Storage::disk('gcs')->exists($filePath)) {
+        if (! Storage::disk('gcs')->exists($filePath)) {
             return response()->json(['message' => 'File not found.'], 404);
         }
 
         $fileContent = Storage::disk('gcs')->get($filePath);
         $fileName = $ticketReportPdfExport->file_name;
 
-        /** 
+        /**
          * @disregard Intelephense non rileva il metodo mimeType
          */
         return response($fileContent, 200)
             ->header('Content-Type', Storage::disk('gcs')->mimeType($filePath))
-            ->header('Content-Disposition', 'attachment; filename="' . $fileName . '"')
+            ->header('Content-Disposition', 'attachment; filename="'.$fileName.'"')
             ->header('Access-Control-Expose-Headers', 'Content-Disposition');
     }
 
     /**
      * Genera il link temporaneo per il file
-     * @param string $path
+     *
+     * @param  string  $path
      * @return string
      */
+    private function generatedSignedUrlForFile($path)
+    {
 
-    private function generatedSignedUrlForFile($path) {
-
-        /** 
-         * @disregard Intelephense non rileva il metodo mimeType
-         */
-        $url = Storage::disk('gcs')->temporaryUrl(
-            $path,
-            now()->addMinutes(65)
-        );
-
-        return $url;
+        return FileUploadController::generateSignedUrlForFile($path);
     }
-
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         //
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(TicketReportPdfExport $ticketReportPdfExport) {
+    public function show(TicketReportPdfExport $ticketReportPdfExport)
+    {
         //
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request) {
+    public function update(Request $request)
+    {
         try {
             $authUser = $request->user();
-            if ($authUser["is_admin"] != 1) {
+            if ($authUser['is_admin'] != 1) {
                 return response([
                     'message' => 'Unauthorized.',
                 ], 401);
@@ -251,7 +245,7 @@ class TicketReportPdfExportController extends Controller {
             ]);
 
             $ticketReportPdfExport = TicketReportPdfExport::find($request->id);
-            if (!$ticketReportPdfExport) {
+            if (! $ticketReportPdfExport) {
                 return response([
                     'message' => 'Report not found',
                 ], 404);
@@ -266,7 +260,7 @@ class TicketReportPdfExportController extends Controller {
             // }
 
             // Genero l'identificativo da utilizzare per la fatturazione
-            if ($validatedData['is_approved_billing'] == 1 && !$ticketReportPdfExport->approved_billing_identification) {
+            if ($validatedData['is_approved_billing'] == 1 && ! $ticketReportPdfExport->approved_billing_identification) {
                 $validatedData['approved_billing_identification'] = $ticketReportPdfExport->generatePdfIdentificationString();
             }
 
@@ -274,12 +268,12 @@ class TicketReportPdfExportController extends Controller {
 
             return response([
                 'message' => 'Report updated successfully',
-                'report' => $ticketReportPdfExport
+                'report' => $ticketReportPdfExport,
             ], 200);
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error updating the report',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -287,17 +281,18 @@ class TicketReportPdfExportController extends Controller {
     /**
      * Regenerates the report
      */
-    public function regenerate(Request $request) {
+    public function regenerate(Request $request)
+    {
         try {
             $authUser = request()->user();
-            if ($authUser["is_admin"] != 1) {
+            if ($authUser['is_admin'] != 1) {
                 return response([
                     'message' => 'Unauthorized.',
                 ], 401);
             }
             // Verifico se il report esiste
             $ticketReportPdfExport = TicketReportPdfExport::find($request->id);
-            if (!$ticketReportPdfExport) {
+            if (! $ticketReportPdfExport) {
                 return response([
                     'message' => 'Report not found',
                 ], 404);
@@ -329,12 +324,12 @@ class TicketReportPdfExportController extends Controller {
 
             return response([
                 'message' => 'The report is scheduled to be regenerated',
-                'report' => $ticketReportPdfExport
+                'report' => $ticketReportPdfExport,
             ], 200);
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error scheduling the report for regeneration',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -342,16 +337,17 @@ class TicketReportPdfExportController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(TicketReportPdfExport $ticketReportPdfExport) {
+    public function destroy(TicketReportPdfExport $ticketReportPdfExport)
+    {
         try {
             $authUser = request()->user();
-            if ($authUser["is_admin"] != 1) {
+            if ($authUser['is_admin'] != 1) {
                 return response([
                     'message' => 'Unauthorized.',
                 ], 401);
             }
             // Verifico se il report esiste
-            if (!$ticketReportPdfExport) {
+            if (! $ticketReportPdfExport) {
                 return response([
                     'message' => 'Report not found',
                 ], 404);
@@ -378,7 +374,7 @@ class TicketReportPdfExportController extends Controller {
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error deleting the report',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

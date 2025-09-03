@@ -280,9 +280,8 @@ class DocumentController extends Controller
 
         try {
             // Generate a temporary URL for the document
-            $url = Storage::disk('gcs')->temporaryUrl(
-                'documents'.$document->path.$document->uploaded_name,
-                now()->addMinutes(65)
+            $url = FileUploadController::generateSignedUrlForFile(
+                'documents'.$document->path.$document->uploaded_name
             );
 
             return response([

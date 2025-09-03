@@ -8,27 +8,28 @@ use App\Models\CustomUserGroup;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
-class CompanyController extends Controller {
+class CompanyController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         $authUser = $request->user();
-        $isAdminRequest = $authUser["is_admin"] == 1;
+        $isAdminRequest = $authUser['is_admin'] == 1;
 
         if ($isAdminRequest) {
             $companies = Company::orderBy('name', 'asc')->get();
             $companies->makeHidden(['sla', 'sla_take_low', 'sla_take_medium', 'sla_take_high', 'sla_take_critical', 'sla_solve_low', 'sla_solve_medium', 'sla_solve_high', 'sla_solve_critical', 'sla_prob_take_low', 'sla_prob_take_medium', 'sla_prob_take_high', 'sla_prob_take_critical', 'sla_prob_solve_low', 'sla_prob_solve_medium', 'sla_prob_solve_high', 'sla_prob_solve_critical']);
 
-            if (!$companies) {
+            if (! $companies) {
                 $companies = [];
             }
         } else {
             // Per utenti non admin, restituisci tutte le aziende collegate tramite la relazione companies()
-            $companies = $authUser->companies()->get(["companies.id", "companies.name"]);
+            $companies = $authUser->companies()->get(['companies.id', 'companies.name']);
         }
 
         return response([
@@ -36,15 +37,16 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getMasterTickets(Company $company, Request $request) {
+    public function getMasterTickets(Company $company, Request $request)
+    {
         $authUser = $request->user();
-        $isAdminRequest = $authUser["is_admin"] == 1;
+        $isAdminRequest = $authUser['is_admin'] == 1;
 
-        if (!$isAdminRequest) {
+        if (! $isAdminRequest) {
             $user_companies = $authUser->companies()->get()->pluck('id')->toArray();
 
             // Controlla se l'utente è admin o se è un company admin della compagnia specificata
-            if (!($authUser->is_company_admin && in_array($company->id, $user_companies))) {
+            if (! ($authUser->is_company_admin && in_array($company->id, $user_companies))) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -69,7 +71,8 @@ class CompanyController extends Controller {
     /**
      * Show the form for creating a new resource.
      */
-    public function create() {
+    public function create()
+    {
         //
         return response([
             'message' => 'Please use /api/store to create a new company',
@@ -79,7 +82,8 @@ class CompanyController extends Controller {
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         //
         $fields = $request->validate([
             'name' => 'required|string',
@@ -87,9 +91,9 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
-                'message' => "Unauthorized",
+                'message' => 'Unauthorized',
             ], 401);
         }
 
@@ -107,10 +111,11 @@ class CompanyController extends Controller {
     /**
      * Display the specified resource.
      */
-    public function show($id, Request $request) {
+    public function show($id, Request $request)
+    {
         $user = $request->user();
 
-        if ($user["is_admin"] != 1 && !$user->companies()->where('companies.id', $id)->exists()) {
+        if ($user['is_admin'] != 1 && ! $user->companies()->where('companies.id', $id)->exists()) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -118,16 +123,16 @@ class CompanyController extends Controller {
 
         $company = Company::where('id', $id)->first();
 
-        if (!$company) {
+        if (! $company) {
             return response([
                 'message' => 'Company not found',
             ], 404);
         }
 
-        /** 
+        /**
          * @disregard Intelephense non rileva il metodo temporaryUrl
          */
-        $company->logo_url = $company->logo_url != null ? Storage::disk('gcs')->temporaryUrl($company->logo_url, now()->addMinutes(70)) : '';
+        $company->logo_url = $company->logo_url != null ? FileUploadController::generateSignedUrlForFile($company->logo_url, 70) : '';
 
         return response([
             'company' => $company,
@@ -137,7 +142,8 @@ class CompanyController extends Controller {
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Company $company) {
+    public function edit(Company $company)
+    {
         //
         return response([
             'message' => 'Please use /api/update to update an existing company',
@@ -147,14 +153,15 @@ class CompanyController extends Controller {
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request) {
+    public function update(Request $request)
+    {
         $request->validate([
             'id' => 'required|int|exists:companies,id',
         ]);
 
         $user = $request->user();
 
-        if (!$user['is_admin']) {
+        if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -169,14 +176,15 @@ class CompanyController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Request $request, $id) {
+    public function destroy(Request $request, $id)
+    {
         $user = $request->user();
 
-        if (!$user["is_admin"]) {
-            return response(['message' => 'Unauthorized',], 401);
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
         }
 
-        // If it has users throw an error 
+        // If it has users throw an error
 
         if (Company::findOrFail($id)->tickets()->count() > 0) {
             return response([
@@ -202,10 +210,9 @@ class CompanyController extends Controller {
             ], 400);
         }
 
-
         $deleted_company = Company::destroy($id);
 
-        if (!$deleted_company) {
+        if (! $deleted_company) {
             return response([
                 'message' => 'Error',
             ], 404);
@@ -216,7 +223,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function offices(Company $company) {
+    public function offices(Company $company)
+    {
         $offices = $company->offices()->get();
 
         return response([
@@ -224,7 +232,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function admins(Company $company) {
+    public function admins(Company $company)
+    {
         $users = $company->users()->where('is_company_admin', 1)->get();
 
         return response([
@@ -232,11 +241,12 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function allusers(Company $company, Request $request) {
+    public function allusers(Company $company, Request $request)
+    {
         $user = $request->user();
 
         // Se non è admin o non è della compagnia allora non è autorizzato
-        if (!($user["is_admin"] == 1 || $user->companies()->where('companies.id', $company["id"])->exists())) {
+        if (! ($user['is_admin'] == 1 || $user->companies()->where('companies.id', $company['id'])->exists())) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -250,7 +260,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function ticketTypes(Company $company, Request $request) {
+    public function ticketTypes(Company $company, Request $request)
+    {
         $isMassive = $request->query('is_massive');
         if ($isMassive) {
             $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with('category')->get();
@@ -263,12 +274,13 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function brands(Company $company) {
+    public function brands(Company $company)
+    {
         $brands = $company->brands()->each(function (Brand $brand) {
             $brand->withGUrl();
         });
 
-        $brandsArray = array();
+        $brandsArray = [];
         foreach ($brands as $brand) {
             $brandsArray[] = $brand;
         }
@@ -278,7 +290,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getFrontendLogoUrl(Company $company) {
+    public function getFrontendLogoUrl(Company $company)
+    {
         $suppliers = Supplier::all()->toArray();
 
         // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
@@ -287,13 +300,14 @@ class CompanyController extends Controller {
         // Filtra i brand omonimo alle aziende interne ed utilizza quello dell'azienda interna con l'id piu basso
         $sameNameSuppliers = array_filter($suppliers, function ($supplier) use ($brands) {
             $brandNames = array_column($brands, 'name');
+
             return in_array($supplier['name'], $brandNames);
         });
 
         $selectedBrand = '';
 
         // Se ci sono aziende interne allora prende quella con l'id più basso e recupera il marchio omonimo, altrimenti usa il marchio con l'id più basso.
-        if (!empty($sameNameSuppliers)) {
+        if (! empty($sameNameSuppliers)) {
             usort($sameNameSuppliers, function ($a, $b) {
                 return $a['id'] <=> $b['id'];
             });
@@ -310,7 +324,7 @@ class CompanyController extends Controller {
         }
 
         // Crea l'url
-        $url = config('app.url') . '/api/brand/' . $selectedBrand['id'] . '/logo';
+        $url = config('app.url').'/api/brand/'.$selectedBrand['id'].'/logo';
 
         // $url = $request->user()->company->frontendLogoUrl;
 
@@ -319,9 +333,10 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function tickets(Company $company, Request $request) {
+    public function tickets(Company $company, Request $request)
+    {
         $user = $request->user();
-        if ($user["is_admin"] != 1 && !$user->companies()->where('companies.id', $company["id"])->exists()) {
+        if ($user['is_admin'] != 1 && ! $user->companies()->where('companies.id', $company['id'])->exists()) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -329,9 +344,9 @@ class CompanyController extends Controller {
 
         $tickets = $company->tickets()->with(['ticketType'])->orderBy('created_at', 'desc')->get();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             foreach ($tickets as $ticket) {
-                $ticket->makeHidden(["admin_user_id", "group_id", "priority", "is_user_error", "actual_processing_time"]);
+                $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
             }
         }
 
@@ -342,7 +357,8 @@ class CompanyController extends Controller {
 
     // Orari azienda
 
-    public function getWeeklyTimes(Company $company) {
+    public function getWeeklyTimes(Company $company)
+    {
         $weeklyTimes = $company->weeklyTimes()->get();
 
         if ($weeklyTimes->count() == 0) {
@@ -387,7 +403,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function editWeeklyTime(Request $request) {
+    public function editWeeklyTime(Request $request)
+    {
         $request->validate([
             'company_id' => 'required|int|exists:companies,id',
             'day' => 'required|string',
@@ -397,7 +414,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user['is_admin']) {
+        if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -411,9 +428,10 @@ class CompanyController extends Controller {
         return response(['weeklyTime' => $weeklyTime], 200);
     }
 
-    public function uploadLogo(Company $company, Request $request) {
+    public function uploadLogo(Company $company, Request $request)
+    {
 
-        if (!$company) {
+        if (! $company) {
             return response([
                 'message' => 'Company not found',
             ], 404);
@@ -422,27 +440,27 @@ class CompanyController extends Controller {
         if ($request->file('file') != null) {
 
             $file = $request->file('file');
-            $file_name = time() . '_' . $file->getClientOriginalName();
+            $file_name = time().'_'.$file->getClientOriginalName();
 
-            $path = "company/" . $company->id . "/logo/" . $file_name;
+            $path = 'company/'.$company->id.'/logo/';
 
-            $file->storeAs($path);
+            $storeFile = FileUploadController::storeFile($file, $path, $file_name);
 
             // $company = Company::find($id);
             $company->update([
-                'logo_url' => $path
+                'logo_url' => $storeFile,
             ]);
 
             return response()->json([
-                'company' => $company
+                'company' => $company,
             ]);
         }
     }
 
     // Gruppi custom
 
-
-    public function getCustomUserGroups(Company $company) {
+    public function getCustomUserGroups(Company $company)
+    {
 
         $customUserGroups = $company->customUserGroups()->get();
 
@@ -451,7 +469,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function updateCustomUserGroup(CustomUserGroup $customUserGroup, Request $request) {
+    public function updateCustomUserGroup(CustomUserGroup $customUserGroup, Request $request)
+    {
 
         $request->validate([
             'name' => 'required|string',
@@ -459,7 +478,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -472,13 +491,15 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getCustomUserGroup(CustomUserGroup $customUserGroup) {
+    public function getCustomUserGroup(CustomUserGroup $customUserGroup)
+    {
         return response([
             'group' => $customUserGroup,
         ], 200);
     }
 
-    public function storeCustomUserGroup(Request $request) {
+    public function storeCustomUserGroup(Request $request)
+    {
 
         $request->validate([
             'name' => 'required|string|unique:custom_user_groups',
@@ -487,7 +508,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -502,7 +523,8 @@ class CompanyController extends Controller {
         ], 201);
     }
 
-    public function getUsersForGroup(CustomUserGroup $customUserGroup) {
+    public function getUsersForGroup(CustomUserGroup $customUserGroup)
+    {
 
         $users = $customUserGroup->users()->get();
 
@@ -511,7 +533,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getAvailableUsers(CustomUserGroup $customUserGroup) {
+    public function getAvailableUsers(CustomUserGroup $customUserGroup)
+    {
 
         $company = Company::find($customUserGroup->company->id);
         $users = $company->users()->where('is_deleted', 0)->whereDoesntHave('customUserGroups', function ($query) use ($customUserGroup) {
@@ -523,7 +546,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function addUsersToGroup(Request $request) {
+    public function addUsersToGroup(Request $request)
+    {
 
         $request->validate([
             'user_ids' => 'required|json',
@@ -532,7 +556,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -547,7 +571,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function removeUsersFromGroup(Request $request) {
+    public function removeUsersFromGroup(Request $request)
+    {
 
         $request->validate([
             'user_ids' => 'required|json',
@@ -556,7 +581,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -570,7 +595,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function deleteCustomUserGroup(CustomUserGroup $customUserGroup) {
+    public function deleteCustomUserGroup(CustomUserGroup $customUserGroup)
+    {
 
         if ($customUserGroup->users()->count() > 0) {
             return response([
@@ -585,7 +611,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getCustomUserGroupTicketTypes(CustomUserGroup $customUserGroup) {
+    public function getCustomUserGroupTicketTypes(CustomUserGroup $customUserGroup)
+    {
 
         $ticketTypes = $customUserGroup->ticketTypes()->get();
 
@@ -594,7 +621,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function getAvailableTicketTypes(CustomUserGroup $customUserGroup) {
+    public function getAvailableTicketTypes(CustomUserGroup $customUserGroup)
+    {
 
         $company = Company::find($customUserGroup->company->id);
 
@@ -607,7 +635,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function addTicketTypesToGroup(Request $request) {
+    public function addTicketTypesToGroup(Request $request)
+    {
 
         $request->validate([
             'ticket_type_ids' => 'required|json',
@@ -616,7 +645,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -630,7 +659,8 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function removeTicketTypesFromGroup(Request $request) {
+    public function removeTicketTypesFromGroup(Request $request)
+    {
 
         $request->validate([
             'ticket_type_ids' => 'required|json',
@@ -639,7 +669,7 @@ class CompanyController extends Controller {
 
         $user = $request->user();
 
-        if (!$user->is_company_admin) {
+        if (! $user->is_company_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -652,10 +682,11 @@ class CompanyController extends Controller {
         ], 200);
     }
 
-    public function updateDelayWarning(Company $company, Request $request) {
+    public function updateDelayWarning(Company $company, Request $request)
+    {
         $user = $request->user();
 
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
