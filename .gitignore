@@ -31,6 +31,11 @@ docker-compose.override.yml
 /docker/data/
 /docker/volumes/
 
+# SSL Certificates (security)
+/docker/ssl/*.crt
+/docker/ssl/*.key
+/docker/ssl/*.pem
+
 # Docker volumes and data
 mysql_data/
 redis_data/

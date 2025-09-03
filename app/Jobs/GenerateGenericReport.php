@@ -2,20 +2,20 @@
 
 namespace App\Jobs;
 
+use App\Exports\GenericExport;
+use App\Http\Controllers\FileUploadController;
+use App\Models\TicketReportExport;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\GenericExport;
-use App\Models\TicketReportExport;
 
 class GenerateGenericReport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
     private $report;
 
     /**
@@ -32,7 +32,8 @@ class GenerateGenericReport implements ShouldQueue
      */
     public function handle(): void
     {
-        Excel::store(new GenericExport($this->report), $this->report->file_path, 'gcs');
+        $disk = FileUploadController::getStorageDisk();
+        Excel::store(new GenericExport($this->report), $this->report->file_path, $disk);
         $this->report->is_generated = true;
         $this->report->save();
     }

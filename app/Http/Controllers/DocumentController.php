@@ -2,26 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Features\DocumentFeatures;
 use App\Models\Document;
 use App\Models\User;
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Contracts\Database\Eloquent\Builder;
-use App\Features\DocumentFeatures;
 
 class DocumentController extends Controller
 {
     /**
      * Display a listing of the documents.
-     * 
-     * @param  \Illuminate\Http\Request  $request
+     *
      * @return \Illuminate\Http\Response
      */
     public function index(Request $request)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('list')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('list')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -30,7 +29,7 @@ class DocumentController extends Controller
         $user = $request->user();
 
         // Check if the user has admin or company_admin permissions
-        if (!$user->is_admin && !$user->is_company_admin) {
+        if (! $user->is_admin && ! $user->is_company_admin) {
             return response([
                 'message' => 'You do not have permission to view documents.',
             ], 403);
@@ -38,7 +37,7 @@ class DocumentController extends Controller
 
         // Get the selected company for the user
         $selectedCompany = $user->selectedCompany();
-        if (!$selectedCompany) {
+        if (! $selectedCompany) {
             return response([
                 'message' => 'No company selected.',
             ], 400);
@@ -55,30 +54,30 @@ class DocumentController extends Controller
                 switch ($key) {
                     case 'pdf':
                         if ($value) {
-                            $mimeTypeIn[] = "application/pdf";
+                            $mimeTypeIn[] = 'application/pdf';
                         }
                         break;
                     case 'word':
                         if ($value) {
-                            $mimeTypeIn[] = "application/msword";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                            $mimeTypeIn[] = 'application/msword';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
                         }
                         break;
                     case 'excel':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-excel";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                            $mimeTypeIn[] = 'application/vnd.ms-excel';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
                         }
                         break;
                     case 'powerpoint':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-powerpoint";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                            $mimeTypeIn[] = 'application/vnd.ms-powerpoint';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
                         }
                         break;
                     case 'archive':
                         if ($value) {
-                            $mimeTypeIn[] = "application/zip";
+                            $mimeTypeIn[] = 'application/zip';
                         }
                         break;
                     case 'dateFrom':
@@ -97,14 +96,14 @@ class DocumentController extends Controller
             // If no mime types are selected, include all
             if (count($mimeTypeIn) == 0) {
                 $mimeTypeIn = [
-                    'application/pdf', 
-                    'application/msword', 
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 
-                    'application/vnd.ms-excel', 
-                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
-                    'application/vnd.ms-powerpoint', 
-                    'application/vnd.openxmlformats-officedocument.presentationml.presentation', 
-                    'application/zip'
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-excel',
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/vnd.ms-powerpoint',
+                    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    'application/zip',
                 ];
             }
 
@@ -150,14 +149,13 @@ class DocumentController extends Controller
     /**
      * Store a newly created document or folder in storage.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
     public function store(Request $request)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('upload')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('upload')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -199,20 +197,20 @@ class DocumentController extends Controller
                 'document' => $document,
                 'message' => 'Folder created successfully.',
             ], 201);
-        } 
+        }
         // Handle file upload
         else {
             if ($request->file('file') != null) {
                 $file = $request->file('file');
 
                 // Generate a unique filename
-                $uploaded_name = time() . '_' . $file->getClientOriginalName();
+                $uploaded_name = time().'_'.$file->getClientOriginalName();
                 $mime_type = $file->getClientMimeType();
                 $file_size = $file->getSize();
-                
+
                 // Store the file in Google Cloud Storage
-                $bucket_path = 'documents' . $validated['path'] . '';
-                $file->storeAs($bucket_path, $uploaded_name, 'gcs');
+                $bucket_path = 'documents'.$validated['path'].'';
+                FileUploadController::storeFile($file, $bucket_path, $uploaded_name);
 
                 // Create the document record in the database
                 $document = Document::create([
@@ -241,15 +239,13 @@ class DocumentController extends Controller
     /**
      * Generate a temporary URL for downloading a document.
      *
-     * @param  \App\Models\Document  $document
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
     public function downloadFile(Document $document, Request $request)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('download')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('download')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -258,7 +254,7 @@ class DocumentController extends Controller
         $user = $request->user();
 
         // Check if the user has admin or company_admin permissions
-        if (!$user->is_admin && !$user->is_company_admin) {
+        if (! $user->is_admin && ! $user->is_company_admin) {
             return response([
                 'message' => 'You do not have permission to download documents.',
             ], 403);
@@ -266,9 +262,9 @@ class DocumentController extends Controller
 
         // Check if the user has access to the document's company
         $selectedCompany = $user->selectedCompany();
-        if (!$selectedCompany || $document->company_id != $selectedCompany->id) {
+        if (! $selectedCompany || $document->company_id != $selectedCompany->id) {
             // Admin users can access any document
-            if (!$user->is_admin) {
+            if (! $user->is_admin) {
                 return response([
                     'message' => 'You do not have access to this document.',
                 ], 403);
@@ -285,7 +281,7 @@ class DocumentController extends Controller
         try {
             // Generate a temporary URL for the document
             $url = Storage::disk('gcs')->temporaryUrl(
-                'documents' . $document->path . $document->uploaded_name,
+                'documents'.$document->path.$document->uploaded_name,
                 now()->addMinutes(65)
             );
 
@@ -294,7 +290,7 @@ class DocumentController extends Controller
             ], 200);
         } catch (\Exception $e) {
             return response([
-                'message' => 'Error generating download URL: ' . $e->getMessage(),
+                'message' => 'Error generating download URL: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -302,15 +298,13 @@ class DocumentController extends Controller
     /**
      * Remove the specified document from storage.
      *
-     * @param  \App\Models\Document  $document
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
     public function destroy(Document $document, Request $request)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('delete')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('delete')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -326,7 +320,7 @@ class DocumentController extends Controller
         }
 
         // Check if the document exists
-        if (!$document) {
+        if (! $document) {
             return response([
                 'message' => 'Document not found.',
             ], 404);
@@ -335,8 +329,8 @@ class DocumentController extends Controller
         try {
             // If it's a file, delete it from storage
             if ($document->type === 'file') {
-                $filePath = 'documents' . $document->path . $document->uploaded_name;
-                
+                $filePath = 'documents'.$document->path.$document->uploaded_name;
+
                 // Check if the file exists in storage
                 if (Storage::disk('gcs')->exists($filePath)) {
                     // Delete the file from storage
@@ -344,10 +338,10 @@ class DocumentController extends Controller
                 }
             }
             // If it's a folder, check if it's empty
-            else if ($document->type === 'folder') {
+            elseif ($document->type === 'folder') {
                 // Check if there are any documents in this folder
-                $hasDocuments = Document::where('path', $document->path . $document->name . '/')->exists();
-                
+                $hasDocuments = Document::where('path', $document->path.$document->name.'/')->exists();
+
                 if ($hasDocuments) {
                     return response([
                         'message' => 'Cannot delete folder because it is not empty.',
@@ -363,7 +357,7 @@ class DocumentController extends Controller
             ], 200);
         } catch (\Exception $e) {
             return response([
-                'message' => 'Error deleting document: ' . $e->getMessage(),
+                'message' => 'Error deleting document: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -371,14 +365,13 @@ class DocumentController extends Controller
     /**
      * Search for documents by name or content.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
     public function search(Request $request)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('search')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('search')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -387,7 +380,7 @@ class DocumentController extends Controller
         $user = $request->user();
 
         // Check if the user has admin or company_admin permissions
-        if (!$user->is_admin && !$user->is_company_admin) {
+        if (! $user->is_admin && ! $user->is_company_admin) {
             return response([
                 'message' => 'You do not have permission to search documents.',
             ], 403);
@@ -395,7 +388,7 @@ class DocumentController extends Controller
 
         // Get the search query
         $search = $request->search;
-        if (!$search) {
+        if (! $search) {
             return response([
                 'message' => 'Search query is required.',
             ], 400);
@@ -403,7 +396,7 @@ class DocumentController extends Controller
 
         // Get the selected company for the user
         $selectedCompany = $user->selectedCompany();
-        if (!$selectedCompany) {
+        if (! $selectedCompany) {
             return response([
                 'message' => 'No company selected.',
             ], 400);
@@ -436,7 +429,7 @@ class DocumentController extends Controller
             ], 200);
         } catch (\Exception $e) {
             return response([
-                'message' => 'Error searching documents: ' . $e->getMessage(),
+                'message' => 'Error searching documents: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -444,15 +437,14 @@ class DocumentController extends Controller
     /**
      * Search for documents by company.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  int  $companyId
      * @return \Illuminate\Http\Response
      */
     public function searchByCompany(Request $request, $companyId)
     {
         // Check if the feature is enabled for the current tenant
-        $documentFeatures = new DocumentFeatures();
-        if (!$documentFeatures('search')) {
+        $documentFeatures = new DocumentFeatures;
+        if (! $documentFeatures('search')) {
             return response([
                 'message' => 'This feature is not available for your tenant.',
             ], 403);
@@ -461,7 +453,7 @@ class DocumentController extends Controller
         $user = $request->user();
 
         // Check if the user has admin permissions
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             return response([
                 'message' => 'Only administrators can search documents by company.',
             ], 403);
@@ -469,7 +461,7 @@ class DocumentController extends Controller
 
         // Get the search query
         $search = $request->search;
-        if (!$search) {
+        if (! $search) {
             return response([
                 'message' => 'Search query is required.',
             ], 400);
@@ -490,7 +482,7 @@ class DocumentController extends Controller
             ], 200);
         } catch (\Exception $e) {
             return response([
-                'message' => 'Error searching documents: ' . $e->getMessage(),
+                'message' => 'Error searching documents: '.$e->getMessage(),
             ], 500);
         }
     }

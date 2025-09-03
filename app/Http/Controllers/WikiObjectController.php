@@ -2,21 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\WikiObject;
+use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Contracts\Database\Eloquent\Builder;
 
-class WikiObjectController extends Controller {
+class WikiObjectController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
 
         $user = $request->user();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -33,30 +34,30 @@ class WikiObjectController extends Controller {
                 switch ($key) {
                     case 'pdf':
                         if ($value) {
-                            $mimeTypeIn[] = "application/pdf";
+                            $mimeTypeIn[] = 'application/pdf';
                         }
                         break;
                     case 'word':
                         if ($value) {
-                            $mimeTypeIn[] = "application/msword";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                            $mimeTypeIn[] = 'application/msword';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
                         }
                         break;
                     case 'excel':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-excel";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                            $mimeTypeIn[] = 'application/vnd.ms-excel';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
                         }
                         break;
                     case 'powerpoint':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-powerpoint";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                            $mimeTypeIn[] = 'application/vnd.ms-powerpoint';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
                         }
                         break;
                     case 'archive':
                         if ($value) {
-                            $mimeTypeIn[] = "application/zip";
+                            $mimeTypeIn[] = 'application/zip';
                         }
                         break;
                     case 'dateFrom':
@@ -96,13 +97,13 @@ class WikiObjectController extends Controller {
                 ->get();
         }
 
-
         return response([
             'files' => $wikiObjects,
         ], 200);
     }
 
-    public function public(Request $request) {
+    public function public(Request $request)
+    {
 
         $user = $request->user();
 
@@ -117,30 +118,30 @@ class WikiObjectController extends Controller {
                 switch ($key) {
                     case 'pdf':
                         if ($value) {
-                            $mimeTypeIn[] = "application/pdf";
+                            $mimeTypeIn[] = 'application/pdf';
                         }
                         break;
                     case 'word':
                         if ($value) {
-                            $mimeTypeIn[] = "application/msword";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                            $mimeTypeIn[] = 'application/msword';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
                         }
                         break;
                     case 'excel':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-excel";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                            $mimeTypeIn[] = 'application/vnd.ms-excel';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
                         }
                         break;
                     case 'powerpoint':
                         if ($value) {
-                            $mimeTypeIn[] = "application/vnd.ms-powerpoint";
-                            $mimeTypeIn[] = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                            $mimeTypeIn[] = 'application/vnd.ms-powerpoint';
+                            $mimeTypeIn[] = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
                         }
                         break;
                     case 'archive':
                         if ($value) {
-                            $mimeTypeIn[] = "application/zip";
+                            $mimeTypeIn[] = 'application/zip';
                         }
                         break;
                     case 'dateFrom':
@@ -182,17 +183,16 @@ class WikiObjectController extends Controller {
                 ->get();
         }
 
-
         return response([
             'files' => $wikiObjects,
         ], 200);
     }
 
-
     /**
      * Show the form for creating a new resource.
      */
-    public function create() {
+    public function create()
+    {
         //
         return response([
             'message' => 'Please use /api/store to create a new object',
@@ -202,12 +202,13 @@ class WikiObjectController extends Controller {
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         //
 
         $user = $request->user();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -221,8 +222,6 @@ class WikiObjectController extends Controller {
         ]);
 
         $company_id = isset($request->company_id) ? $request->company_id : null;
-
-
 
         if ($validated['type'] == 'folder') {
             $name = $request->name;
@@ -247,11 +246,11 @@ class WikiObjectController extends Controller {
 
                 $file = $request->file('file');
 
-                $uploaded_name = time() . '_' . $file->getClientOriginalName();
+                $uploaded_name = time().'_'.$file->getClientOriginalName();
                 $mime_type = $file->getClientMimeType();
                 $file_size = $file->getSize();
-                $bucket_path = 'wiki_objects' . $validated['path'] . '';
-                $file->storeAs($bucket_path, $uploaded_name, 'gcs');
+                $bucket_path = 'wiki_objects'.$validated['path'].'';
+                FileUploadController::storeFile($file, $bucket_path, $uploaded_name);
 
                 $company_id = isset($request->company_id) ? $request->company_id : null;
                 $wikiObject = WikiObject::create([
@@ -277,15 +276,15 @@ class WikiObjectController extends Controller {
         }
     }
 
-    public function downloadFile(WikiObject $wikiObject) {
+    public function downloadFile(WikiObject $wikiObject)
+    {
         /**
          * @disregard P1009 Undefined type
          */
         $url = Storage::disk('gcs')->temporaryUrl(
-            'wiki_objects' . $wikiObject->path . $wikiObject->uploaded_name,
+            'wiki_objects'.$wikiObject->path.$wikiObject->uploaded_name,
             now()->addMinutes(65)
         );
-
 
         return response([
             'url' => $url,
@@ -295,12 +294,13 @@ class WikiObjectController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(WikiObject $wikiObject, Request $request) {
+    public function destroy(WikiObject $wikiObject, Request $request)
+    {
         //
 
         $user = $request->user();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -313,14 +313,14 @@ class WikiObjectController extends Controller {
         ], 200);
     }
 
-    public function searchPublic(Request $request) {
+    public function searchPublic(Request $request)
+    {
         $user = $request->user();
-
 
         $search = $request->search;
 
         $wikiObjects = WikiObject::query()->when($search, function (Builder $q, $value) {
-            /** 
+            /**
              * @disregard Intelephense non rileva il metodo whereIn
              */
             return $q->whereIn('id', WikiObject::search($value)->keys());
@@ -331,10 +331,11 @@ class WikiObjectController extends Controller {
         ], 200);
     }
 
-    public function search(Request $request) {
+    public function search(Request $request)
+    {
         $user = $request->user();
 
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -343,7 +344,7 @@ class WikiObjectController extends Controller {
         $search = $request->search;
 
         $wikiObjects = WikiObject::query()->when($search, function (Builder $q, $value) {
-            /** 
+            /**
              * @disregard Intelephense non rileva il metodo whereIn
              */
             return $q->whereIn('id', WikiObject::search($value)->keys());

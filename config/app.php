@@ -131,6 +131,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Object Storage Method
+    |--------------------------------------------------------------------------
+    |
+    | This value determines which storage method to use for file uploads.
+    | When set to 'gcs', files will be uploaded to Google Cloud Storage.
+    | When set to 'default' or any other value, the default filesystem disk will be used.
+    |
+    */
+
+    'object_storage_method' => env('OBJECT_STORAGE_METHOD', 'default'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Maintenance Mode Driver
     |--------------------------------------------------------------------------
     |
@@ -191,57 +204,56 @@ return [
 
     ])->toArray(),
 
-
-    /* 
+    /*
         Possibili stati dei ticket
     */
     'ticket_stages' => [
-        "Nuovo",
-        "Assegnato",
-        "In corso",
-        "In attesa",
-        "Risolto",
-        "Chiuso",
-        "Attesa feedback cliente",
+        'Nuovo',
+        'Assegnato',
+        'In corso',
+        'In attesa',
+        'Risolto',
+        'Chiuso',
+        'Attesa feedback cliente',
     ],
 
-    /* 
+    /*
         Tipi di update dei ticket
     */
     'update_types' => [
-        "closing" => "Chiusura",
-        "status" => "Cambio stato",
-        "note" => "Aggiunta nota",
-        "assign" => "Assegnamento",
-        "group_assign" => "Assegnamento di gruppo",
-        "sla" => "Cambio SLA",
-        "blame" => "Cambio responsabilità",
-        "billing" => "Fatturazione",
-        "time" => "Tempo esecuzione",
-        "work_mode" => "Modalità di lavoro",
+        'closing' => 'Chiusura',
+        'status' => 'Cambio stato',
+        'note' => 'Aggiunta nota',
+        'assign' => 'Assegnamento',
+        'group_assign' => 'Assegnamento di gruppo',
+        'sla' => 'Cambio SLA',
+        'blame' => 'Cambio responsabilità',
+        'billing' => 'Fatturazione',
+        'time' => 'Tempo esecuzione',
+        'work_mode' => 'Modalità di lavoro',
     ],
 
-    /* 
+    /*
         Modalità di lavoro
     */
     'work_modes' => [
-        "on_site" => "Dal cliente",
-        "remote" => "In remoto",
+        'on_site' => 'Dal cliente',
+        'remote' => 'In remoto',
     ],
 
     'ticket_sources' => [
-        "email" => "Email",
-        "phone" => "Telefono",
-        "on_site_technician" => "Tecnico in sede",
-        "platform" => "Piattaforma",
-        "internal" => "Supporto",
-        "automatic" => "Automatico",
+        'email' => 'Email',
+        'phone' => 'Telefono',
+        'on_site_technician' => 'Tecnico in sede',
+        'platform' => 'Piattaforma',
+        'internal' => 'Supporto',
+        'automatic' => 'Automatico',
     ],
 
     'hardware_ownership_types' => [
-        "owned" => "Proprietà",
-        "rented" => "Noleggio",
-        "other" => "Altro",
+        'owned' => 'Proprietà',
+        'rented' => 'Noleggio',
+        'other' => 'Altro',
     ],
 
     'hardware_audit_log_actions' => [
@@ -253,7 +265,7 @@ return [
         'deleted' => 'Eliminato',
         'restore' => 'Ripristinato',
         'restored' => 'Ripristinato',
-        'permanent-delete' => 'Eliminato definitivamente'
+        'permanent-delete' => 'Eliminato definitivamente',
     ],
 
     'hardware_audit_log_subjects' => [
@@ -262,7 +274,7 @@ return [
         'hardware_ticket' => 'Associazione con ticket',
         'hardware_company' => 'Associazione con azienda',
     ],
-    
+
     'hardware_statuses' => [
         'new' => 'Nuovo',
         'used' => 'Usato',
@@ -274,13 +286,13 @@ return [
     ],
 
     'hardware_positions' => [
-        'user' => "Utente",
+        'user' => 'Utente',
         'company' => 'Magazzino azienda',
         'support' => 'Magazzino supporto',
         'repair_center' => 'Centro di riparazione',
         'dismissed' => 'Dismesso',
     ],
-    
+
     // Ancora non vengono usate, ma da implementare.
     // 'problem_causes' => [
     //     'user_data_entry' => 'Errore del cliente in inserimento dati',
