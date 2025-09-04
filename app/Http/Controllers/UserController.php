@@ -4,22 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Exports\UserTemplateExport;
 use App\Imports\UsersImport;
-use App\Models\ActivationToken;
 use App\Jobs\SendWelcomeEmail;
+use App\Models\ActivationToken;
 use App\Models\Company;
-use Illuminate\Http\Request;
-use App\Models\User;
 use App\Models\Supplier;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Auth;
 use Maatwebsite\Excel\Facades\Excel;
 use PragmaRX\Google2FA\Google2FA;
 
-class UserController extends Controller {
+class UserController extends Controller
+{
     //
 
-    public function me() {
+    public function me()
+    {
 
         $user = auth()->user();
 
@@ -28,11 +31,12 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         $requestUser = $request->user();
 
         $fields = $request->validate([
-            'company_id' => $requestUser["is_admin"] == 1 ? 'required|int' : 'nullable|int',
+            'company_id' => $requestUser['is_admin'] == 1 ? 'required|int' : 'nullable|int',
             'name' => 'required|string',
             'email' => 'required|string',
             'surname' => 'required|string',
@@ -40,16 +44,16 @@ class UserController extends Controller {
 
         $userCompanyIds = $requestUser->companies()->pluck('companies.id')->toArray();
         // if (!($requestUser["is_admin"] == 1 || (in_array($fields["company_id"], $userCompanyIds) && $requestUser["is_company_admin"] == 1))) {
-        if (!($requestUser["is_admin"] == 1 || ($requestUser["is_company_admin"] == 1))) {
+        if (! ($requestUser['is_admin'] == 1 || ($requestUser['is_company_admin'] == 1))) {
             return response([
-            'message' => 'Unauthorized',
+                'message' => 'Unauthorized',
             ], 401);
         }
 
-        if($requestUser['is_admin'] != 1) {
+        if ($requestUser['is_admin'] != 1) {
             $fields['company_id'] = $requestUser->selectedCompany();
         }
-        
+
         // Se si modifica qualcosa da questo punto in poi bisogna modificare anche in UsersImport.php
         $newUser = User::create([
             // 'company_id' => $fields['company_id'],
@@ -68,13 +72,13 @@ class UserController extends Controller {
 
         $activation_token = ActivationToken::create([
             // 'token' => Hash::make(Str::random(32)),
-            'token' => Str::random(20) . time(),
+            'token' => Str::random(20).time(),
             'uid' => $newUser['id'],
             'status' => 0,
         ]);
 
         // Inviare mail con url: frontendBaseUrl + /support/set-password/ + activation_token['token]
-        $url = env('FRONTEND_URL') . '/support/set-password/' . $activation_token['token'];
+        $url = env('FRONTEND_URL').'/support/set-password/'.$activation_token['token'];
         dispatch(new SendWelcomeEmail($newUser, $url));
 
         return response([
@@ -85,22 +89,23 @@ class UserController extends Controller {
     /**
      * Mostra i dati dell'utente.
      */
-    public function show($id, Request $request) {
+    public function show($id, Request $request)
+    {
         $authUser = $request->user();
 
         $user = User::where('id', $id)->with(['companies'])->first();
 
         // Se non è l'utente stesso, un admin o company_admin e della stessa compagnia allora non è autorizzato
-        if (!($authUser["is_admin"] == 1 || ($authUser["id"] == $id) || ($user && (
-                // $user["company_id"] == $authUser["company_id"]
-                $authUser->selectedCompany() && $user->hasCompany($authUser->selectedCompany()->id)
-            ) && ($authUser["is_company_admin"] == 1)))) {
+        if (! ($authUser['is_admin'] == 1 || ($authUser['id'] == $id) || ($user && (
+            // $user["company_id"] == $authUser["company_id"]
+            $authUser->selectedCompany() && $user->hasCompany($authUser->selectedCompany()->id)
+        ) && ($authUser['is_company_admin'] == 1)))) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -111,21 +116,21 @@ class UserController extends Controller {
         ], 200);
     }
 
-
     /**
      * Attiva l'utenza assegnandogli la password scelta.
      */
-    public function activateUser(Request $request) {
+    public function activateUser(Request $request)
+    {
         $fields = $request->validate([
             'token' => 'required|string|exists:activation_tokens,token',
             'email' => 'required|string|exists:users,email',
-            'password'  => 'required|string',
+            'password' => 'required|string',
         ]);
 
         $user = User::where('email', $request['email'])->first();
 
         // Per non far sapere che l'utente esiste si può modificare in unauthorized
-        if (!$user) {
+        if (! $user) {
             return response([
                 // 'message' => 'User not found',
                 'message' => 'Unauthorized',
@@ -150,7 +155,7 @@ class UserController extends Controller {
         $password = $fields['password'];
         $pattern = "/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&.])[A-Za-z\d@$!%*?&.]{10,}$/";
 
-        if (!preg_match($pattern, $password)) {
+        if (! preg_match($pattern, $password)) {
             return response([
                 'message' => 'Invalid password',
             ], 400);
@@ -161,7 +166,7 @@ class UserController extends Controller {
             'email_verified_at' => date('Y-m-d H:i:s'),
         ]);
 
-        if (!$updated) {
+        if (! $updated) {
             return response([
                 'message' => 'Error',
             ], 404);
@@ -181,7 +186,8 @@ class UserController extends Controller {
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request) {
+    public function update(Request $request)
+    {
         $fields = $request->validate([
             'id' => 'required|int|exists:users,id', // TODO: 'id' => 'required|int|exists:users,id
             // 'company_id' => 'required|int',
@@ -194,14 +200,14 @@ class UserController extends Controller {
 
         $user = User::where('id', $request['id'])->first();
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
         }
 
         // Se non è admin o non è della compagnia e company_admin allora non è autorizzato
-        if (!($req_user["is_admin"] == 1 || ($user->companies()->where('companies.id', $req_user->selectedCompany()->id)->exists() && $req_user["is_company_admin"] == 1))) {
+        if (! ($req_user['is_admin'] == 1 || ($user->companies()->where('companies.id', $req_user->selectedCompany()->id)->exists() && $req_user['is_company_admin'] == 1))) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -238,11 +244,12 @@ class UserController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id, Request $request) {
+    public function destroy($id, Request $request)
+    {
         //Solo gli admin possono eliminare (disabilitare) le utenze
         $req_user = $request->user();
 
-        if ($req_user["is_admin"] == 1 && $id) {
+        if ($req_user['is_admin'] == 1 && $id) {
             // In ogni caso si disabilita l'utente, senza eliminarlo.
             $user = User::where('id', $id)->first();
             $disabled = $user->update([
@@ -253,6 +260,7 @@ class UserController extends Controller {
                     'deleted_user' => $id,
                 ], 200);
             }
+
             return response([
                 'message' => 'Error',
             ], 400);
@@ -260,15 +268,16 @@ class UserController extends Controller {
     }
 
     // Riabilitare utente disabilitato
-    public function enable($id, Request $request) {
+    public function enable($id, Request $request)
+    {
         $req_user = $request->user();
 
-        if ($req_user["is_admin"] != 1) {
+        if ($req_user['is_admin'] != 1) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
-        if (!$id) {
+        if (! $id) {
             return response([
                 'message' => 'Error',
             ], 404);
@@ -278,29 +287,31 @@ class UserController extends Controller {
         $enabled = $user->update([
             'is_deleted' => 0,
         ]);
-        if (!$enabled) {
+        if (! $enabled) {
             return response([
                 'message' => 'Error',
             ], 404);
         }
+
         return response([
             'enabled_user' => $id,
         ], 200);
     }
 
-    public function ticketTypes(Request $request) {
+    public function ticketTypes(Request $request)
+    {
 
         $user = $request->user();
 
         // Se l'utente è admin allora prende tutti i ticket types di tutti i gruppi associati all'utente, altrimenti solo quelli della sua compagnia
-        if ($user["is_admin"] == 1) {
+        if ($user['is_admin'] == 1) {
             $ticketTypes = collect();
             foreach ($user->groups as $group) {
                 $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with('category')->get());
             }
         } else {
             $selectedCompany = $user->selectedCompany();
-            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where("is_custom_group_exclusive", false)->with('category')->get() : collect();
+            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with('category')->get() : collect();
 
             $customGroups = $user->customUserGroups()->get();
             foreach ($customGroups as $customGroup) {
@@ -308,15 +319,15 @@ class UserController extends Controller {
             }
 
             // Gli utenti normali non devono vedere i ticket master, mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
-            if (!$user->is_company_admin || ($request->get('new_ticket') == 'true')) {
+            if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
                 $ticketTypes = $ticketTypes->filter(function ($ticketType) {
-                    return !$ticketType->is_master;
+                    return ! $ticketType->is_master;
                 });
             }
         }
 
         return response([
-            'ticketTypes' => $ticketTypes->values()->all()
+            'ticketTypes' => $ticketTypes->values()->all(),
         ], 200);
     }
 
@@ -337,7 +348,8 @@ class UserController extends Controller {
 
     // }
 
-    public function test(Request $request) {
+    public function test(Request $request)
+    {
 
         return response([
             'test' => $request,
@@ -346,8 +358,9 @@ class UserController extends Controller {
 
     // Restituisce gli id degli admin (serve per vedere se un messaggio va mostrato come admin o meno).
     // Controlla se l'utente che fa la richiesta è admin, se lo è restituisce gli id degli admin, altrimenti restituisce [].
-    public function adminsIds(Request $request) {
-        $isAdminRequest = $request->user()["is_admin"] == 1;
+    public function adminsIds(Request $request)
+    {
+        $isAdminRequest = $request->user()['is_admin'] == 1;
 
         if ($isAdminRequest) {
             $users = User::where('is_admin', 1)->get();
@@ -363,8 +376,9 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function allAdmins(Request $request) {
-        $isAdminRequest = $request->user()["is_admin"] == 1;
+    public function allAdmins(Request $request)
+    {
+        $isAdminRequest = $request->user()['is_admin'] == 1;
 
         if ($isAdminRequest) {
             $users = User::where('is_admin', 1)->get();
@@ -372,18 +386,18 @@ class UserController extends Controller {
             $users = null;
         }
 
-
         return response([
             'admins' => $users,
         ], 200);
     }
 
-    public function allUsers(Request $request) {
-        $isAdminRequest = $request->user()["is_admin"] == 1;
+    public function allUsers(Request $request)
+    {
+        $isAdminRequest = $request->user()['is_admin'] == 1;
         if ($isAdminRequest) {
             $users = User::with(['companies:id,name'])->get();
             $users->makeHidden(['microsoft_token']);
-            if (!$users) {
+            if (! $users) {
                 $users = [];
             }
         } else {
@@ -395,27 +409,29 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function getName($id, Request $request) {
+    public function getName($id, Request $request)
+    {
         $authUser = $request->user();
         $user = User::where('id', $id)->first();
 
         $authUserSelectedCompanyId = $authUser->selectedCompany()->id ?? null;
         $company = Company::find($authUserSelectedCompanyId);
 
-        if (!$request->user()["is_admin"] 
-            && !$user->hasCompany($authUserSelectedCompanyId)
-            && !$user->companies()->where('data_owner_email', $authUser->email)->exists()) {
+        if (! $request->user()['is_admin']
+            && ! $user->hasCompany($authUserSelectedCompanyId)
+            && ! $user->companies()->where('data_owner_email', $authUser->email)->exists()) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
 
         return response([
-            'name' => ($user["name"] ?? '') . " " . ($user["surname"] ?? ''),
+            'name' => ($user['name'] ?? '').' '.($user['surname'] ?? ''),
         ], 200);
     }
 
-    public function getFrontendLogoUrl(Request $request) {
+    public function getFrontendLogoUrl(Request $request)
+    {
         $suppliers = Supplier::all()->toArray();
 
         // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
@@ -425,13 +441,14 @@ class UserController extends Controller {
         // Filtra i brand omonimo alle aziende interne ed utilizza quello dell'azienda interna con l'id piu basso
         $sameNameSuppliers = array_filter($suppliers, function ($supplier) use ($brands) {
             $brandNames = array_column($brands, 'name');
+
             return in_array($supplier['name'], $brandNames);
         });
 
         $selectedBrand = '';
 
         // Se ci sono aziende interne allora prende quella con l'id più basso e recupera il marchio omonimo, altrimenti usa il marchio con l'id più basso.
-        if (!empty($sameNameSuppliers)) {
+        if (! empty($sameNameSuppliers)) {
             usort($sameNameSuppliers, function ($a, $b) {
                 return $a['id'] <=> $b['id'];
             });
@@ -448,7 +465,7 @@ class UserController extends Controller {
         }
 
         // Crea l'url
-        $url = config('app.url') . '/api/brand/' . $selectedBrand['id'] . '/logo';
+        $url = config('app.url').'/api/brand/'.$selectedBrand['id'].'/logo';
 
         // $url = $request->user()->company->frontendLogoUrl;
 
@@ -457,12 +474,15 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function exportTemplate() {
-        $name = 'users_import_template_' . time() . '.xlsx';
-        return Excel::download(new UserTemplateExport(), $name);
+    public function exportTemplate()
+    {
+        $name = 'users_import_template_'.time().'.xlsx';
+
+        return Excel::download(new UserTemplateExport, $name);
     }
 
-    public function importUsers(Request $request) {
+    public function importUsers(Request $request)
+    {
         $request->validate([
             'file' => 'required|mimes:xlsx',
         ]);
@@ -472,7 +492,7 @@ class UserController extends Controller {
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX or XLS file.',
                 ], 400);
@@ -482,17 +502,18 @@ class UserController extends Controller {
         }
 
         return response([
-            'message' => "Success",
+            'message' => 'Success',
         ], 200);
     }
 
-    public function twoFactorChallenge(Request $request) {
+    public function twoFactorChallenge(Request $request)
+    {
         $user = Auth::user();
 
-        $google2fa = new Google2FA();
+        $google2fa = new Google2FA;
         $secret = decrypt($user->two_factor_secret);
 
-        if (!$google2fa->verifyKey($secret, $request->code)) {
+        if (! $google2fa->verifyKey($secret, $request->code)) {
             return response([
                 'message' => 'Invalid code',
             ], 401);
@@ -503,20 +524,21 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function userTickets($userId, Request $request) {
+    public function userTickets($userId, Request $request)
+    {
         $authUser = $request->user();
         $user = User::where('id', $userId)->first();
         if (
-            !$authUser->is_admin
-            && !($authUser->is_company_admin && ($user->companies()->whereIn('companies.id', $authUser->selectedCompany()->id)->exists()))
-            && !($user->id == $authUser)
+            ! $authUser->is_admin
+            && ! ($authUser->is_company_admin && ($user->companies()->whereIn('companies.id', $authUser->selectedCompany()->id)->exists()))
+            && ! ($user->id == $authUser)
         ) {
             return response([
                 'message' => 'You are not allowed to view this user tickets',
             ], 403);
         }
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -524,6 +546,7 @@ class UserController extends Controller {
 
         if ($authUser->is_admin) {
             $tickets = $user->ownTicketsMerged();
+
             return response([
                 'tickets' => $tickets,
             ], 200);
@@ -536,9 +559,9 @@ class UserController extends Controller {
                 // Nascondere i dati utente se è stato aperto dal supporto
                 if ($ticket->user->is_admin) {
                     $ticket->user->id = 1;
-                    $ticket->user->name = "Supporto";
-                    $ticket->user->surname = "";
-                    $ticket->user->email = "Supporto";
+                    $ticket->user->name = 'Supporto';
+                    $ticket->user->surname = '';
+                    $ticket->user->email = 'Supporto';
                 }
             }
 
@@ -548,7 +571,8 @@ class UserController extends Controller {
         }
     }
 
-    public function companies(Request $request) {
+    public function companies(Request $request)
+    {
         $user = $request->user();
 
         return response([
@@ -556,8 +580,8 @@ class UserController extends Controller {
         ], 200);
     }
 
-
-    public function setActiveCompany(Request $request) {
+    public function setActiveCompany(Request $request)
+    {
         $request->validate([
             'companyId' => 'required|integer|exists:companies,id',
         ]);
@@ -566,36 +590,45 @@ class UserController extends Controller {
 
         $user_companies = $user->companies()->get()->pluck('id')->toArray();
         // Controlla se l'utente appartiene alla compagnia
-        if (!in_array($request->companyId, $user_companies)) {
+        if (! in_array($request->companyId, $user_companies)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
 
         // Elimina tutte le cache che contengono 'user_' . $user->id . '_'
-        $redis = \Cache::getRedis();
-        foreach ($redis->keys('*user_' . $user->id . '_*') as $key) {
-            $redis->del($key);
+        if (config('cache.default') === 'redis') {
+            $redis = Cache::getRedis();
+            foreach ($redis->keys('*user_'.$user->id.'_*') as $key) {
+                $redis->del($key);
+            }
+        } else {
+            // Per altri driver di cache, usa la flush o tags se supportati
+            Cache::flush();
         }
 
         // Salva il company_id nella sessione
         session(['selected_company_id' => $request->companyId]);
-
-
 
         return response([
             'success' => true,
             'selected_company_id' => $request->companyId,
         ], 200);
     }
-    
-    public function resetActiveCompany(Request $request) {
+
+    public function resetActiveCompany(Request $request)
+    {
         $user = $request->user();
 
         // Elimina tutte le cache che contengono 'user_' . $user->id . '_'
-        $redis = \Cache::getRedis();
-        foreach ($redis->keys('*user_' . $user->id . '_*') as $key) {
-            $redis->del($key);
+        if (config('cache.default') === 'redis') {
+            $redis = Cache::getRedis();
+            foreach ($redis->keys('*user_'.$user->id.'_*') as $key) {
+                $redis->del($key);
+            }
+        } else {
+            // Per altri driver di cache, usa la flush o tags se supportati
+            Cache::flush();
         }
 
         // Salva il company_id nella sessione
@@ -607,11 +640,12 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function companiesForUser($id, Request $request) {
+    public function companiesForUser($id, Request $request)
+    {
         $authUser = $request->user();
 
         // Se non è admin o company_admin allora non è autorizzato
-        if (!($authUser["is_admin"] == 1 || ($authUser["id"] == $id) || ($authUser["is_company_admin"] == 1))) {
+        if (! ($authUser['is_admin'] == 1 || ($authUser['id'] == $id) || ($authUser['is_company_admin'] == 1))) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -619,7 +653,7 @@ class UserController extends Controller {
 
         $user = User::where('id', $id)->with(['companies'])->first();
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -630,11 +664,11 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function addCompaniesForUser($id, Request $request) {
+    public function addCompaniesForUser($id, Request $request)
+    {
         $authUser = $request->user();
 
-
-        if (!$authUser["is_admin"]) {
+        if (! $authUser['is_admin']) {
             // Se non è admin o company_admin allora non è autorizzato
             return response([
                 'message' => 'Unauthorized',
@@ -643,7 +677,7 @@ class UserController extends Controller {
 
         $user = User::where('id', $id)->first();
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -662,10 +696,11 @@ class UserController extends Controller {
         ], 200);
     }
 
-    public function deleteCompaniesForUser($id, Company $company, Request $request) {
+    public function deleteCompaniesForUser($id, Company $company, Request $request)
+    {
         $authUser = $request->user();
 
-        if (!$authUser["is_admin"]) {
+        if (! $authUser['is_admin']) {
             // Se non è admin o company_admin allora non è autorizzato
             return response([
                 'message' => 'Unauthorized',
@@ -674,7 +709,7 @@ class UserController extends Controller {
 
         $user = User::where('id', $id)->first();
 
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
