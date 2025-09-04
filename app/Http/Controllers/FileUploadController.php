@@ -44,8 +44,14 @@ class FileUploadController extends Controller
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
             return Storage::disk('gcs')->temporaryUrl($filePath, now()->addMinutes($minutesValid));
+        } elseif ($disk === 'private' || $disk === 's3') {
+            // Per Cloudflare R2 o AWS S3, usa temporaryUrl
+            /**
+             * @disregard Intelephense non rileva il metodo temporaryUrl
+             */
+            return Storage::disk($disk)->temporaryUrl($filePath, now()->addMinutes($minutesValid));
         } else {
-            // Per il disco di default (locale), ritorna il path diretto
+            // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
             return Storage::url($filePath);
         }
