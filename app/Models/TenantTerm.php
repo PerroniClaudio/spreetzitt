@@ -14,11 +14,11 @@ class TenantTerm extends Model
         'key',
         'value',
         'description',
-        'category'
+        'category',
     ];
 
     protected $casts = [
-        'value' => 'array'
+        'value' => 'array',
     ];
 
     /**
@@ -50,14 +50,14 @@ class TenantTerm extends Model
     /**
      * Set a term for a tenant
      */
-    public static function setTermForTenant(string $tenant, string $key, $value, string $description = null, string $category = null): self
+    public static function setTermForTenant(string $tenant, string $key, $value, ?string $description = null, ?string $category = null): self
     {
         return self::updateOrCreate(
             ['tenant' => $tenant, 'key' => $key],
             [
                 'value' => $value,
                 'description' => $description,
-                'category' => $category
+                'category' => $category,
             ]
         );
     }
@@ -68,6 +68,7 @@ class TenantTerm extends Model
     public static function getCurrentTenantTerm(string $key, $default = null)
     {
         $tenant = config('app.tenant', env('TENANT', 'default'));
+
         return self::getTermForTenant($tenant, $key, $default);
     }
 }
