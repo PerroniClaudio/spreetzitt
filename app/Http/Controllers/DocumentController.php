@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\FileUploadController;
 
 class DocumentController extends Controller
 {
@@ -331,9 +332,10 @@ class DocumentController extends Controller
                 $filePath = 'documents'.$document->path.$document->uploaded_name;
 
                 // Check if the file exists in storage
-                if (Storage::disk('gcs')->exists($filePath)) {
+                $disk = FileUploadController::getStorageDisk();
+                if (Storage::disk($disk)->exists($filePath)) {
                     // Delete the file from storage
-                    Storage::disk('gcs')->delete($filePath);
+                    Storage::disk($disk)->delete($filePath);
                 }
             }
             // If it's a folder, check if it's empty

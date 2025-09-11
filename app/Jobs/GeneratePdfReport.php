@@ -1589,7 +1589,8 @@ class GeneratePdfReport implements ShouldQueue {
                 throw new Exception("PDF generation failed");
             }
 
-            Storage::disk('gcs')->put($report->file_path, $pdf->output());
+            $disk = \App\Http\Controllers\FileUploadController::getStorageDisk();
+            Storage::disk($disk)->put($report->file_path, $pdf->output());
 
             // Se ci mette troppo tempo potremmo rispondere ok alla creazione del report e generarlo tramite un job, che quando ha fatto aggiorna il report
             
