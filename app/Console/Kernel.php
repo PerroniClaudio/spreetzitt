@@ -14,13 +14,8 @@ class Kernel extends ConsoleKernel {
 
         $schedule->job(new \App\Jobs\TicketStats)->everyFiveMinutes(); //ogni 5 min
 
-        for($i = 6; $i <= 17; $i++) {
-            if($i < 10) {
-                $j = "0$i";
-            } else {
-                $j = $i;
-            }
-            $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt("$j:00");
+        foreach (['08:00', '12:00', '16:00'] as $time) {
+            $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt($time);
         }
 
         // AUTO_ASSIGN_TICKET=true

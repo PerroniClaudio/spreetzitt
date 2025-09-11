@@ -55,7 +55,11 @@ return array(
          *
          * Note: This directory must exist and be writable by the webserver process.
          */
-        "font_cache" => storage_path('fonts'),
+    /*
+     * Font cache directory: must be writable. In serverless prefer the
+     * system temp dir (/tmp). Allow override with DOMPDF_FONT_CACHE.
+     */
+    "font_cache" => env('DOMPDF_FONT_CACHE', sys_get_temp_dir()),
 
         /**
          * The location of a temporary directory.
@@ -160,7 +164,7 @@ return array(
          * the desired content might be different (e.g. screen or projection view of html file).
          * Therefore allow specification of content here.
          */
-        "default_media_type" => "screen",
+    "default_media_type" => "screen",
 
         /**
          * The default paper size.
@@ -186,7 +190,11 @@ return array(
          * Used if no suitable fonts can be found. This must exist in the font folder.
          * @var string
          */
-        "default_font" => "serif",
+    /*
+     * Default font: force a known-good bundled font. Can be overridden via
+     * the DOMPDF_DEFAULT_FONT env var if needed.
+     */
+    "default_font" => env('DOMPDF_DEFAULT_FONT', 'DejaVuSans'),
 
         /**
          * Image DPI setting
@@ -264,7 +272,13 @@ return array(
          *
          * @var bool
          */
-        "enable_remote" => true,
+    /*
+     * Disable remote loading by default in serverless environments so dompdf
+     * doesn't try to fetch web fonts (e.g. Inter) which create temporary
+     * files under storage/fonts and can fail. Override with
+     * DOMPDF_ENABLE_REMOTE=true if remote fonts are required.
+     */
+    "enable_remote" => env('DOMPDF_ENABLE_REMOTE', false),
 
         /**
          * A ratio applied to the fonts height to be more like browsers' line height
