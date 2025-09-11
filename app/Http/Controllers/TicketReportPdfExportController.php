@@ -7,6 +7,7 @@ use App\Models\Company;
 use App\Models\TicketReportPdfExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\FileUploadController;
 
 class TicketReportPdfExportController extends Controller
 {
@@ -182,18 +183,19 @@ class TicketReportPdfExportController extends Controller
 
         $filePath = $ticketReportPdfExport->file_path;
 
-        if (! Storage::disk('gcs')->exists($filePath)) {
+        $disk = FileUploadController::getStorageDisk();
+
+        if (! Storage::disk($disk)->exists($filePath)) {
             return response()->json(['message' => 'File not found.'], 404);
         }
-
-        $fileContent = Storage::disk('gcs')->get($filePath);
+        $fileContent = Storage::disk($disk)->get($filePath);
         $fileName = $ticketReportPdfExport->file_name;
 
         /**
          * @disregard Intelephense non rileva il metodo mimeType
          */
         return response($fileContent, 200)
-            ->header('Content-Type', Storage::disk('gcs')->mimeType($filePath))
+            ->header('Content-Type', Storage::disk($disk)->mimeType($filePath))
             ->header('Content-Disposition', 'attachment; filename="'.$fileName.'"')
             ->header('Access-Control-Expose-Headers', 'Content-Disposition');
     }
@@ -307,9 +309,10 @@ class TicketReportPdfExportController extends Controller
             // Cancello il file dal bucket
             if ($ticketReportPdfExport->is_generated) {
                 $filePath = $ticketReportPdfExport->file_path;
-                if (Storage::disk('gcs')->exists($filePath)) {
-                    Storage::disk('gcs')->delete($filePath);
-                }
+                    $disk = FileUploadController::getStorageDisk();
+                    if (Storage::disk($disk)->exists($filePath)) {
+                        Storage::disk($disk)->delete($filePath);
+                    }
             }
 
             // Imposta come non generato e cancella il messaggio di errore
@@ -361,8 +364,9 @@ class TicketReportPdfExportController extends Controller
             // Cancello il file dal bucket
             if ($ticketReportPdfExport->is_generated) {
                 $filePath = $ticketReportPdfExport->file_path;
-                if (Storage::disk('gcs')->exists($filePath)) {
-                    Storage::disk('gcs')->delete($filePath);
+                $disk = FileUploadController::getStorageDisk();
+                if (Storage::disk($disk)->exists($filePath)) {
+                    Storage::disk($disk)->delete($filePath);
                 }
             }
             // Cancello il report dal db
