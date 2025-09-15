@@ -84,13 +84,13 @@ class BrandController extends Controller
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
 
-            $path = 'brands/'.$id.'/logo/'.$file_name;
+            $path = 'brands/'.$id.'/logo';
 
-            $file->storeAs($path);
+            $file_path = FileUploadController::storeFile($file, $path, $file_name);
 
             $brand = Brand::find($id);
             $brand->update([
-                'logo_url' => $path,
+                'logo_url' => $file_path,
             ]);
 
             return response()->json([
@@ -113,23 +113,39 @@ class BrandController extends Controller
 
     public function getLogo(Brand $brand)
     {
-        // header("Content-type: image/jpeg"); //(così che viene settato l'header della risposta)
-        // $url = Storage::disk('gcs')->temporaryUrl(
-        //     $brand->logo_url,
-        //     now()->addMinutes(65)
-        // );
-        // imagejpeg($url);
-
-        //Query per l'immagine che ti serve
+        $disk = FileUploadController::getStorageDisk();
         $imagePath = $brand->logo_url;
-        // Genera l'URL temporaneo per l'immagine nel bucket
-        $imageUrl = FileUploadController::generateSignedUrlForFile($imagePath);
-        // Scarica l'immagine dal bucket
-        $imageContent = file_get_contents($imageUrl);
+
+        if ($disk === 'public' || $disk === 'local') {
+            // Se il disco è locale, costruiamo il path assoluto
+            $imageContent = file_get_contents(Storage::path($imagePath));
+        } else {
+            // Per i dischi cloud, generiamo un URL firmato e scarichiamo il contenuto
+            $imageUrl = FileUploadController::generateSignedUrlForFile($imagePath);
+            $imageContent = file_get_contents($imageUrl);
+        }
 
         // Restituisci l'immagine come risposta HTTP con il tipo di contenuto image/jpeg
         return response($imageContent, 200, [
             'Content-Type' => 'image/jpeg',
         ]);
+    }
+
+    public function getLogos()
+    {
+        $brands = Brand::whereNotNull('logo_url')->get();
+        $disk = FileUploadController::getStorageDisk();
+
+        foreach ($brands as $brand) {
+            if ($disk === 'public' || $disk === 'local') {
+                $brand->logo_url = config('app.url') . '/api/brand/' . $brand->id . '/logo';
+            } else {
+                $brand->logo_url = FileUploadController::generateSignedUrlForFile($brand->logo_url, 70);
+            }
+        }
+
+        return response([
+            'brands' => $brands,
+        ], 200);
     }
 }

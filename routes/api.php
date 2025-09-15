@@ -28,6 +28,19 @@ Route::get('/tenant-terms/public', [App\Http\Controllers\TenantTermController::c
 Route::get('/tenant-terms/public/{key}', [App\Http\Controllers\TenantTermController::class, "show"]);
 Route::get('/tenant-terms/public/category/{category}', [App\Http\Controllers\TenantTermController::class, "byCategory"]);
 
+// PUBLIC ROUTES
+
+// Brand Routes
+Route::get("/brand/{brand}/logo", [BrandController::class, "getLogo"]);
+Route::get("/brands/logos", [BrandController::class, "getLogos"]);
+
+// File Upload Routes
+Route::post("/upload-file", [App\Http\Controllers\FileUploadController::class, "uploadFileToCloud"]);
+
+// Feature Flags Routes
+Route::get('/features', [App\Http\Controllers\FeatureFlagController::class, "getFeatures"]);
+Route::post('/features/flush', [App\Http\Controllers\FeatureFlagController::class, "flushFeatureFlags"]);
+
 
 // AUTHENTICATION ROUTES 
 
@@ -344,14 +357,3 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
 
 });
 
-// PUBLIC ROUTES
-
-// Brand Routes
-Route::get("/brand/{brand}/logo", [BrandController::class, "getLogo"]);
-
-// File Upload Routes
-Route::post("/upload-file", [App\Http\Controllers\FileUploadController::class, "uploadFileToCloud"]);
-
-// Feature Flags Routes
-Route::get('/features', [App\Http\Controllers\FeatureFlagController::class, "getFeatures"]);
-Route::post('/features/flush', [App\Http\Controllers\FeatureFlagController::class, "flushFeatureFlags"]);

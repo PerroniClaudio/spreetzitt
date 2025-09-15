@@ -27,6 +27,11 @@ class FileUploadController extends Controller
         $disk = self::getStorageDisk();
         $fileName = $fileName ?: time().'_'.$file->getClientOriginalName();
 
+        if ($disk === 'local') {
+            // Se il disco è 'local', salviamo in 'storage/app/public'
+            return $file->storeAs('public/'.$path, $fileName, $disk);
+        }
+
         return $file->storeAs($path, $fileName, $disk);
     }
 
@@ -73,7 +78,7 @@ class FileUploadController extends Controller
                  */
                 $fetchFile = $diskInstance->url($storeFile);
             } else {
-                $fetchFile = Storage::url($storeFile);
+                $fetchFile = Storage::url('/public/'.$storeFile);
             }
         } catch (\Exception $e) {
             return response()->json([
