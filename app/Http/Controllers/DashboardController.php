@@ -174,6 +174,12 @@ class DashboardController extends Controller {
             case 'ticket-master':
                 $card['data'] = $this->getTicketMasterData();
                 break;
+            case 'ticket-master':
+                $card['data'] = $this->getTicketMasterData();
+                break;
+            case 'activities-open':
+                $card['data'] = $this->getNormalTicketData();
+                break;
             case 'recent-functions':
             case 'recent-tickets':
                 $card['data'] = $this->getRecentTicketsData();
@@ -373,5 +379,30 @@ class DashboardController extends Controller {
         })->values()->toArray();
 
 
+    }
+
+    public function getNormalTicketData() {
+        $ticketStages = config('app.ticket_stages');
+
+        // Recupera ticket i cui tipi hanno is_master = 0 usando whereHas per evitare join e abilitare eager loading
+        // Assicurati di includere la foreign key 'user_id' nella selezione, altrimenti la relazione user non viene collegata.
+        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname']) // Eager load per ottimizzare le query
+            ->where('status', '!=', 5)
+            ->whereHas('ticketType', function ($query) {
+                $query->where('is_master', 0);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id'])
+            ->take(5);
+
+        return $tickets->map(function ($ticket) use ($ticketStages) {
+            return [
+                'id' => $ticket->id,
+                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
+                'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '') . ' ' . ($ticket->handler->surname ?? '')) : null,
+                'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '') . ' ' . ($ticket->user->surname ?? '')) : null,
+            ];
+        })->values()->toArray();
     }
 }
