@@ -73,5 +73,35 @@ return [
             ]
         ]
     ],
+    'lexblast' => [
+        'leftCards' => [
+            [
+                'id' => 'ticket-master',
+                'type' => 'ticket-master',
+                'color' => 'primary',
+                'content' => 'Fascicoli aperti'
+            ],
+            [
+                'id' => 'activities-open',
+                'type' => 'activities-open',
+                'color' => 'secondary',
+                'content' => 'Attività in corso'
+            ]
+        ],
+        'rightCards' => [
+            [
+                'id' => 'ticket-redirect',
+                'type' => 'tickets-redirect',
+                'color' => 'secondary',
+                'content' => 'Gestione ticket'
+            ],
+            [
+                'id' => 'accesso-rapido-report',
+                'type' => 'quick-access-reports',
+                'color' => 'secondary',
+                'content' => 'Accesso rapido report'
+            ]
+        ]
+    ]
     // Aggiungi qui altri tenant con le rispettive configurazioni
 ];
