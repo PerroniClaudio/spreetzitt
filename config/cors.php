@@ -31,4 +31,5 @@ return [
 
     'supports_credentials' => true,
 
+    'exposed_headers' => ['Content-Disposition'],
 ];

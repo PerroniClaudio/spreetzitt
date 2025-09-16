@@ -1069,15 +1069,34 @@ class HardwareController extends Controller {
 
         // $fileName = 'hardware_assignment_' . $hardware->id . '_to_' . $user->id . '.pdf';
 
-        $name = 'hardware_user_assignment_' . $hardware->id . '_to_' . $user->id . '_' . time() . '.pdf';
+        $hardwareFileName = $hardware->support_label
+            ?? $hardware->company_asset_number
+            ?? $hardware->serial_number
+            ?? $hardware->model
+            ?? $hardware->id;
+        $userFileName = $user->surname
+            ? ($user->name ? $user->surname . '_' . $user->name : $user->surname)
+            : ($user->name ?? $user->id);
+        $name = 'hardware_user_assignment_' . $hardwareFileName . '_to_' . $userFileName . '_' . time() . '.pdf';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
 
         $hardware->load(['hardwareType', 'company']);
 
         $relation = $hardware->users()->wherePivot('user_id', $user->id)->first();
 
-        $brand = $hardware->company->brands()->first();
-        $google_url = $brand->withGUrl()->logo_url;
+        // Gestione logo per sviluppo e produzione
+        $google_url = null;
+        if ($hardware->company) {
+            $brand = $hardware->company->brands()->first();
+            if ($brand) {
+                $google_url = $brand->withGUrl()->logo_url;
+            }
+        }
+        
+        // Fallback per sviluppo se non c'è logo
+        if (app()->environment('local', 'development') && empty($google_url)) {
+            $google_url = null; // In sviluppo non mostriamo logo se mancante
+        }
 
         $data = [
             'title' => $name,
