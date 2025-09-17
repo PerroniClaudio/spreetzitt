@@ -198,6 +198,14 @@ class User extends Authenticatable {
         return $this->hasOne(Dashboard::class);
     }
 
+    /**
+     * Assignment history records associated to the admin user.
+     */
+    public function assignmentHistoryRecords()
+    {
+        return $this->hasMany(TicketAssignmentHistoryRecord::class, 'admin_user_id');
+    }
+
     public function selectedCompany() {
         $selectedCompanyId = session('selected_company_id');
         $company = null;

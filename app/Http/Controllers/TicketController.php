@@ -11,6 +11,7 @@ use App\Models\Group;
 use App\Models\Hardware;
 use App\Models\HardwareAuditLog;
 use App\Models\Ticket;
+use App\Models\TicketAssignmentHistoryRecord;
 use App\Models\TicketFile;
 use App\Models\TicketMessage;
 use App\Models\TicketStatusUpdate;
@@ -1832,4 +1833,196 @@ class TicketController extends Controller
 
         return response()->json($tickets);
     }
+
+    //? Nuove funzioni di assegnazione
+
+    /**
+     * La funzione di assegnazione riceve come parametri:
+     * - ticket_id
+     * - group_id
+     * - user_id 
+     * - messaggio
+     * 
+     * Una volta verificati i permessi dell'utente che fa la richiesta, crea un record in TicketAssignmentHistoryRecord con gli attuali dati del ticket.
+     * Dopodichè aggiorna il ticket con i nuovi dati.
+     * Infine crea un TicketStatusUpdate con il messaggio di assegnazione ed annessa notifica.
+     * Se il ticket viene assegnato ad un utente, lo stato del ticket viene aggiornato in "Assegnato" se era "Nuovo".
+     */
+
+    public function assign(Request $request) {
+
+        $request->validate([
+            'ticket_id' => 'required|int|exists:tickets,id',
+            'group_id' => 'required|int|exists:groups,id',
+            'user_id' => 'required|int|exists:users,id',
+            'message' => 'required|string',
+        ]);
+
+        $authUser = $request->user();
+        if ($authUser['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        $ticket = Ticket::where('id', $request->ticket_id)->first();
+
+        if ($ticket == null) {
+            return response([
+                'message' => 'Ticket not found',
+            ], 404);
+        }
+
+        // Crea un record di partenza nella history se non ce ne sono.
+
+        if ($ticket->assignmentHistory()->count() == 0) {
+            $historyRecord = TicketAssignmentHistoryRecord::create([
+                'ticket_id' => $ticket->id,
+                'group_id' => $ticket->group_id,
+                'user_id' => $ticket->admin_user_id,
+                'message' => 'Record di partenza',
+            ]);
+        }
+
+        $historyRecord = TicketAssignmentHistoryRecord::create([
+            'ticket_id' => $ticket->id,
+            'group_id' => $request->group_id,
+            'user_id' => $request->admin_user_id,
+            'message' => $request->message,
+        ]);
+
+        $ticket->update([
+            'group_id' => $request->group_id ?? $ticket->group_id,
+            'admin_user_id' => $request->user_id ?? $ticket->admin_user_id,
+            'assigned' => true,
+            'last_assignment_id' => $historyRecord->id,
+        ]);
+
+        $message = 'Assegnazione ticket all\'utente '.($request->user_id ? User::find($request->user_id)->name.' '.User::find($request->user_id)->surname : 'Nessuno') .' del gruppo '.($request->group_id ? Group::find($request->group_id)->name : 'Nessuno') . ', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $authUser->id,
+            'content' => $message,
+            'type' => 'assign',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+
+        // Invalida la cache per chi ha creato il ticket e per i referenti.
+        $ticket->invalidateCache();
+
+        // Se lo stato è 'Nuovo' aggiornarlo in assegnato
+        $ticketStages = config('app.ticket_stages');
+        if ($ticketStages[$ticket->status] == 'Nuovo' && $request->user_id != null) {
+            $index_status_assegnato = array_search('Assegnato', $ticketStages);
+            $ticket->update(['status' => $index_status_assegnato]);
+            $new_status = $ticketStages[$ticket->status];   
+            $update = TicketStatusUpdate::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $authUser->id,
+                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$new_status.'"',
+                'type' => 'status',
+            ]);
+            // Invalida la cache per chi ha creato il ticket e per i referenti.
+            $ticket->invalidateCache();
+        }
+
+        return response([
+            'ticket' => $ticket,
+            'assignment_history_record' => $historyRecord,
+        ], 200);
+       
+    }
+
+    public function asignmentHistory(Ticket $ticket) {
+
+        $history = $ticket->assignmentHistory()->with([
+            'adminUser',
+            'group',
+        ])->get();
+
+        return response([
+            'history' => $history,
+        ], 200);
+
+    }
+
+    /**
+     * La funzione di riassegnazione riceve come parametri:
+     * - id della history a cui si deve tornare
+     * - messaggio
+     * 
+     * Dopo di che si assegna il ticket a utente e gruppo di quel record, si crea un nuovo record in history con i dati attuali del ticket e si crea un TicketStatusUpdate con il messaggio di riassegnazione.
+     */
+
+    public function reassign(Request $request) {
+
+        $request->validate([
+            'history_id' => 'required|int|exists:ticket_assignment_history_records,id',
+            'message' => 'required|string',
+        ]);
+
+        $authUser = $request->user();
+
+        if ($authUser['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        $historyRecord = TicketAssignmentHistoryRecord::where('id', $request->history_id)->with([
+            'adminUser',
+            'group',
+        ])->first();
+
+        if ($historyRecord == null) {
+            return response([
+                'message' => 'History record not found',
+            ], 404);
+        }
+
+        $ticket = Ticket::where('id', $historyRecord->ticket_id)->first();
+        if ($ticket == null) {
+            return response([
+                'message' => 'Ticket not found',
+            ], 404);
+        }
+
+        $newHistoryRecord = TicketAssignmentHistoryRecord::create([
+            'ticket_id' => $ticket->id,
+            'group_id' => $ticket->group_id,
+            'user_id' => $ticket->admin_user_id,
+            'message' => $request->message,
+        ]);
+
+        $ticket->update([
+            'group_id' => $historyRecord->group_id,
+            'admin_user_id' => $historyRecord->user_id,
+            'assigned' => true,
+            'last_assignment_id' => $newHistoryRecord->id,
+        ]);
+
+        $message = 'Riassegnazione ticket all\'utente '.($historyRecord->adminUser ? $historyRecord->adminUser->name.' '.$historyRecord->adminUser->surname : 'Nessuno') .' del gruppo '.($historyRecord->group ? $historyRecord->group->name : 'Nessuno') . ', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $authUser->id,
+            'content' => $message,
+            'type' => 'assign',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+        // Invalida la cache per chi ha creato il ticket e per i referenti.
+        $ticket->invalidateCache();
+
+
+        return response([
+            'ticket' => $ticket,
+            'assignment_history_record' => $newHistoryRecord,
+        ], 200);
+
+    }
+
 }

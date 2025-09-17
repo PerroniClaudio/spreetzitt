@@ -43,6 +43,12 @@ class Ticket extends Model {
         'no_user_response',
         'referer_id',
         'referer_it_id',
+        'assigned',
+        'last_assignment_id',
+    ];
+
+    protected $casts = [
+        'assigned' => 'boolean',
     ];
 
     public function toSearchableArray() {
@@ -127,6 +133,22 @@ class Ticket extends Model {
 
     public function files() {
         return $this->hasMany(TicketFile::class);
+    }
+
+    /**
+     * Assignment history records for this ticket.
+     */
+    public function assignmentHistoryRecords()
+    {
+        return $this->hasMany(TicketAssignmentHistoryRecord::class, 'ticket_id');
+    }
+
+    /**
+     * Last assignment record reference.
+     */
+    public function lastAssignment()
+    {
+        return $this->belongsTo(TicketAssignmentHistoryRecord::class, 'last_assignment_id');
     }
 
     public function brandUrl() {
