@@ -39,8 +39,13 @@ class TicketController extends Controller
         // Deve comprendere i ticket chiusi?
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
 
+        $selectedCompany = $user->selectedCompany();
+        if (!$selectedCompany) {
+            return response(['message' => 'No company selected'], 400);
+        }
+
         // Generazione query in base ai parametri della richiesta.
-        $query = Ticket::query()->where('company_id', $user->selectedCompany()->id);
+        $query = Ticket::query()->where('company_id', $selectedCompany->id);
         if (! $withClosed) {
             $query->where('status', '!=', 5);
         }
@@ -73,9 +78,9 @@ class TicketController extends Controller
 
         // Generazione chiave cache in base all'utente e ai parametri della richiesta.
         if ($withClosed) {
-            $cacheKey = 'user_'.$user->id.'_'.$user->selectedCompany()->id.'_tickets_with_closed';
+            $cacheKey = 'user_'.$user->id.'_'.$selectedCompany->id.'_tickets_with_closed';
         } else {
-            $cacheKey = 'user_'.$user->id.'_'.$user->selectedCompany()->id.'_tickets';
+            $cacheKey = 'user_'.$user->id.'_'.$selectedCompany->id.'_tickets';
         }
 
         // Recupero dati e salvataggio in cache per 5 minuti
@@ -145,7 +150,8 @@ class TicketController extends Controller
             }
 
             // Admin o con ticketType.company_id tra le sue aziende
-            if (! $user->is_admin && ($user->selectedCompany()->id != $ticketType->company_id)) {
+            $selectedCompany = $user->selectedCompany();
+            if (!$user->is_admin && (!$selectedCompany || $selectedCompany->id != $ticketType->company_id)) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -382,114 +388,22 @@ class TicketController extends Controller
     public function show($id, Request $request)
     {
         $user = $request->user();
-
-        $ticket = Ticket::where('id', $id)->with([
-            'ticketType' => function ($query) {
-                $query->with('category');
-            },
-            'hardware' => function ($query) {
-                $query->with('hardwareType');
-            },
-            'company' => function ($query) {
-                $query->select('id', 'name', 'logo_url');
-            },
-            'user' => function ($query) {
-                $query->select('id', 'name', 'surname', 'email', 'is_admin');
-            },
-            'files',
-        ])->first();
-
-        if ($ticket == null) {
-            return response([
-                'message' => 'Ticket not found',
-            ], 404);
+        
+        // 1. Trova il ticket
+        $ticket = $this->findTicketWithRelations($id);
+        if (!$ticket) {
+            return response(['message' => 'Ticket not found'], 404);
         }
 
-        // Se la richiesta è lato utente ed il ticket è stato aperto dal supporto, si deve nascondere il nome dell'utente che ha aperto il ticket
-        if (! $user->is_admin && $ticket->user->is_admin) {
-            $ticket->user->id = 1;
-            $ticket->user->name = 'Supporto';
-            $ticket->user->surname = '';
-            $ticket->user->email = 'Supporto';
+        // 2. Controlla autorizzazione
+        if (!$this->canViewTicket($user, $ticket)) {
+            return response(['message' => 'Unauthorized'], 401);
         }
 
-        $groupIdExists = false;
-
-        foreach ($user->groups as $group) {
-            if ($group->id == $ticket['group_id']) {
-                $groupIdExists = true;
-                break;
-            }
-        }
-
-        // Può avere il ticket solo se:
-        // admin e del gruppo associato,
-        // company admin e della stessa azienda del ticket,
-        // della stessa azienda del ticket ed il creatore del ticket o se è l'utente interessato (referer), (non necessariamente company_admin).
-        // titolare del dato dell'azienda del ticket.
-        $authorized = false;
-        // $isCompanyInUsersCompanies = in_array($ticket->company_id, $user->companies()->pluck('companies.id')->toArray());
-        if (
-            ($user['is_admin'] == 1 && $groupIdExists) ||
-            (($ticket->company_id == $user->selectedCompany()->id) && $user['is_company_admin'] == 1) ||
-            (($ticket->company_id == $user->selectedCompany()->id) && $ticket->user_id == $user->id) ||
-            ($ticket->referer?->id == $user->id) ||
-            ($ticket->company->data_owner_email == $user->email)
-        ) {
-            $authorized = true;
-        }
-
-        if (! $authorized) {
-            return response([
-                'message' => 'Unauthorized',
-            ], 401);
-        }
-
-        // Se l'utente è admin si devono impostare i messaggi degli utenti come letti, altrimenti si devono impostare i messaggi degli admin come letti.
-        // Se si vuole mostrare quanti messaggi erano da leggere si potrebbe usare un async che posticipi l'azzeramento dei messaggi non letti, in modo da inviare le risposta prima della modifica.
-        if ($user['is_admin'] == 1) {
-            // $ticket->setUsersMessagesAsRead();
-            // solo se l'admin è anche il gestore del ticket.
-            if (isset($ticket->admin_user_id) && $ticket->admin_user_id == $user->id && $ticket->unread_mess_for_adm > 0) {
-                $ticket->update(['unread_mess_for_adm' => 0]);
-                cache()->forget('user_'.$user->id.'_tickets');
-                cache()->forget('user_'.$user->id.'_tickets_with_closed');
-            }
-        } elseif ($ticket->unread_mess_for_usr > 0) {
-            // $ticket->setAdminsMessagesAsRead();
-            $ticket->update(['unread_mess_for_usr' => 0]);
-            cache()->forget('user_'.$user->id.'_tickets');
-            cache()->forget('user_'.$user->id.'_tickets_with_closed');
-        }
-
-        // Messo qui perchè altrimenti va in conflitto con gli update
-        // (il campo child_ticket_id non esiste nel modello. Viene usato solo per la navigazione nel frontend)
-        $childTicket = Ticket::where('parent_ticket_id', $ticket->id)->first();
-        $ticket->child_ticket_id = $childTicket->id ?? null;
-
-        // il campo reopen_child_ticket_id non esiste nel modello. viene usato solo per la navigazione nel frontend
-        $reopenChildTicket = Ticket::where('reopen_parent_id', $ticket->id)->first();
-        $ticket->reopen_child_ticket_id = $reopenChildTicket->id ?? null;
-
-        $ticket->closed_at = null;
-        // Il campo can reopen non esiste nel modello. Viene usato per indicare se il ticket può essere riaperto.
-        $can_reopen = false;
-        $closingUpdate = $ticket->statusUpdates()
-            ->where('type', 'closing')
-            ->orderBy('created_at', 'desc')
-            ->first();
-        if ($closingUpdate) {
-            // Se il ticket è stato chiuso, non ha un ticket figlio (quindi non è stata usata l'altra funzione che chiude un ticket e ne apre un'altro)
-            // e sono passati meno di 7 giorni dalla chiusura, si può riaprire.
-            $can_reopen = ($ticket->status == 5
-                && ((time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60))
-                && ! $childTicket
-            );
-
-            // Aggiunge la data di chiusura per facilitare i controlli nel frontend.
-            $ticket->closed_at = $closingUpdate->created_at ?? null;
-        }
-        $ticket->can_reopen = $can_reopen;
+        // 3. Applica trasformazioni per il frontend
+        $this->maskSupportUserIfNeeded($user, $ticket);
+        $this->markMessagesAsRead($user, $ticket);
+        $this->addVirtualFields($ticket);
 
         return response([
             'ticket' => $ticket,
@@ -1212,7 +1126,9 @@ class TicketController extends Controller
 
         $authUser = $request->user();
         $ticket = Ticket::find($id);
-        if (! $authUser->is_admin && ($authUser->selectedCompany()->id != $ticket->company_id)) {
+        
+        $selectedCompany = $authUser->selectedCompany();
+        if (!$authUser->is_admin && (!$selectedCompany || $selectedCompany->id != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized.',
             ], 401);
@@ -1406,10 +1322,10 @@ class TicketController extends Controller
      */
     public function closingMessages(Ticket $ticket, Request $request)
     {
-
         $user = $request->user();
+        $selectedCompany = $user->selectedCompany();
 
-        if ($user['is_admin'] != 1 && ($user->selectedCompany()->id != $ticket->company_id)) {
+        if ($user['is_admin'] != 1 && (!$selectedCompany || $selectedCompany->id != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1427,10 +1343,11 @@ class TicketController extends Controller
      */
     public function getSlaveTickets(Ticket $ticket, Request $request)
     {
-
         $user = $request->user();
+        $selectedCompany = $user->selectedCompany();
 
-        if ($user['is_admin'] != 1 && ! ($user['is_company_admin'] == 1 && $ticket->company_id == $user->selectedCompany()->id)) {
+        if ($user['is_admin'] != 1 && 
+            !($user['is_company_admin'] == 1 && $selectedCompany && $ticket->company_id == $selectedCompany->id)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1478,7 +1395,10 @@ class TicketController extends Controller
     public function report(Ticket $ticket, Request $request)
     {
         $user = $request->user();
-        if ($user['is_admin'] != 1 && ($user['is_company_admin'] != 1 || $ticket->company_id != $user->selectedCompany()->id)) {
+        $selectedCompany = $user->selectedCompany();
+        
+        if ($user['is_admin'] != 1 && 
+            ($user['is_company_admin'] != 1 || !$selectedCompany || $ticket->company_id != $selectedCompany->id)) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -1490,7 +1410,8 @@ class TicketController extends Controller
         if (isset($webform_data->office)) {
             $selectedCompany = $ticket->company;
             if (method_exists($user, 'selectedCompany')) {
-                $selectedCompany = $user->selectedCompany();
+                $userSelectedCompany = $user->selectedCompany();
+                $selectedCompany = $userSelectedCompany ?: $selectedCompany;
             }
             $office = $selectedCompany ? $selectedCompany->offices()->where('id', $webform_data->office)->first() : null;
             $webform_data->office = $office ? $office->name : null;
@@ -1875,11 +1796,11 @@ class TicketController extends Controller
 
         // Crea un record di partenza nella history se non ce ne sono.
 
-        if ($ticket->assignmentHistory()->count() == 0) {
+        if ($ticket->assignmentHistoryRecords()->count() == 0) {
             $historyRecord = TicketAssignmentHistoryRecord::create([
                 'ticket_id' => $ticket->id,
                 'group_id' => $ticket->group_id,
-                'user_id' => $ticket->admin_user_id,
+                'admin_user_id' => $ticket->admin_user_id,
                 'message' => 'Record di partenza',
             ]);
         }
@@ -1887,7 +1808,7 @@ class TicketController extends Controller
         $historyRecord = TicketAssignmentHistoryRecord::create([
             'ticket_id' => $ticket->id,
             'group_id' => $request->group_id,
-            'user_id' => $request->admin_user_id,
+            'admin_user_id' => $request->user_id,
             'message' => $request->message,
         ]);
 
@@ -1897,6 +1818,8 @@ class TicketController extends Controller
             'assigned' => true,
             'last_assignment_id' => $historyRecord->id,
         ]);
+
+      
 
         $message = 'Assegnazione ticket all\'utente '.($request->user_id ? User::find($request->user_id)->name.' '.User::find($request->user_id)->surname : 'Nessuno') .' del gruppo '.($request->group_id ? Group::find($request->group_id)->name : 'Nessuno') . ', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
 
@@ -1936,9 +1859,13 @@ class TicketController extends Controller
        
     }
 
+    /**
+     * Recupera la history delle assegnazioni di un ticket.
+     */
+
     public function asignmentHistory(Ticket $ticket) {
 
-        $history = $ticket->assignmentHistory()->with([
+        $history = $ticket->assignmentHistoryRecords()->with([
             'adminUser',
             'group',
         ])->get();
@@ -1993,7 +1920,7 @@ class TicketController extends Controller
         $newHistoryRecord = TicketAssignmentHistoryRecord::create([
             'ticket_id' => $ticket->id,
             'group_id' => $ticket->group_id,
-            'user_id' => $ticket->admin_user_id,
+            'admin_user_id' => $ticket->admin_user_id,
             'message' => $request->message,
         ]);
 
@@ -2025,4 +1952,213 @@ class TicketController extends Controller
 
     }
 
+    /**
+     * 
+     */
+
+    public function getCurrentHandler(Ticket $ticket) {
+
+        $admin_handler = null;
+        if ($ticket->admin_user_id !== null) {
+            $adminUser = User::select('id', 'name', 'surname')->find($ticket->admin_user_id);
+            if ($adminUser) {
+            $admin_handler = [
+                'id' => $adminUser->id,
+                'name' => trim($adminUser->name.' '.($adminUser->surname ?? '')),
+            ];
+            }
+        }
+
+        $group_handler = null;
+        if ($ticket->group_id !== null) {
+            $groupModel = Group::select('id', 'name')->find($ticket->group_id);
+            if ($groupModel) {
+            $group_handler = [
+                'id' => $groupModel->id,
+                'name' => $groupModel->name,
+            ];
+            }
+        }
+
+        return response([
+            'handler' => [
+                'admin' => $admin_handler,
+                'group' => $group_handler,
+            ],
+        ], 200);
+    }
+
+    /**
+     * Helper method per trovare un ticket con le relazioni necessarie
+     */
+    private function findTicketWithRelations($id)
+    {
+        return Ticket::where('id', $id)->with([
+            'ticketType' => function ($query) {
+                $query->with('category');
+            },
+            'hardware' => function ($query) {
+                $query->with('hardwareType');
+            },
+            'company' => function ($query) {
+                $query->select('id', 'name', 'logo_url');
+            },
+            'user' => function ($query) {
+                $query->select('id', 'name', 'surname', 'email', 'is_admin');
+            },
+            'files',
+        ])->first();
+    }
+
+    /**
+     * Verifica se l'utente può visualizzare il ticket
+     */
+    private function canViewTicket($user, $ticket): bool
+    {
+        // Admin con accesso al gruppo del ticket
+        if ($user->is_admin && $this->userBelongsToTicketGroup($user, $ticket)) {
+            return true;
+        }
+
+        $selectedCompany = $user->selectedCompany();
+        
+        // Controlli per utenti senza company selezionata
+        if (!$selectedCompany) {
+            return $this->hasAssignmentHistory($user, $ticket) || 
+                   $this->isReferer($user, $ticket) || 
+                   $this->isDataOwner($user, $ticket);
+        }
+
+        // Controlli per utenti con company selezionata
+        return ($this->isSameCompany($selectedCompany, $ticket) && 
+                ($user->is_company_admin || $ticket->user_id === $user->id)) ||
+               $this->hasAssignmentHistory($user, $ticket) ||
+               $this->isReferer($user, $ticket) ||
+               $this->isDataOwner($user, $ticket);
+    }
+
+    /**
+     * Verifica se l'utente appartiene al gruppo del ticket
+     */
+    private function userBelongsToTicketGroup($user, $ticket): bool
+    {
+        return $user->groups->contains('id', $ticket->group_id);
+    }
+
+    /**
+     * Verifica se l'utente ha uno storico di assegnazione per questo ticket
+     */
+    private function hasAssignmentHistory($user, $ticket): bool
+    {
+        return \App\Models\TicketAssignmentHistoryRecord::where('ticket_id', $ticket->id)
+            ->where('admin_user_id', $user->id)
+            ->exists();
+    }
+
+    /**
+     * Verifica se l'utente è il referer del ticket
+     */
+    private function isReferer($user, $ticket): bool
+    {
+        return $ticket->referer && $ticket->referer->id === $user->id;
+    }
+
+    /**
+     * Verifica se l'utente è il data owner dell'azienda del ticket
+     */
+    private function isDataOwner($user, $ticket): bool
+    {
+        return $ticket->company && $ticket->company->data_owner_email === $user->email;
+    }
+
+    /**
+     * Verifica se il ticket appartiene alla stessa azienda dell'utente
+     */
+    private function isSameCompany($selectedCompany, $ticket): bool
+    {
+        return $ticket->company_id === $selectedCompany->id;
+    }
+
+    /**
+     * Nasconde i dati del supporto se necessario
+     */
+    private function maskSupportUserIfNeeded($user, $ticket): void
+    {
+        if (!$user->is_admin && $ticket->user->is_admin) {
+            $ticket->user->id = 1;
+            $ticket->user->name = 'Supporto';
+            $ticket->user->surname = '';
+            $ticket->user->email = 'Supporto';
+        }
+    }
+
+    /**
+     * Segna i messaggi come letti
+     */
+    private function markMessagesAsRead($user, $ticket): void
+    {
+        if ($user->is_admin) {
+            if (isset($ticket->admin_user_id) && 
+                $ticket->admin_user_id === $user->id && 
+                $ticket->unread_mess_for_adm > 0) {
+                $ticket->update(['unread_mess_for_adm' => 0]);
+                $this->clearUserCache($user);
+            }
+        } elseif ($ticket->unread_mess_for_usr > 0) {
+            $ticket->update(['unread_mess_for_usr' => 0]);
+            $this->clearUserCache($user);
+        }
+    }
+
+    /**
+     * Aggiunge campi virtuali per il frontend
+     */
+    private function addVirtualFields($ticket): void
+    {
+        $childTicket = Ticket::where('parent_ticket_id', $ticket->id)->first();
+        $ticket->child_ticket_id = $childTicket->id ?? null;
+
+        $reopenChildTicket = Ticket::where('reopen_parent_id', $ticket->id)->first();
+        $ticket->reopen_child_ticket_id = $reopenChildTicket->id ?? null;
+
+        $closingUpdate = $ticket->statusUpdates()
+            ->where('type', 'closing')
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        $ticket->closed_at = $closingUpdate->created_at ?? null;
+        $ticket->can_reopen = $this->canReopenTicket($ticket, $closingUpdate, $childTicket);
+    }
+
+    /**
+     * Verifica se il ticket può essere riaperto
+     */
+    private function canReopenTicket($ticket, $closingUpdate, $childTicket): bool
+    {
+        if (!$closingUpdate) {
+            return false;
+        }
+
+        return $ticket->status == 5 &&
+               (time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60) &&
+               !$childTicket;
+    }
+
+    /**
+     * Pulisce la cache dell'utente
+     */
+    private function clearUserCache($user): void
+    {
+        cache()->forget('user_'.$user->id.'_tickets');
+        cache()->forget('user_'.$user->id.'_tickets_with_closed');
+    }
+
+    /**
+     * Gestisce operazioni null-safe per selectedCompany
+     */
+    private function getSelectedCompanyId($user)
+    {
+        $selectedCompany = $user->selectedCompany();
+        return $selectedCompany ? $selectedCompany->id : null;
+    }
 }

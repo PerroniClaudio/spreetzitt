@@ -109,6 +109,15 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-types', [App\Http\Controllers\UserController::class, 'ticketTypes']);
     Route::get('/ticket/{ticket}/slave-tickets', [App\Http\Controllers\TicketController::class, 'getSlaveTickets']);
 
+    // Assegnazione ticket
+
+    Route::get('/ticket-assign/{ticket}/history', [App\Http\Controllers\TicketController::class, 'asignmentHistory']);
+    Route::get('/ticket-assign/{ticket}/handler', [App\Http\Controllers\TicketController::class, 'getCurrentHandler']);
+    Route::get('/ticket-assign/groups', [App\Http\Controllers\GroupController::class, 'groupsWithUsers']);
+    Route::post('/ticket-assign/assign', [App\Http\Controllers\TicketController::class, 'assign']);
+    Route::post('/ticket-assign/reassign', [App\Http\Controllers\TicketController::class, 'reassign']);
+
+
     // Company Routes
 
     Route::get('/companies/allowed', [App\Http\Controllers\UserController::class, 'companies']);
