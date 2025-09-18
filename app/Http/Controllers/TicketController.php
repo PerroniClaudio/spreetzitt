@@ -39,13 +39,13 @@ class TicketController extends Controller
         // Deve comprendere i ticket chiusi?
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
 
-        $selectedCompany = $user->selectedCompany();
-        if (!$selectedCompany) {
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
+        if (!$selectedCompanyId) {
             return response(['message' => 'No company selected'], 400);
         }
 
         // Generazione query in base ai parametri della richiesta.
-        $query = Ticket::query()->where('company_id', $selectedCompany->id);
+        $query = Ticket::query()->where('company_id', $selectedCompanyId);
         if (! $withClosed) {
             $query->where('status', '!=', 5);
         }
@@ -78,9 +78,9 @@ class TicketController extends Controller
 
         // Generazione chiave cache in base all'utente e ai parametri della richiesta.
         if ($withClosed) {
-            $cacheKey = 'user_'.$user->id.'_'.$selectedCompany->id.'_tickets_with_closed';
+            $cacheKey = 'user_'.$user->id.'_'.$selectedCompanyId.'_tickets_with_closed';
         } else {
-            $cacheKey = 'user_'.$user->id.'_'.$selectedCompany->id.'_tickets';
+            $cacheKey = 'user_'.$user->id.'_'.$selectedCompanyId.'_tickets';
         }
 
         // Recupero dati e salvataggio in cache per 5 minuti
@@ -150,8 +150,8 @@ class TicketController extends Controller
             }
 
             // Admin o con ticketType.company_id tra le sue aziende
-            $selectedCompany = $user->selectedCompany();
-            if (!$user->is_admin && (!$selectedCompany || $selectedCompany->id != $ticketType->company_id)) {
+            $selectedCompanyId = $this->getSelectedCompanyId($user);
+            if (!$user->is_admin && (!$selectedCompanyId || $selectedCompanyId != $ticketType->company_id)) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -1127,8 +1127,8 @@ class TicketController extends Controller
         $authUser = $request->user();
         $ticket = Ticket::find($id);
         
-        $selectedCompany = $authUser->selectedCompany();
-        if (!$authUser->is_admin && (!$selectedCompany || $selectedCompany->id != $ticket->company_id)) {
+        $selectedCompanyId = $this->getSelectedCompanyId($authUser);
+        if (!$authUser->is_admin && (!$selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized.',
             ], 401);
@@ -1323,9 +1323,9 @@ class TicketController extends Controller
     public function closingMessages(Ticket $ticket, Request $request)
     {
         $user = $request->user();
-        $selectedCompany = $user->selectedCompany();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
 
-        if ($user['is_admin'] != 1 && (!$selectedCompany || $selectedCompany->id != $ticket->company_id)) {
+        if ($user['is_admin'] != 1 && (!$selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1344,10 +1344,10 @@ class TicketController extends Controller
     public function getSlaveTickets(Ticket $ticket, Request $request)
     {
         $user = $request->user();
-        $selectedCompany = $user->selectedCompany();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
 
         if ($user['is_admin'] != 1 && 
-            !($user['is_company_admin'] == 1 && $selectedCompany && $ticket->company_id == $selectedCompany->id)) {
+            !($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1395,10 +1395,10 @@ class TicketController extends Controller
     public function report(Ticket $ticket, Request $request)
     {
         $user = $request->user();
-        $selectedCompany = $user->selectedCompany();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
         
         if ($user['is_admin'] != 1 && 
-            ($user['is_company_admin'] != 1 || !$selectedCompany || $ticket->company_id != $selectedCompany->id)) {
+            ($user['is_company_admin'] != 1 || !$selectedCompanyId || $ticket->company_id != $selectedCompanyId)) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -1408,12 +1408,12 @@ class TicketController extends Controller
         $webform_data = json_decode($ticket->messages()->first()->message);
 
         if (isset($webform_data->office)) {
-            $selectedCompany = $ticket->company;
+            $companyForOffice = $ticket->company;
             if (method_exists($user, 'selectedCompany')) {
                 $userSelectedCompany = $user->selectedCompany();
-                $selectedCompany = $userSelectedCompany ?: $selectedCompany;
+                $companyForOffice = $userSelectedCompany ?: $companyForOffice;
             }
-            $office = $selectedCompany ? $selectedCompany->offices()->where('id', $webform_data->office)->first() : null;
+            $office = $companyForOffice ? $companyForOffice->offices()->where('id', $webform_data->office)->first() : null;
             $webform_data->office = $office ? $office->name : null;
         } else {
             $webform_data->office = null;
@@ -1920,13 +1920,13 @@ class TicketController extends Controller
         $newHistoryRecord = TicketAssignmentHistoryRecord::create([
             'ticket_id' => $ticket->id,
             'group_id' => $ticket->group_id,
-            'admin_user_id' => $ticket->admin_user_id,
+            'admin_user_id' => $historyRecord->admin_user_id,
             'message' => $request->message,
         ]);
 
         $ticket->update([
             'group_id' => $historyRecord->group_id,
-            'admin_user_id' => $historyRecord->user_id,
+            'admin_user_id' => $historyRecord->admin_user_id,
             'assigned' => true,
             'last_assignment_id' => $newHistoryRecord->id,
         ]);
