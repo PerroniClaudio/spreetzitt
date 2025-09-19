@@ -3,6 +3,7 @@
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\GroupController;
+use App\Http\Controllers\SupplierController;
 use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\TicketStatusUpdateController;
 use Illuminate\Http\Request;
@@ -29,6 +30,7 @@ Route::get('/tenant-terms/public/category/{category}', [App\Http\Controllers\Ten
 
 // Brand Routes
 Route::get('/brand/{brand}/logo', [BrandController::class, 'getLogo']);
+Route::get('/supplier/{supplier}/logo', [SupplierController::class, 'getLogo']);
 Route::get('/brands/logos', [BrandController::class, 'getLogos']);
 
 // File Upload Routes
@@ -116,7 +118,6 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-assign/groups', [App\Http\Controllers\GroupController::class, 'groupsWithUsers']);
     Route::post('/ticket-assign/assign', [App\Http\Controllers\TicketController::class, 'assign']);
     Route::post('/ticket-assign/reassign', [App\Http\Controllers\TicketController::class, 'reassign']);
-
 
     // Company Routes
 
@@ -268,6 +269,13 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/approved-ticket-pdf-report/list/{company}', [App\Http\Controllers\TicketReportPdfExportController::class, 'approvedPdfCompany']);
     Route::get('/ticket-pdf-report/preview/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfPreview']);
     Route::get('/ticket-pdf-report/download/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfDownload']);
+
+    // Ticket reminder Routes
+
+    Route::get('/ticket-reminders/{ticketId}/latest-reminder', [App\Http\Controllers\TicketReminderController::class, 'getLatestByTicket']);
+    Route::get('/ticket-reminders', [App\Http\Controllers\TicketReminderController::class, 'index']);
+    Route::post('/ticket-reminders', [App\Http\Controllers\TicketReminderController::class, 'store']);
+    Route::get('/ticket-reminders/{reminder}/ics', [App\Http\Controllers\TicketReminderController::class, 'generateIcs']);
 
     // Hardware Routes
 

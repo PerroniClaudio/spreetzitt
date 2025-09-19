@@ -123,10 +123,16 @@ class AuthenticatedSessionController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->token),
                 'microsoft_token' => $request->token,
+                'microsoft_access_token' => $request->access_token,
                 'is_admin' => true,
             ]);
 
             event(new Registered($user));
+        } else {
+            // Aggiorna il token di accesso se l'utente esiste già
+            $user->update([
+                'microsoft_access_token' => $request->access_token,
+            ]);
         }
 
         Auth::login($user);

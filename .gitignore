@@ -26,6 +26,7 @@ start.sh
 # Docker Development Environment
 .env.local
 .env.docker
+.env.boost
 docker-compose.override.yml
 /docker/logs/
 /docker/data/
@@ -59,6 +60,8 @@ DOCKER.md
 Dockerfile
 .dockerignore
 Makefile
+docker-php
+temp env
 
 # Container logs
 *.log
