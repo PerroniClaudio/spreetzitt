@@ -40,7 +40,7 @@ class TicketReminderController extends Controller
             'message' => 'required|string|max:1000',
             'reminder_date' => 'required|date|after:now',
             'create_outlook_event' => 'nullable|boolean',
-
+            'is_ticket_deadline' => 'nullable|boolean',
         ]);
 
         try {
@@ -51,6 +51,7 @@ class TicketReminderController extends Controller
                 'ticket_id' => $validated['ticket_id'],
                 'message' => $validated['message'],
                 'reminder_date' => $validated['reminder_date'],
+                'is_ticket_deadline' => $validated['is_ticket_deadline'] ?? false,
             ]);
 
             $reminder->load(['user', 'ticket']);
@@ -90,6 +91,21 @@ class TicketReminderController extends Controller
         }
     }
 
+    public function listForTicket(Request $request, int $ticketId): Response
+    {
+        $user = $request->user();
+
+        $reminders = TicketReminder::with(['user', 'ticket'])
+            ->where('ticket_id', $ticketId)
+            ->where('user_id', $user->id)
+            ->orderBy('reminder_date', 'asc')
+            ->get();
+
+        return response([
+            'reminders' => $reminders,
+        ], 200);
+    }
+
     /**
      * Get the latest reminder for a specific ticket.
      */
@@ -116,6 +132,70 @@ class TicketReminderController extends Controller
     }
 
     /**
+     * Get all deadline reminders for the authenticated user.
+     */
+    public function getDeadlineReminders(Request $request): Response
+    {
+        $user = $request->user();
+
+        $deadlineReminders = TicketReminder::with(['user', 'ticket'])
+            ->where('user_id', $user->id)
+            ->where('is_ticket_deadline', true)
+            ->orderBy('reminder_date', 'asc')
+            ->get();
+
+        return response([
+            'deadline_reminders' => $deadlineReminders,
+        ], 200);
+    }
+
+    /**
+     * Get deadline reminder for a specific ticket.
+     */
+    public function getDeadlineByTicket(Request $request, int $ticketId): Response
+    {
+        $user = $request->user();
+
+        $deadlineReminder = TicketReminder::with(['user', 'ticket'])
+            ->where('ticket_id', $ticketId)
+            ->where('user_id', $user->id)
+            ->where('is_ticket_deadline', true)
+            ->first();
+
+        if (! $deadlineReminder) {
+            return response([
+                'message' => 'Nessun reminder di scadenza trovato per questo ticket',
+                'deadline_reminder' => null,
+            ], 200);
+        }
+
+        return response([
+            'deadline_reminder' => $deadlineReminder,
+        ], 200);
+    }
+
+    /**
+     * Display the specified reminder.
+     */
+    public function show(Request $request, TicketReminder $reminder): Response
+    {
+        $user = $request->user();
+
+        // Verifica che il reminder appartenga all'utente
+        if ($reminder->user_id !== $user->id) {
+            return response([
+                'message' => 'Non autorizzato a visualizzare questo reminder',
+            ], 403);
+        }
+
+        $reminder->load(['user', 'ticket']);
+
+        return response([
+            'reminder' => $reminder,
+        ], 200);
+    }
+
+    /**
      * Create event in Outlook calendar using Microsoft Graph API.
      */
     private function createOutlookEvent($user, TicketReminder $reminder, array $validated): array
@@ -132,8 +212,16 @@ class TicketReminderController extends Controller
             $startTime = \Carbon\Carbon::parse($reminder->reminder_date);
             $endTime = $startTime->copy()->addMinutes(30); // Durata fissa 30 minuti
 
+            $eventTitle = $reminder->is_ticket_deadline
+                ? '🚨 SCADENZA: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)
+                : 'Ticket Reminder: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id);
+
+            $categories = $reminder->is_ticket_deadline
+                ? ['Ticket Support', 'Deadline', 'Urgent']
+                : ['Ticket Support'];
+
             $eventData = [
-                'subject' => 'Ticket Reminder: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id),
+                'subject' => $eventTitle,
                 'body' => [
                     'contentType' => 'HTML',
                     'content' => $this->buildEventBody($reminder),
@@ -147,8 +235,9 @@ class TicketReminderController extends Controller
                     'timeZone' => config('app.timezone', 'UTC'),
                 ],
                 'isReminderOn' => true,
-                'reminderMinutesBeforeStart' => 15,
-                'categories' => ['Ticket Support'],
+                'reminderMinutesBeforeStart' => $reminder->is_ticket_deadline ? 30 : 15, // Più avviso per scadenze
+                'categories' => $categories,
+                'importance' => $reminder->is_ticket_deadline ? 'high' : 'normal',
             ];
 
             // Chiama Microsoft Graph API
@@ -228,17 +317,22 @@ class TicketReminderController extends Controller
         $ics .= "CALSCALE:GREGORIAN\r\n";
 
         foreach ($reminders as $reminder) {
+            $isDeadline = $reminder->is_ticket_deadline;
+            $title = $isDeadline ? '🚨 SCADENZA: ' : 'Ticket Reminder: ';
+            $priority = $isDeadline ? "PRIORITY:1\r\n" : '';
+
             $ics .= "BEGIN:VEVENT\r\n";
             $ics .= 'UID:'.$reminder->event_uuid."\r\n";
             $ics .= 'DTSTAMP:'.now()->format('Ymd\THis\Z')."\r\n";
             $ics .= 'DTSTART:'.$reminder->reminder_date->format('Ymd\THis\Z')."\r\n";
-            $ics .= 'SUMMARY:Ticket Reminder: '.$this->escapeLine($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)."\r\n";
-            $ics .= 'DESCRIPTION:'.$this->escapeLine($reminder->message)."\r\n";
+            $ics .= 'SUMMARY:'.$title.$this->escapeLine($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)."\r\n";
+            $ics .= 'DESCRIPTION:'.$this->escapeLine($reminder->message.($isDeadline ? ' [SCADENZA TICKET]' : ''))."\r\n";
             $ics .= "STATUS:CONFIRMED\r\n";
+            $ics .= $priority;
             $ics .= "BEGIN:VALARM\r\n";
             $ics .= "TRIGGER:-PT15M\r\n";
             $ics .= "ACTION:DISPLAY\r\n";
-            $ics .= "DESCRIPTION:Ticket Reminder\r\n";
+            $ics .= 'DESCRIPTION:'.($isDeadline ? 'SCADENZA TICKET' : 'Ticket Reminder')."\r\n";
             $ics .= "END:VALARM\r\n";
             $ics .= "END:VEVENT\r\n";
         }
@@ -254,14 +348,16 @@ class TicketReminderController extends Controller
     private function buildEventBody(TicketReminder $reminder): string
     {
         $ticketUrl = config('app.url').'/ticket/'.$reminder->ticket_id;
+        $reminderType = $reminder->is_ticket_deadline ? '🚨 SCADENZA TICKET' : 'Ticket Reminder';
 
         return "
             <div>
-                <h3>Ticket Reminder</h3>
+                <h3>{$reminderType}</h3>
                 <p><strong>Messaggio:</strong> {$reminder->message}</p>
                 <p><strong>Ticket ID:</strong> #{$reminder->ticket_id}</p>
                 <p><strong>Descrizione Ticket:</strong> ".($reminder->ticket->description ?? 'N/A')."</p>
                 <p><strong>Data Reminder:</strong> {$reminder->reminder_date->format('d/m/Y H:i')}</p>
+                ".($reminder->is_ticket_deadline ? '<p><strong>⚠️ QUESTO È UN REMINDER DI SCADENZA</strong></p>' : '')."
                 <p><a href=\"{$ticketUrl}\">Visualizza Ticket</a></p>
             </div>
         ";
@@ -275,5 +371,287 @@ class TicketReminderController extends Controller
         $text = str_replace(['\\', ',', ';', "\n", "\r"], ['\\\\', '\\,', '\\;', '\\n', ''], $text);
 
         return substr($text, 0, 75); // Limit length for ICS compatibility
+    }
+
+    /**
+     * Update the specified reminder.
+     */
+    public function update(Request $request, TicketReminder $reminder): Response
+    {
+        $user = $request->user();
+
+        // Verifica che il reminder appartenga all'utente
+        if ($reminder->user_id !== $user->id) {
+            return response([
+                'message' => 'Non autorizzato a modificare questo reminder',
+            ], 403);
+        }
+
+        $validated = $request->validate([
+            'message' => 'required|string|max:1000',
+            'reminder_date' => 'required|date|after:now',
+            'is_ticket_deadline' => 'nullable|boolean',
+            'sync_outlook' => 'nullable|boolean',
+        ]);
+
+        try {
+            // Aggiorna il reminder nel database
+            $reminder->update([
+                'message' => $validated['message'],
+                'reminder_date' => $validated['reminder_date'],
+                'is_ticket_deadline' => $validated['is_ticket_deadline'] ?? $reminder->is_ticket_deadline,
+            ]);
+
+            $reminder->load(['user', 'ticket']);
+
+            // Se richiesto e se l'utente ha token Microsoft, aggiorna anche su Outlook
+            if (($validated['sync_outlook'] ?? false) && $user->microsoft_access_token) {
+                $outlookResult = $this->updateOutlookEvent($user, $reminder);
+
+                if ($outlookResult['success']) {
+                    return response([
+                        'reminder' => $reminder,
+                        'outlook_event' => $outlookResult['event'],
+                        'message' => 'Reminder e evento Outlook aggiornati con successo',
+                    ], 200);
+                } else {
+                    return response([
+                        'reminder' => $reminder,
+                        'message' => 'Reminder aggiornato ma errore nell\'aggiornamento dell\'evento Outlook',
+                        'error' => $outlookResult['error'],
+                    ], 207); // 207 Multi-Status
+                }
+            }
+
+            return response([
+                'reminder' => $reminder,
+                'message' => 'Reminder aggiornato con successo',
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Errore durante l\'aggiornamento del reminder', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response([
+                'message' => 'Errore durante l\'aggiornamento del reminder: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove the specified reminder from storage.
+     */
+    public function destroy(Request $request, TicketReminder $reminder): Response
+    {
+        $user = $request->user();
+
+        // Verifica che il reminder appartenga all'utente
+        if ($reminder->user_id !== $user->id) {
+            return response([
+                'message' => 'Non autorizzato a eliminare questo reminder',
+            ], 403);
+        }
+
+        $syncOutlook = $request->boolean('sync_outlook', false);
+
+        try {
+            // Se richiesto e se l'utente ha token Microsoft, elimina anche da Outlook
+            if ($syncOutlook && $user->microsoft_access_token) {
+                $outlookResult = $this->deleteOutlookEvent($user, $reminder);
+
+                if (! $outlookResult['success']) {
+                    // Log l'errore ma continua con l'eliminazione dal database
+                    Log::warning('Errore durante l\'eliminazione dell\'evento Outlook', [
+                        'user_id' => $user->id,
+                        'reminder_id' => $reminder->id,
+                        'error' => $outlookResult['error'],
+                    ]);
+                }
+            }
+
+            // Elimina il reminder dal database
+            $reminder->delete();
+
+            return response([
+                'message' => 'Reminder eliminato con successo',
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Errore durante l\'eliminazione del reminder', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response([
+                'message' => 'Errore durante l\'eliminazione del reminder: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Update event in Outlook calendar using Microsoft Graph API.
+     */
+    private function updateOutlookEvent($user, TicketReminder $reminder): array
+    {
+        if (! $user->microsoft_access_token) {
+            return [
+                'success' => false,
+                'error' => 'Microsoft access token non disponibile per questo utente.',
+            ];
+        }
+
+        try {
+            // Prepara i dati aggiornati per l'evento Outlook
+            $startTime = \Carbon\Carbon::parse($reminder->reminder_date);
+            $endTime = $startTime->copy()->addMinutes(30); // Durata fissa 30 minuti
+
+            $eventTitle = $reminder->is_ticket_deadline
+                ? 'SCADENZA: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)
+                : 'Ticket Reminder: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id);
+
+            $categories = $reminder->is_ticket_deadline
+                ? ['Ticket Support', 'Deadline', 'Urgent']
+                : ['Ticket Support'];
+
+            $eventData = [
+                'subject' => $eventTitle,
+                'body' => [
+                    'contentType' => 'HTML',
+                    'content' => $this->buildEventBody($reminder),
+                ],
+                'start' => [
+                    'dateTime' => $startTime->toISOString(),
+                    'timeZone' => config('app.timezone', 'UTC'),
+                ],
+                'end' => [
+                    'dateTime' => $endTime->toISOString(),
+                    'timeZone' => config('app.timezone', 'UTC'),
+                ],
+                'isReminderOn' => true,
+                'reminderMinutesBeforeStart' => $reminder->is_ticket_deadline ? 30 : 15,
+                'categories' => $categories,
+                'importance' => $reminder->is_ticket_deadline ? 'high' : 'normal',
+            ];
+
+            // Aggiorna l'evento su Microsoft Graph API
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$user->microsoft_access_token,
+                'Content-Type' => 'application/json',
+            ])->patch('https://graph.microsoft.com/v1.0/me/events/'.$reminder->event_uuid, $eventData);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'event' => $response->json(),
+                ];
+            } else {
+                // Se l'evento non esiste su Outlook (404), considera come successo parziale
+                if ($response->status() === 404) {
+                    Log::warning('Evento Outlook non trovato durante l\'aggiornamento (probabilmente eliminato manualmente)', [
+                        'user_id' => $user->id,
+                        'reminder_id' => $reminder->id,
+                        'event_uuid' => $reminder->event_uuid,
+                    ]);
+
+                    return [
+                        'success' => false,
+                        'error' => 'Evento non trovato su Outlook (potrebbe essere stato eliminato manualmente)',
+                    ];
+                }
+
+                // Log dell'errore
+                Log::error('Errore aggiornamento evento Outlook', [
+                    'user_id' => $user->id,
+                    'reminder_id' => $reminder->id,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => $response->json(),
+                ];
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Errore durante l\'aggiornamento dell\'evento Outlook', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Delete event from Outlook calendar using Microsoft Graph API.
+     */
+    private function deleteOutlookEvent($user, TicketReminder $reminder): array
+    {
+        if (! $user->microsoft_access_token) {
+            return [
+                'success' => false,
+                'error' => 'Microsoft access token non disponibile per questo utente.',
+            ];
+        }
+
+        try {
+            // Elimina l'evento da Microsoft Graph API
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer '.$user->microsoft_access_token,
+            ])->delete('https://graph.microsoft.com/v1.0/me/events/'.$reminder->event_uuid);
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                ];
+            } else {
+                // Se l'evento non esiste su Outlook (404), considera come successo
+                if ($response->status() === 404) {
+                    Log::info('Evento Outlook non trovato durante l\'eliminazione (probabilmente già eliminato)', [
+                        'user_id' => $user->id,
+                        'reminder_id' => $reminder->id,
+                        'event_uuid' => $reminder->event_uuid,
+                    ]);
+
+                    return [
+                        'success' => true, // Consideriamo come successo perché l'obiettivo è eliminarlo
+                    ];
+                }
+
+                // Log dell'errore
+                Log::error('Errore eliminazione evento Outlook', [
+                    'user_id' => $user->id,
+                    'reminder_id' => $reminder->id,
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
+
+                return [
+                    'success' => false,
+                    'error' => $response->json(),
+                ];
+            }
+
+        } catch (\Exception $e) {
+            Log::error('Errore durante l\'eliminazione dell\'evento Outlook', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
     }
 }

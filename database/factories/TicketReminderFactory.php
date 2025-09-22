@@ -28,6 +28,7 @@ class TicketReminderFactory extends Factory
             'ticket_id' => Ticket::factory(),
             'message' => fake()->sentence(),
             'reminder_date' => fake()->dateTimeBetween('now', '+1 month'),
+            'is_ticket_deadline' => fake()->boolean(20), // 20% di possibilità che sia una scadenza
         ];
     }
 
@@ -48,6 +49,17 @@ class TicketReminderFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'reminder_date' => fake()->dateTimeBetween('-1 month', '-1 day'),
+        ]);
+    }
+
+    /**
+     * Indicate that the reminder is a ticket deadline.
+     */
+    public function deadline(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_ticket_deadline' => true,
+            'message' => 'Scadenza del ticket - controllare urgentemente',
         ]);
     }
 }

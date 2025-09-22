@@ -273,9 +273,15 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // Ticket reminder Routes
 
     Route::get('/ticket-reminders/{ticketId}/latest-reminder', [App\Http\Controllers\TicketReminderController::class, 'getLatestByTicket']);
+    Route::get('/ticket-reminders/{ticketId}/all-reminders', [App\Http\Controllers\TicketReminderController::class, 'listForTicket']);
     Route::get('/ticket-reminders', [App\Http\Controllers\TicketReminderController::class, 'index']);
     Route::post('/ticket-reminders', [App\Http\Controllers\TicketReminderController::class, 'store']);
-    Route::get('/ticket-reminders/{reminder}/ics', [App\Http\Controllers\TicketReminderController::class, 'generateIcs']);
+    Route::get('/ticket-reminders/show/{reminder}', [App\Http\Controllers\TicketReminderController::class, 'show']);
+    Route::patch('/ticket-reminders/{reminder}', [App\Http\Controllers\TicketReminderController::class, 'update']);
+    Route::delete('/ticket-reminders/{reminder}', [App\Http\Controllers\TicketReminderController::class, 'destroy']);
+    Route::get('/ticket-reminders/ics', [App\Http\Controllers\TicketReminderController::class, 'generateIcs']);
+    Route::get('/ticket-reminders/deadlines', [App\Http\Controllers\TicketReminderController::class, 'getDeadlineReminders']);
+    Route::get('/ticket-reminders/{ticketId}/deadline', [App\Http\Controllers\TicketReminderController::class, 'getDeadlineByTicket']);
 
     // Hardware Routes
 
