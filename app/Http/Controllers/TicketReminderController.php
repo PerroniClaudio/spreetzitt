@@ -318,7 +318,7 @@ class TicketReminderController extends Controller
 
         foreach ($reminders as $reminder) {
             $isDeadline = $reminder->is_ticket_deadline;
-            $title = $isDeadline ? '🚨 SCADENZA: ' : 'Ticket Reminder: ';
+            $title = $isDeadline ? 'SCADENZA: ' : 'Ticket Reminder: ';
             $priority = $isDeadline ? "PRIORITY:1\r\n" : '';
 
             $ics .= "BEGIN:VEVENT\r\n";
