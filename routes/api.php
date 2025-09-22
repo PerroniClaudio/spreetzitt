@@ -281,6 +281,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-reminders/{reminder}', [App\Http\Controllers\TicketReminderController::class, 'destroy']);
     Route::get('/ticket-reminders/ics', [App\Http\Controllers\TicketReminderController::class, 'generateIcs']);
     Route::get('/ticket-reminders/deadlines', [App\Http\Controllers\TicketReminderController::class, 'getDeadlineReminders']);
+    Route::get('/ticket-reminders/deadlines-this-month', [App\Http\Controllers\TicketReminderController::class, 'getTicketsWithDeadlinesThisMonth']);
     Route::get('/ticket-reminders/{ticketId}/deadline', [App\Http\Controllers\TicketReminderController::class, 'getDeadlineByTicket']);
 
     // Hardware Routes

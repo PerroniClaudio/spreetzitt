@@ -196,6 +196,63 @@ class TicketReminderController extends Controller
     }
 
     /**
+     * Get tickets with deadline reminders in the current month.
+     */
+    public function getTicketsWithDeadlinesThisMonth(Request $request): Response
+    {
+        $user = $request->user();
+        $ticketStages = config('app.ticket_stages');
+
+        // Data inizio e fine del mese corrente
+        $startOfMonth = now()->startOfMonth();
+        $endOfMonth = now()->endOfMonth();
+
+        // Query per reminder di scadenza nel mese corrente (solo futuri)
+        $deadlineReminders = TicketReminder::with([
+            'user',
+            'ticket.ticketType',
+            'ticket.company',
+            'ticket.handler', // Questo è il gestore (admin_user_id)
+        ])
+            ->where('user_id', $user->id)
+            ->where('is_ticket_deadline', true)
+            ->where('reminder_date', '>=', now()) // Solo nel futuro
+            ->whereYear('reminder_date', now()->year)
+            ->whereMonth('reminder_date', now()->month)
+            ->orderBy('reminder_date', 'asc')
+            ->get();
+
+        // Raggruppa per ticket per evitare duplicati
+        $ticketsWithDeadlines = $deadlineReminders->groupBy('ticket_id')->map(function ($reminders) use ($ticketStages) {
+            $earliestReminder = $reminders->sortBy('reminder_date')->first();
+            $ticket = $earliestReminder->ticket;
+
+            return [
+                'id' => $ticket->id,
+                'tipo' => [
+                    'nome' => $ticket->ticketType->name ?? 'N/A',
+                    'id' => $ticket->type_id ?? null,
+                ],
+                'stato' => $ticketStages[$ticket->status],
+                'azienda' => $ticket->company->name ?? 'N/A',
+                'gestore' => $ticket->handler ? [
+                    'id' => $ticket->handler->id,
+                    'nome' => $ticket->handler->name,
+                    'email' => $ticket->handler->email,
+                ] : null,
+                'data_scadenza' => $earliestReminder->reminder_date,
+                'days_until_deadline' => now()->diffInDays($earliestReminder->reminder_date),
+            ];
+        })->values();
+
+        return response([
+            'tickets_with_deadlines' => $ticketsWithDeadlines,
+            'total_count' => $ticketsWithDeadlines->count(),
+            'month' => now()->format('F Y'),
+        ], 200);
+    }
+
+    /**
      * Create event in Outlook calendar using Microsoft Graph API.
      */
     private function createOutlookEvent($user, TicketReminder $reminder, array $validated): array

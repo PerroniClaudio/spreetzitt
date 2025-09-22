@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Laravel\Scout\Searchable;
 
-class Ticket extends Model {
+class Ticket extends Model
+{
     use HasFactory, Searchable;
 
     protected $fillable = [
@@ -15,7 +16,6 @@ class Ticket extends Model {
         'user_id',
         'status',
         'description',
-        'type',
         'file',
         'duration',
         'admin_user_id',
@@ -51,11 +51,11 @@ class Ticket extends Model {
         'assigned' => 'boolean',
     ];
 
-    public function toSearchableArray() {
+    public function toSearchableArray()
+    {
         return [
             'description' => $this->description,
             'status' => $this->status,
-            'type' => $this->type,
             'user_name' => $this->user->name,
             'user_surname' => $this->user->surname,
             'company' => $this->company->name,
@@ -64,18 +64,21 @@ class Ticket extends Model {
 
     /* get the owner */
 
-    public function user() {
+    public function user()
+    {
         return $this->belongsTo(User::class);
     }
 
     /* get the group */
-    public function group() {
+    public function group()
+    {
         return $this->belongsTo(Group::class);
     }
 
     /* get the handler */
 
-    public function handler() {
+    public function handler()
+    {
         // return User::find($this->admin_user_id);
         return $this->belongsTo(User::class, 'admin_user_id');
     }
@@ -98,40 +101,46 @@ class Ticket extends Model {
     //     return User::find(0);
     // }
 
-    public function referer() {
+    public function referer()
+    {
         return $this->belongsTo(User::class, 'referer_id');
     }
 
     /* get the IT referer (referente IT) */
-    public function refererIt() {
+    public function refererIt()
+    {
         return $this->belongsTo(User::class, 'referer_it_id');
     }
 
-    public function hardware() {
+    public function hardware()
+    {
         return $this->belongsToMany(Hardware::class);
     }
 
     /** get  messages  */
-
-    public function messages() {
+    public function messages()
+    {
         return $this->hasMany(TicketMessage::class);
     }
 
     /** get  status updates  */
-
-    public function statusUpdates() {
+    public function statusUpdates()
+    {
         return $this->hasMany(TicketStatusUpdate::class);
     }
 
-    public function ticketType() {
+    public function ticketType()
+    {
         return $this->belongsTo(TicketType::class, 'type_id');
     }
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class);
     }
 
-    public function files() {
+    public function files()
+    {
         return $this->hasMany(TicketFile::class);
     }
 
@@ -151,33 +160,37 @@ class Ticket extends Model {
         return $this->belongsTo(TicketAssignmentHistoryRecord::class, 'last_assignment_id');
     }
 
-    public function brandUrl() {
+    public function brandUrl()
+    {
         $brand_id = $this->ticketType->brand->id;
-        return env('APP_URL') . '/api/brand/' . $brand_id . '/logo';
+
+        return env('APP_URL').'/api/brand/'.$brand_id.'/logo';
     }
 
     // Invalida la cache per chi ha creato il ticket e per i referenti
-    public function invalidateCache() {
+    public function invalidateCache()
+    {
         // $cacheKey = 'user_' . $user->id . '_tickets';
         $ticketUser = $this->user;
         $referer = $this->referer;
         $refererIT = $this->refererIt;
         if ($ticketUser) {
-            Cache::forget('user_' . $ticketUser->id . '_tickets');
-            Cache::forget('user_' . $ticketUser->id . '_tickets_with_closed');
+            Cache::forget('user_'.$ticketUser->id.'_tickets');
+            Cache::forget('user_'.$ticketUser->id.'_tickets_with_closed');
         }
         if ($referer) {
-            Cache::forget('user_' . $referer->id . '_tickets');
-            Cache::forget('user_' . $referer->id . '_tickets_with_closed');
+            Cache::forget('user_'.$referer->id.'_tickets');
+            Cache::forget('user_'.$referer->id.'_tickets_with_closed');
         }
         if ($refererIT) {
-            Cache::forget('user_' . $refererIT->id . '_tickets');
-            Cache::forget('user_' . $refererIT->id . '_tickets_with_closed');
+            Cache::forget('user_'.$refererIT->id.'_tickets');
+            Cache::forget('user_'.$refererIT->id.'_tickets_with_closed');
         }
     }
 
-    // In base al tipo di ticket si dovranno includere o meno i sabati, le domeniche, tutte le ore del giorno o anche le festività 
-    public function waitingHours($includeSaturday = false, $includeSunday = false, $IncludeAllDayHours = false, $includeHolidays = false) {
+    // In base al tipo di ticket si dovranno includere o meno i sabati, le domeniche, tutte le ore del giorno o anche le festività
+    public function waitingHours($includeSaturday = false, $includeSunday = false, $IncludeAllDayHours = false, $includeHolidays = false)
+    {
         $waitingHours = 0;
 
         // Array delle festività italiane
@@ -228,10 +241,10 @@ class Ticket extends Model {
             $current = $start->copy();
 
             while ($current->lessThan($end)) {
-                $isExcludedDay = (!$includeSunday && $current->isSunday())
-                    || (!$includeSaturday && $current->isSaturday())
-                    || (!$includeHolidays && in_array($current->format('m-d'), $holidays));
-                $isExcludedHour = !$IncludeAllDayHours && ($current->hour >= 20 || $current->hour < 8);
+                $isExcludedDay = (! $includeSunday && $current->isSunday())
+                    || (! $includeSaturday && $current->isSaturday())
+                    || (! $includeHolidays && in_array($current->format('m-d'), $holidays));
+                $isExcludedHour = ! $IncludeAllDayHours && ($current->hour >= 20 || $current->hour < 8);
                 if ($isExcludedHour || $isExcludedDay) {
                     $excludedMinutes++;
                 }
@@ -246,7 +259,8 @@ class Ticket extends Model {
         return $waitingHours;
     }
 
-    public function waitingTimes() {
+    public function waitingTimes()
+    {
         $waitingHours = 0;
 
         /*
@@ -278,7 +292,8 @@ class Ticket extends Model {
         return count($waitingRecords);
     }
 
-    public function parent() {
+    public function parent()
+    {
         return $this->belongsTo(Ticket::class, 'parent_ticket_id');
     }
 
@@ -286,22 +301,41 @@ class Ticket extends Model {
     //     return $this->hasMany(Ticket::class, 'parent_ticket_id');
     // }
 
-    // Dato che c'è già parent (e child/children non c'è ma sarebbe il suo corrispettivo), 
+    // Dato che c'è già parent (e child/children non c'è ma sarebbe il suo corrispettivo),
     // per il collegamento tra ticket on site e ticket normali uso master e slave (un ticket on site può avere da 0 a n ticket normali a lui collegati e questi due vengono trattati diversamente nel report).
-    public function master() {
+    public function master()
+    {
         return $this->belongsTo(Ticket::class, 'master_id');
     }
 
-    public function slaves() {
+    public function slaves()
+    {
         return $this->hasMany(Ticket::class, 'master_id');
     }
 
-    public function reopenedParent() {
+    public function reopenedParent()
+    {
         return $this->belongsTo(Ticket::class, 'reopen_parent_id');
     }
-    
-    public function reopenedChild() {
+
+    public function reopenedChild()
+    {
         return $this->hasOne(Ticket::class, 'reopen_parent_id');
     }
 
+    /**
+     * Get all ticket reminders for this ticket.
+     */
+    public function ticketReminders()
+    {
+        return $this->hasMany(TicketReminder::class);
+    }
+
+    /**
+     * Get deadline reminders for this ticket.
+     */
+    public function deadlineReminders()
+    {
+        return $this->hasMany(TicketReminder::class)->where('is_ticket_deadline', true);
+    }
 }
