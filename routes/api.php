@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BrandController;
+use App\Http\Controllers\TicketStageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TicketMessageController;
@@ -353,6 +354,12 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
 
     // News
     Route::get('/news/source/{newsSource}', [App\Http\Controllers\NewsController::class, 'bySource']);
+
+    // Ticket Stages Management
+    Route::apiResource('ticket-stages', App\Http\Controllers\TicketStageController::class);
+    Route::post('/ticket-stages/{id}/restore', [App\Http\Controllers\TicketStageController::class, 'restore']);
+    Route::get('/all-ticket-stages', [App\Http\Controllers\TicketStageController::class, 'all']);
+    Route::get('/ticket-stages-options', [App\Http\Controllers\TicketStageController::class, 'options']);
     
 
 });

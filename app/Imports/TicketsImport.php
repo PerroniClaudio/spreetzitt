@@ -9,6 +9,7 @@ use App\Jobs\SendOpenTicketEmail;
 use App\Models\Ticket;
 use App\Models\TicketFile;
 use App\Models\TicketMessage;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\TicketType;
 use Illuminate\Support\Collection;
@@ -46,10 +47,11 @@ class TicketsImport implements ToCollection
 
         // Gestire qui le righe del file Excel
         try {
-            $ticketStages = config('app.ticket_stages');
             $ticketType = TicketType::find($formData->type_id);
             $group = $ticketType->groups->first();
             $groupId = $group ? $group->id : null;
+
+            $openTicketStageId = TicketStage::where('system_key', 'new')->value('id');
 
             if ($mergeRows) {
 
@@ -74,7 +76,8 @@ class TicketsImport implements ToCollection
                         'type_id' => $ticketType->id,
                         'group_id' => $groupId,
                         'user_id' => $user->id,
-                        'status' => '0',
+                        'status' => '0', // Da mantenere fino a dopo la migrazione del vecchio db
+                        'stage_id' => $openTicketStageId,
                         'company_id' => $formData->company,
                         'file' => null,
                         'duration' => 0,
@@ -145,17 +148,23 @@ class TicketsImport implements ToCollection
 
                     // Modifica dello stato del ticket
                     if ($setStage) {
-                        if ($ticketStages[$setStage]) {
+                        $selectedStage = TicketStage::find($setStage);
+                        if ($selectedStage) {
+                            $oldStageId = $ticket->stage_id;
                             $ticket->fill([
-                                'status' => $setStage,
+                                'stage_id' => $selectedStage->id,
                                 // 'wait_end' => $setWaitEnd || null,
                             ])->save();
                             $update = TicketStatusUpdate::create([
                                 'ticket_id' => $ticket->id,
                                 'user_id' => $user->id,
-                                'content' => 'Stato del ticket modificato in "'.$ticketStages[$setStage].'"',
+                                'old_stage_id' => $oldStageId,
+                                'new_stage_id' => $selectedStage->id,
+                                'content' => 'Stato del ticket modificato in "' . $selectedStage->name . '"',
                                 'type' => 'status',
                             ]);
+                        } else {
+                            $generatedTicketsError[] = 'ID ticket: '.$ticket->id.' - Impossibile modificare lo stato del ticket. Lo stage selezionato non esiste più.';
                         }
                         // La mail non la inviamo. Nemmeno una singola per tutti i ticket generati.
                     }
@@ -180,7 +189,8 @@ class TicketsImport implements ToCollection
                         'type_id' => $ticketType->id,
                         'group_id' => $groupId,
                         'user_id' => $user->id,
-                        'status' => '0',
+                        'status' => '0', // Da mantenere fino a dopo la migrazione del vecchio db
+                        'stage_id' => $openTicketStageId,
                         'company_id' => $formData->company,
                         'file' => null,
                         'duration' => 0,
@@ -248,17 +258,23 @@ class TicketsImport implements ToCollection
 
                     // Modifica dello stato del ticket
                     if ($setStage) {
-                        if ($ticketStages[$setStage]) {
+                        $selectedStage = TicketStage::find($setStage);
+                        if ($selectedStage) {
+                            $oldStageId = $ticket->stage_id;
                             $ticket->fill([
-                                'status' => $setStage,
+                                'stage_id' => $selectedStage->id,
                                 // 'wait_end' => $setWaitEnd || null,
                             ])->save();
                             $update = TicketStatusUpdate::create([
                                 'ticket_id' => $ticket->id,
                                 'user_id' => $user->id,
-                                'content' => 'Stato del ticket modificato in "'.$ticketStages[$setStage].'"',
+                                'old_stage_id' => $oldStageId,
+                                'new_stage_id' => $selectedStage->id,
+                                'content' => 'Stato del ticket modificato in "' . $selectedStage->name . '"',
                                 'type' => 'status',
                             ]);
+                        } else {
+                            $generatedTicketsError[] = 'ID ticket: '.$ticket->id.' - Impossibile modificare lo stato del ticket. Lo stage selezionato non esiste più.';
                         }
                         // La mail non la inviamo. Nemmeno una singola per tutti i ticket generati.
                     }

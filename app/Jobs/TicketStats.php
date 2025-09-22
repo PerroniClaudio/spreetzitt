@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Company;
 use App\Models\Ticket;
+use App\Models\TicketStage;
 use App\Models\TicketStats as Stats;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -28,7 +29,7 @@ class TicketStats implements ShouldQueue {
         $nightHours = 0;
 
         if ($start->isSameDay($end)) {
-
+            // Bisogna allineare i dati tra questa funzione e quella che calcola le ore di attesa, perchè questa ha 18 e l'altra 20. Poi considerare anche se devono essere settate in base alle impostazioni nell'azienda cliente o no.
             if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = 10;
             } else if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isBefore($start->copy()->startOfDay()->addHours(8))) {
@@ -37,7 +38,30 @@ class TicketStats implements ShouldQueue {
                 $nightHours = $end->diffInHours($start->copy()->startOfDay()->addHours(18));
             }
         } else {
-            $nightHours = $start->diffInDays($end) * 13;
+
+            // Calcolo ore notturne primo giorno (dalle 18:00 fino a mezzanotte)
+            $firstDayNightHours = 0;
+            if ($start->hour < 18) {
+                // Inizia prima delle 18, conta dalle 18 a mezzanotte
+                $firstDayNightHours = 6; // 18:00 - 24:00 = 6 ore
+            } elseif ($start->hour >= 18) {
+                // Inizia dopo le 18, conta dall'ora di inizio a mezzanotte
+                $firstDayNightHours = 24 - $start->hour;
+            }
+            // Calcolo ore notturne ultimo giorno (da mezzanotte alle 8:00)
+            $lastDayNightHours = 0;
+            if ($end->hour > 8) {
+                // Finisce dopo le 8, conta da mezzanotte alle 8
+                $lastDayNightHours = 8;
+            } elseif ($end->hour <= 8) {
+                // Finisce prima delle 8, conta da mezzanotte all'ora di fine
+                $lastDayNightHours = $end->hour;
+            }
+            // Calcolo giorni intermedi completi (se esistono)
+            $fullDaysBetween = max(0, $start->diffInDays($end) - 1);
+            $fullDaysNightHours = $fullDaysBetween * 14; // 6 + 8 = 14 ore per giorno completo
+            
+            $nightHours = $firstDayNightHours + $lastDayNightHours + $fullDaysNightHours;
         }
 
 
@@ -92,7 +116,11 @@ class TicketStats implements ShouldQueue {
      * Execute the job.
      */
     public function handle(): void {
-        $openTicekts = Ticket::where('status', '!=', '5')->with('ticketType.category')->get();
+        $newTicketStageId = TicketStage::where('system_key', 'new')->first()?->id;
+        $closedTicketStageId = TicketStage::where('system_key', 'closed')->first()?->id;
+        $waitingTicketStagesIds = TicketStage::where('is_sla_pause', true)->pluck('id')->toArray(); 
+
+        $openTicekts = Ticket::where('stage_id', '!=', $closedTicketStageId)->with('ticketType.category')->get();
 
         $results = [
             'incident_open' => 0,
@@ -110,33 +138,21 @@ class TicketStats implements ShouldQueue {
             // Aggiunti anche i risolti tra quelli in attesa, perchè non sono chiusi e potrebbero tornare in lavorazione se la soluzione non viene accettata dall'utente.
             switch ($ticket->ticketType->category->is_problem) {
                 case 1:
-                    switch ($ticket->status) {
-                        case 0:
-                            $results['incident_open']++;
-                            break;
-                        case 1:
-                        case 2:
-                            $results['incident_in_progress']++;
-                            break;
-                        case 3:
-                        case 4:
-                            $results['incident_waiting']++;
-                            break;
+                    if ($ticket->stage_id == $newTicketStageId) {
+                        $results['incident_open']++;
+                    } else if (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
+                        $results['incident_waiting']++;
+                    } else {
+                        $results['incident_in_progress']++;
                     }
                     break;
                 case 0:
-                    switch ($ticket->status) {
-                        case 0:
-                            $results['request_open']++;
-                            break;
-                        case 1:
-                        case 2:
-                            $results['request_in_progress']++;
-                            break;
-                        case 3:
-                        case 4:
-                            $results['request_waiting']++;
-                            break;
+                    if ($ticket->stage_id == $newTicketStageId) {
+                        $results['request_open']++;
+                    } else if (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
+                        $results['request_waiting']++;
+                    } else {
+                        $results['request_in_progress']++;
                     }
                     break;
             }
@@ -170,10 +186,16 @@ class TicketStats implements ShouldQueue {
                 }
             }
 
-            $diffInHours -= $weekendDays * 24;
+            // Quando si rifarà la funzione considerare che se vengono già tolte le ore notturne non si devono togliere 24 ore, ma meno. 
+            // In più si dovrebbe controllare se il giorno in questione è quello iniziale o finale e calcolare con più precisione in quel caso. 
+            // Inoltre la funzione successiva non considera sabati e domeniche se non si passano parametri diversi, quindi considerare anche quello (che siano allineate. se non le considera allora va bene così, altrimenti non vanno eliminati nemmeno qui).
+            // $diffInHours -= $weekendDays * 24;
+            $diffInHours -= $weekendDays * 10; // nightHours conta dalle 18 alle 8, quindi 14 ore. Ne rimangono 10.
 
             // ? Se il ticket è rimasto in attesa è necessario rimuovere le ore in cui è rimasto in attesa.
 
+            // Quando si rifarà la funzione considerare che $ticket->waitingHours() considera o meno le ore notturne in base al parametro che gli si passa e che le conteggerebbe dalle 20 alle 8.
+            // Di base non le considera. Inoltre anche sabati e domeniche vanno in base ai parametri passati e di base non li considera.
             $waitingHours = $ticket->waitingHours();
             $diffInHours -= $waitingHours;
 
@@ -192,9 +214,9 @@ class TicketStats implements ShouldQueue {
 
         // Creare la lista di compagnie con ticket aperti
         $companiesOpenTickets = [];
-        // Seve use(&$companiesOpenTickets) per passare la variabile per riferimento e non per valore
-        Company::all()->each(function ($company) use (&$companiesOpenTickets) {
-            $companyTickets = $company->tickets->where('status', '!=', '5')->count();
+        // Serve use(&$companiesOpenTickets, $closedTicketStageId) per passare la variabile per riferimento e non per valore
+        Company::all()->each(function ($company) use (&$companiesOpenTickets, $closedTicketStageId) {
+            $companyTickets = $company->tickets->where('stage_id', '!=', $closedTicketStageId)->count();
             $companiesOpenTickets[] = [
                 "name" => $company->name,
                 "tickets" => $companyTickets

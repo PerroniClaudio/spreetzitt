@@ -1,6 +1,6 @@
 @component('mail::message', ['previewText' => $previewText])
 <h2> Update {{ $category->is_problem ? "Incident" : "Request" }} - Stato: 
-@component('mail::status', ['status' => $ticket->status, 'stages' => $stages])
+@component('mail::statusnew', ['status' => $ticket->stage_id, 'stages' => $stages])
 @endcomponent
 </h2>
 

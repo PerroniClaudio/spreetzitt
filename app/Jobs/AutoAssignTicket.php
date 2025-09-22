@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Ticket;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -42,7 +43,9 @@ class AutoAssignTicket implements ShouldQueue
         // Mail::to("c.perroni@ifortech.com")->send(new \App\Mail\PlatformActivityMail($tickets));
 
         Log::info('AutoAssignTicket job started');
-        $unassignedTickets = Ticket::where('status', 0)->get();
+        $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+        // $unassignedTickets = Ticket::where('status', 0)->get();
+        $unassignedTickets = Ticket::where('stage_id', $newTicketStageId)->whereNull('admin_user_id')->get();
 
         foreach ($unassignedTickets as $ticket) {
             
@@ -82,15 +85,16 @@ class AutoAssignTicket implements ShouldQueue
             ]);
     
             // Se lo stato è 'Nuovo' aggiornarlo in assegnato. Lo stato già sappiamo che è 0, quindi non serve il controllo
-            $ticketStages = config('app.ticket_stages');
-            $index_status_assegnato = array_search('Assegnato', $ticketStages);
-            $ticket->update(['status' => $index_status_assegnato]);
-            $new_status = $ticketStages[$ticket->status];
+            $assignedStageId = TicketStage::where('system_key', 'assigned')->value('id');
+            $ticket->update(['stage_id' => $assignedStageId]);
+            $newStageText = TicketStage::find($assignedStageId)->name;
 
             $statusUpdate = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $adminUser->id,
-                'content' => 'Modifica automatica: Stato del ticket modificato in "' . $new_status . '"',
+                'old_stage_id' => $newTicketStageId,
+                'new_stage_id' => $assignedStageId,
+                'content' => 'Modifica automatica: Stato del ticket modificato in "' . $newStageText . '"',
                 'type' => 'status',
             ]);
 

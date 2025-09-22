@@ -13,6 +13,7 @@ use App\Models\HardwareAuditLog;
 use App\Models\Ticket;
 use App\Models\TicketFile;
 use App\Models\TicketMessage;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\TicketType;
 use App\Models\User;
@@ -40,8 +41,9 @@ class TicketController extends Controller
 
         // Generazione query in base ai parametri della richiesta.
         $query = Ticket::query()->where('company_id', $user->selectedCompany()->id);
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
         if (! $withClosed) {
-            $query->where('status', '!=', 5);
+            $query->where('stage_id', '!=', $closedStageId);
         }
         if ($user['is_company_admin'] != 1) {
             $query->where(function (Builder $query) use ($user) {
@@ -67,6 +69,9 @@ class TicketController extends Controller
             },
             'user' => function ($query) {
                 $query->select('id', 'name', 'surname', 'email', 'is_admin');
+            },
+            'stage' => function ($query) {
+                $query->select('id', 'name');
             },
         ]);
 
@@ -118,6 +123,8 @@ class TicketController extends Controller
     {
 
         $user = $request->user();
+        $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+        $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $fields = $request->validate([
             'description' => 'required|string',
@@ -155,7 +162,8 @@ class TicketController extends Controller
                 'type_id' => $fields['type_id'],
                 'group_id' => $groupId,
                 'user_id' => $user->id,
-                'status' => '0',
+                'status' => '0', // per il momento lo lasciamo perchè non ha un valore di default. Poi questo campo verrà eliminato.
+                'stage_id' => $newTicketStageId,
                 'company_id' => isset($request['company']) && $user['is_admin'] == 1 ? $request['company'] : $ticketType->company_id,
                 'file' => null,
                 'duration' => 0,
@@ -191,9 +199,11 @@ class TicketController extends Controller
                     $ticket->parent_ticket_id = $parentTicket->id;
                     $ticket->save();
 
-                    // Chiude il ticket padre, segnala che il ticket procede in quello nuovo
+                    // Salva lo stato del ticket prima di modificarlo
+                    $parentOldStageId = $parentTicket->stage_id;
 
-                    $parentTicket->status = 5;
+                    // Chiude il ticket padre, segnala che il ticket procede in quello nuovo
+                    $parentTicket->stage_id = $closedTicketStageId;
                     $parentTicket->is_rejected = 1;
                     $parentTicket->is_form_correct = 0;
 
@@ -202,6 +212,8 @@ class TicketController extends Controller
                     TicketStatusUpdate::create([
                         'ticket_id' => $parentTicket->id,
                         'user_id' => $user->id,
+                        'old_stage_id' => $parentOldStageId,
+                        'new_stage_id' => $closedTicketStageId,
                         'content' => 'Ticket chiuso automaticamente in quanto è stato aperto un nuovo ticket collegato: '.$ticket->id,
                         'type' => 'closing',
                     ]);
@@ -223,8 +235,7 @@ class TicketController extends Controller
             if ($request->reopen_parent_ticket_id) {
                 $reopenedTicket = Ticket::find($request->reopen_parent_ticket_id);
                 if ($reopenedTicket) {
-                    // Se il ticket non è chiuso, non può essere riaperto.
-                    if ($reopenedTicket->status != 5) {
+                    if ($reopenedTicket->stage_id != $closedTicketStageId) {
                         return response([
                             'message' => 'Il ticket non è chiuso. Impossibile riaprirlo.',
                         ], 400);
@@ -395,6 +406,9 @@ class TicketController extends Controller
             'user' => function ($query) {
                 $query->select('id', 'name', 'surname', 'email', 'is_admin');
             },
+            'stage' => function ($query) {
+                $query->select('id', 'name', 'description', 'admin_color', 'user_color', 'is_sla_pause');
+            },
             'files',
         ])->first();
 
@@ -477,10 +491,11 @@ class TicketController extends Controller
             ->where('type', 'closing')
             ->orderBy('created_at', 'desc')
             ->first();
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
         if ($closingUpdate) {
             // Se il ticket è stato chiuso, non ha un ticket figlio (quindi non è stata usata l'altra funzione che chiude un ticket e ne apre un'altro)
             // e sono passati meno di 7 giorni dalla chiusura, si può riaprire.
-            $can_reopen = ($ticket->status == 5
+            $can_reopen = ($ticket->stage_id == $closedStageId
                 && ((time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60))
                 && ! $childTicket
             );
@@ -544,23 +559,25 @@ class TicketController extends Controller
     {
         //
         $user = $request->user();
+        
+        $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $ticket = Ticket::where('id', $ticket->id)->where('user_id', $user->id)->first();
         cache()->forget('user_'.$user->id.'_tickets');
         cache()->forget('user_'.$user->id.'_tickets_with_closed');
 
         $ticket->update([
-            'status' => '5',
+            'stage_id' => $closedTicketStageId,
         ]);
     }
 
     public function updateStatus(Ticket $ticket, Request $request)
     {
-        $ticketStages = config('app.ticket_stages');
+        $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         // Controlla se lo status è presente nella richiesta e se è tra quelli validi.
         $request->validate([
-            'status' => 'required|int|max:'.(count($ticketStages) - 1),
+            'stage_id' => 'required|int|exists:ticket_stages,id,deleted_at,NULL',
         ]);
         $isAdminRequest = $request->user()['is_admin'] == 1;
 
@@ -571,7 +588,7 @@ class TicketController extends Controller
         }
 
         // Se lo status della richiesta è uguale a quello attuale, non fa nulla.
-        if ($ticket->status == $request->status) {
+        if ($ticket->stage_id == $request->stage_id) {
             return response([
                 'message' => 'The ticket is already in this status.',
             ], 200);
@@ -579,29 +596,38 @@ class TicketController extends Controller
 
         // Se lo status corrisponde a "Chiuso", non permette la modifica.
         // si può chiudere solo usando l'apposita funzione di chiusura, che fa i controlli e richiede le informazioni necessarie.
-        $index_status_chiuso = array_search('Chiuso', $ticketStages); // dovrebbe essere 5
-        if ($request->status == $index_status_chiuso) {
+        // $index_status_chiuso = array_search('Chiuso', $ticketStages); // dovrebbe essere 5
+        // if ($request->status == $index_status_chiuso) {
+        if ($request->stage_id == $closedTicketStageId) {
             return response([
                 'message' => 'It\'s not possible to close the ticket from here',
             ], 400);
         }
 
         // Se il ticket è chiuso, lo stato non può essere modificato.
-        if ($ticket->status == $index_status_chiuso) {
+        // if ($ticket->status == $index_status_chiuso) {
+        if ($ticket->stage_id == $closedTicketStageId) {
             return response([
                 'message' => 'The ticket is already closed. It cannot be modified.',
             ], 400);
         }
 
+        $oldStageId = $ticket->stage_id;
+
         $ticket->fill([
-            'status' => $request->status,
+            'stage_id' => $request->stage_id,
             'wait_end' => $request['wait_end'],
         ])->save();
+
+        $newTicketStageText = TicketStage::find($request->stage_id)->name;
 
         $update = TicketStatusUpdate::create([
             'ticket_id' => $ticket->id,
             'user_id' => $request->user()->id,
-            'content' => 'Stato del ticket modificato in "'.$ticketStages[$request->status].'"',
+            'old_stage_id' => $oldStageId,
+            'new_stage_id' => $request->stage_id,
+            // 'content' => 'Stato del ticket modificato in "'.$ticketStages[$request->status].'"',
+            'content' => 'Stato del ticket modificato in "' . $newTicketStageText . '"',
             'type' => 'status',
         ]);
 
@@ -617,10 +643,6 @@ class TicketController extends Controller
 
     public function addNote(Ticket $ticket, Request $request)
     {
-
-        // $ticket->update([
-        //     'status' => $request->status,
-        // ]);
         $fields = $request->validate([
             'message' => 'required|string',
         ]);
@@ -911,6 +933,8 @@ class TicketController extends Controller
             ], 401);
         }
 
+        $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
+
         $ticketType = $ticket->ticketType;
         if ($fields['actualProcessingTime'] <= 0 || ($fields['actualProcessingTime'] < ($ticketType->expected_processing_time ?? 0))) {
             return response([
@@ -970,8 +994,10 @@ class TicketController extends Controller
                 ]);
             }
 
+            $oldStageId = $ticket->stage_id;
+
             $ticket->update([
-                'status' => 5, // Si può impostare l'array di stati e prendere l'indice di "Chiuso" da lì
+                'stage_id' => $closedTicketStageId,
                 'actual_processing_time' => $request->actualProcessingTime,
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
@@ -982,6 +1008,8 @@ class TicketController extends Controller
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $authUser->id,
+                'old_stage_id' => $oldStageId,
+                'new_stage_id' => $closedTicketStageId,
                 'content' => $fields['message'],
                 'type' => 'closing',
                 'show_to_user' => $request->sendMail,
@@ -1070,18 +1098,20 @@ class TicketController extends Controller
             ]);
 
             // Va modificato lo stato se viene rimosso l'utente assegnato al ticket. (solo se il ticket non è stato già chiuso)
-            $ticketStages = config('app.ticket_stages');
-            $index_status_nuovo = array_search('Nuovo', $ticketStages);
-            $index_status_chiuso = array_search('Chiuso', $ticketStages);
-            if ($ticket->status != $index_status_nuovo && $ticket->status != $index_status_chiuso) {
-                // $old_status = $ticketStages[$ticket->status];
-                $ticket->update(['status' => $index_status_nuovo]);
-                $new_status = $ticketStages[$ticket->status];
+            $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+            $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+            if ($ticket->stage_id != $newTicketStageId && $ticket->stage_id != $closedTicketStageId) {
+                $oldStageId = $ticket->stage_id;
+                $ticket->update(['stage_id' => $newTicketStageId]);
+                $newStageText = TicketStage::find($newTicketStageId)->name;
 
                 $update = TicketStatusUpdate::create([
                     'ticket_id' => $ticket->id,
                     'user_id' => $request->user()->id,
-                    'content' => 'Modifica automatica: Stato del ticket modificato in "'.$new_status.'"',
+                    'old_stage_id' => $oldStageId,
+                    'new_stage_id' => $newTicketStageId,
+                    'content' => 'Modifica automatica: Stato del ticket modificato in "'.$newStageText.'"',
                     'type' => 'status',
                 ]);
 
@@ -1089,24 +1119,6 @@ class TicketController extends Controller
                 $ticket->invalidateCache();
             }
         }
-
-        // Ticket va messo in attesa se si cambia il gruppo. Comportamento da confermare. --  Si è deciso di non metterlo in attesa.
-        // Se deve ripartire da zero allora si può prendere la data della modifica come partenza, senza ulteriori cambi di stato.
-        // $ticketStages = config('app.ticket_stages');
-
-        // $index_in_attesa = array_search("In attesa", $ticketStages);
-        // if ($ticket["status"] != $index_in_attesa){
-        //     $ticket->update([
-        //         'status' => $index_in_attesa
-        //     ]);
-
-        //     TicketStatusUpdate::create([
-        //         'ticket_id' => $ticket->id,
-        //         'user_id' => $request->user()->id,
-        //         'content' => "Stato del ticket modificato in " . $index_in_attesa,
-        //         'type' => 'status',
-        //     ]);
-        // }
 
         return response([
             'ticket' => $ticket,
@@ -1143,17 +1155,21 @@ class TicketController extends Controller
         // Spostato dopo lo status update così la mail prende lo stato aggiornato
         // dispatch(new SendUpdateEmail($update));
 
+        $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+        $assignedTicketStageId = TicketStage::where('system_key', 'assigned')->value('id');
+
         // Se lo stato è 'Nuovo' aggiornarlo in assegnato
-        $ticketStages = config('app.ticket_stages');
-        if ($ticketStages[$ticket->status] == 'Nuovo') {
-            $index_status_assegnato = array_search('Assegnato', $ticketStages);
-            $ticket->update(['status' => $index_status_assegnato]);
-            $new_status = $ticketStages[$ticket->status];
+        if ($ticket->stage_id == $newTicketStageId) {
+            $oldStageId = $ticket->stage_id;
+            $ticket->update(['stage_id' => $assignedTicketStageId]);
+            $newStageText = TicketStage::find($assignedTicketStageId)->name;
 
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $request->user()->id,
-                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$new_status.'"',
+                'old_stage_id' => $oldStageId,
+                'new_stage_id' => $assignedTicketStageId,
+                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$newStageText.'"',
                 'type' => 'status',
             ]);
 
@@ -1348,11 +1364,12 @@ class TicketController extends Controller
         $groups = $user->groups;
 
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
-
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+        
         if ($withClosed) {
             $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->with('user')->get();
         } else {
-            $tickets = Ticket::where('status', '!=', 5)->whereIn('group_id', $groups->pluck('id'))->with('user')->get();
+            $tickets = Ticket::where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->with('user')->get();
         }
 
         return response([
@@ -1387,11 +1404,11 @@ class TicketController extends Controller
                 $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
             }
         } else {
-            // $tickets = Ticket::where("status", "!=", 5)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
+            $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
             if ($withSet) {
-                $tickets = Ticket::where('status', '!=', 5)->whereIn('group_id', $groups->pluck('id'))->get();
+                $tickets = Ticket::where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->get();
             } else {
-                $tickets = Ticket::where('status', '!=', 5)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
+                $tickets = Ticket::where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
             }
         }
 
@@ -1441,7 +1458,7 @@ class TicketController extends Controller
             $slaveTicket->setVisible([
                 'id',
                 'company_id',
-                'status',
+                'stage_id',
                 'description',
                 'group_id',
                 'created_at',
@@ -1542,22 +1559,26 @@ class TicketController extends Controller
             'in_corso' => 0,
         ];
 
-        foreach ($ticket->statusUpdates as $update) {
-            if ($update->type == 'status') {
+        // SE SI VUOLE USARE QUESTO CONTEGGIO VA RIVISTO IL METODO DI LOG DEI CAMBI DI STATO, PERCHÈ I NOMI SARANNO MODIFICABILI A PIACERE,
+        // QUINDI NON SI PUÒ RICERCARE LA PAROLA NEL TESTO MA SERVE O UN CAMPO IN PIÙ O UNA TABELLA A PARTE.
+        // HO AGGIUNTO I CAMPI NECESSARI NEGLI STATUS UPDATE, MA NON HO MODIFICATO IL CODICE CHE CREA GLI UPDATE (SIA MANUALI CHE AUTOMATICI).
+        // POI SERVE IL CODICE RETROCOMPATIBILE PER I VECCHI TICKET O UNA MIGGRAZIONE CHE MODIFICHI GLI UPDATE ESISTENTI AGGIUNGENDO IL NUOVO CAMPO.
+        // foreach ($ticket->statusUpdates as $update) {
+        //     if ($update->type == 'status') {
 
-                if (strpos($update->content, 'In attesa') !== false) {
-                    $avanzamento['attesa']++;
-                }
-                if (
-                    (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
-                ) {
-                    $avanzamento['assegnato']++;
-                }
-                if (strpos($update->content, 'In corso') !== false) {
-                    $avanzamento['in_corso']++;
-                }
-            }
-        }
+        //         if (strpos($update->content, 'In attesa') !== false) {
+        //             $avanzamento['attesa']++;
+        //         }
+        //         if (
+        //             (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
+        //         ) {
+        //             $avanzamento['assegnato']++;
+        //         }
+        //         if (strpos($update->content, 'In corso') !== false) {
+        //             $avanzamento['in_corso']++;
+        //         }
+        //     }
+        // }
 
         //? Chiusura
 
@@ -1718,22 +1739,27 @@ class TicketController extends Controller
                     'in_corso' => 0,
                 ];
 
-                foreach ($ticket->statusUpdates as $update) {
-                    if ($update->type == 'status') {
+                // COME DETTO NELLA FUNZIONE REPORT,
+                // SE SI VUOLE USARE QUESTO CONTEGGIO VA RIVISTO IL METODO DI LOG DEI CAMBI DI STATO, PERCHÈ I NOMI SARANNO MODIFICABILI A PIACERE,
+                // QUINDI NON SI PUÒ RICERCARE LA PAROLA NEL TESTO MA SERVE O UN CAMPO IN PIÙ O UNA TABELLA A PARTE.
+                // HO AGGIUNTO I CAMPI NECESSARI NEGLI STATUS UPDATE, MA NON HO MODIFICATO IL CODICE CHE CREA GLI UPDATE (SIA MANUALI CHE AUTOMATICI).
+                // POI SERVE IL CODICE RETROCOMPATIBILE PER I VECCHI TICKET O UNA MIGGRAZIONE CHE MODIFICHI GLI UPDATE ESISTENTI AGGIUNGENDO IL NUOVO CAMPO.
+                // foreach ($ticket->statusUpdates as $update) {
+                //     if ($update->type == 'status') {
 
-                        if (strpos($update->content, 'In attesa') !== false) {
-                            $avanzamento['attesa']++;
-                        }
-                        if (
-                            (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
-                        ) {
-                            $avanzamento['assegnato']++;
-                        }
-                        if (strpos($update->content, 'In corso') !== false) {
-                            $avanzamento['in_corso']++;
-                        }
-                    }
-                }
+                //         if (strpos($update->content, 'In attesa') !== false) {
+                //             $avanzamento['attesa']++;
+                //         }
+                //         if (
+                //             (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
+                //         ) {
+                //             $avanzamento['assegnato']++;
+                //         }
+                //         if (strpos($update->content, 'In corso') !== false) {
+                //             $avanzamento['in_corso']++;
+                //         }
+                //     }
+                // }
 
                 //? Chiusura
 

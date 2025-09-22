@@ -59,6 +59,7 @@ DOCKER.md
 Dockerfile
 .dockerignore
 Makefile
+Makefile_no_ubuntu
 
 # Container logs
 *.log

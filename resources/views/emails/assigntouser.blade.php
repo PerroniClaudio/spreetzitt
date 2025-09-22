@@ -10,7 +10,7 @@ Categoria: {{ $category->name }} <br>
 Tipo: {{ $ticketType->name }} <br><br>
 <!-- Update: {{ $update->content }} <br><br> -->
 Stato:
-@component('mail::status', ['status' => $ticket->status, 'stages' => $stages])
+@component('mail::statusnew', ['status' => $ticket->stage_id, 'stages' => $stages])
 @endcomponent
 
 <br>

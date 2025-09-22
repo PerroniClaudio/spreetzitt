@@ -14,6 +14,7 @@ class Ticket extends Model {
         'company_id',
         'user_id',
         'status',
+        'stage_id', // New TicketStage relationship
         'description',
         'type',
         'file',
@@ -48,7 +49,8 @@ class Ticket extends Model {
     public function toSearchableArray() {
         return [
             'description' => $this->description,
-            'status' => $this->status,
+            // 'status' => $this->status,
+            'stage_id' => $this->stage_id,
             'type' => $this->type,
             'user_name' => $this->user->name,
             'user_surname' => $this->user->surname,
@@ -121,6 +123,13 @@ class Ticket extends Model {
         return $this->belongsTo(TicketType::class, 'type_id');
     }
 
+    /**
+     * Get the ticket stage (new system)
+     */
+    public function stage() {
+        return $this->belongsTo(TicketStage::class, 'stage_id');
+    }
+
     public function company() {
         return $this->belongsTo(Company::class);
     }
@@ -177,19 +186,26 @@ class Ticket extends Model {
         */
 
         $statusUpdates = $this->statusUpdates()->whereIn('type', ['status', 'closing'])->get();
-
+        
+        // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
+        $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
+            return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;
+        });
+        
         $hasBeenWaiting = false;
         $waitingRecords = [];
         $waitingEndingRecords = [];
         $waitingMinutes = 0;
 
-        for ($i = 0; $i < count($statusUpdates); $i++) {
+        for ($i = 0; $i < count($filteredStatusUpdates); $i++) {
             if (
-                (strpos(strtolower($statusUpdates[$i]->content), 'in attesa') !== false) || (strpos(strtolower($statusUpdates[$i]->content), 'risolto') !== false)
+                // (strpos(strtolower($statusUpdates[$i]->content), 'in attesa') !== false) || (strpos(strtolower($statusUpdates[$i]->content), 'risolto') !== false)
+                TicketStage::find($filteredStatusUpdates[$i]->new_stage_id)?->is_sla_pause 
             ) {
                 $hasBeenWaiting = true;
-                $waitingRecords[] = $statusUpdates[$i];
-                $waitingEndingRecords[] = $statusUpdates[$i + 1] ?? null;
+                $waitingRecords[] = $filteredStatusUpdates[$i];
+                // $waitingEndingRecords[] = $statusUpdates[$i + 1] ?? null;
+                $waitingEndingRecords[] = $filteredStatusUpdates[$i + 1] ?? null;
             }
         }
 
@@ -225,26 +241,29 @@ class Ticket extends Model {
     }
 
     public function waitingTimes() {
-        $waitingHours = 0;
-
-        /*
-            Se il ticket è stato in attesa almeno una volta bisogna calcolare il tempo totale in cui è rimasto in attesa.
-        */
-
         $statusUpdates = $this->statusUpdates()->where('type', 'status')->get();
+        
+        // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
+        $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
+            return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;
+        });
 
         $hasBeenWaiting = false;
         $waitingRecords = [];
         $waitingEndingRecords = [];
 
-        for ($i = 0; $i < count($statusUpdates); $i++) {
+        for ($i = 0; $i < count($filteredStatusUpdates); $i++) {
             if (
-                (strpos(strtolower($statusUpdates[$i]->content), 'in attesa') !== false) || (strpos(strtolower($statusUpdates[$i]->content), 'risolto') !== false)
+                // (strpos(strtolower($statusUpdates[$i]->content), 'in attesa') !== false) || (strpos(strtolower($statusUpdates[$i]->content), 'risolto') !== false)
+                TicketStage::find($filteredStatusUpdates[$i]->new_stage_id)?->is_sla_pause
             ) {
                 $hasBeenWaiting = true;
-                $waitingRecords[] = $statusUpdates[$i];
-                if (count($statusUpdates) > ($i + 1)) {
-                    $waitingEndingRecords[] = $statusUpdates[$i + 1];
+                // $waitingRecords[] = $statusUpdates[$i];
+                // if (count($statusUpdates) > ($i + 1)) {
+                //     $waitingEndingRecords[] = $statusUpdates[$i + 1];
+                $waitingRecords[] = $filteredStatusUpdates[$i];
+                if (count($filteredStatusUpdates) > ($i + 1)) {
+                    $waitingEndingRecords[] = $filteredStatusUpdates[$i + 1];
                 }
             }
         }

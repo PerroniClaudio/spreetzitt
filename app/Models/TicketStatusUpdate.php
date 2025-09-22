@@ -14,7 +14,9 @@ class TicketStatusUpdate extends Model
         'user_id',
         'content',
         'type',
-        'show_to_user'
+        'show_to_user',
+        'old_stage_id',
+        'new_stage_id'
     ];
 
     /* get the owner */

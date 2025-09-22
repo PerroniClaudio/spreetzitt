@@ -205,19 +205,6 @@ return [
     ])->toArray(),
 
     /*
-        Possibili stati dei ticket
-    */
-    'ticket_stages' => [
-        'Nuovo',
-        'Assegnato',
-        'In corso',
-        'In attesa',
-        'Risolto',
-        'Chiuso',
-        'Attesa feedback cliente',
-    ],
-
-    /*
         Tipi di update dei ticket
     */
     'update_types' => [

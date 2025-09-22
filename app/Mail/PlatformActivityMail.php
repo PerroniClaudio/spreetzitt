@@ -21,7 +21,14 @@ class PlatformActivityMail extends Mailable
      */
     public function __construct(public iterable $tickets)
     {
-        $this->stages = config('app.ticket_stages');
+        $this->stages = \App\Models\TicketStage::all()->mapWithKeys(function ($stage) {
+            return [$stage->id => [
+                'name' => $stage->name,
+                'admin_color' => $stage->admin_color,
+                'user_color' => $stage->user_color,
+                'is_sla_pause' => $stage->is_sla_pause
+            ]];
+        })->toArray();
     }
 
     /**
