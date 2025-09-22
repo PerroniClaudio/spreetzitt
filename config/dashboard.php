@@ -33,17 +33,29 @@ return [
     ],
     'spreetzit' => [
         'leftCards' => [
+            // [
+            //     'id' => 'ultimi-articoli-dpo',
+            //     'type' => 'latest-dpo-articles',
+            //     'color' => 'primary',
+            //     'content' => 'Ultimi articoli in DPO del comune'
+            // ],
+            // [
+            //     'id' => 'articoli-integys',
+            //     'type' => 'integys-articles',
+            //     'color' => 'secondary',
+            //     'content' => 'Ultimi Articoli in Integys'
+            // ],
             [
-                'id' => 'ultimi-articoli-dpo',
-                'type' => 'latest-dpo-articles',
+                'id' => 'ticket-master',
+                'type' => 'ticket-master',
                 'color' => 'primary',
-                'content' => 'Ultimi articoli in DPO del comune'
+                'content' => 'Fascicoli aperti'
             ],
             [
-                'id' => 'articoli-integys',
-                'type' => 'integys-articles',
+                'id' => 'activities-open',
+                'type' => 'activities-open',
                 'color' => 'secondary',
-                'content' => 'Ultimi Articoli in Integys'
+                'content' => 'Attività in corso'
             ],
             [
                 'id' => 'ticket-frequenti',
@@ -59,11 +71,17 @@ return [
                 'color' => 'secondary',
                 'content' => 'Accesso rapido report'
             ],
+            // [
+            //     'id' => 'news-vendor',
+            //     'type' => 'vendor-news',
+            //     'color' => 'primary',
+            //     'content' => 'News riguardanti vendor diversi'
+            // ],
             [
-                'id' => 'news-vendor',
-                'type' => 'vendor-news',
-                'color' => 'primary',
-                'content' => 'News riguardanti vendor diversi'
+                'id' => 'ticket-redirect',
+                'type' => 'tickets-redirect',
+                'color' => 'secondary',
+                'content' => 'Gestione ticket'
             ],
             [
                 'id' => 'ultime-funzioni-utilizzate',
@@ -73,5 +91,35 @@ return [
             ]
         ]
     ],
+    'lexblast' => [
+        'leftCards' => [
+            [
+                'id' => 'ticket-master',
+                'type' => 'ticket-master',
+                'color' => 'primary',
+                'content' => 'Fascicoli aperti'
+            ],
+            [
+                'id' => 'activities-open',
+                'type' => 'activities-open',
+                'color' => 'secondary',
+                'content' => 'Attività in corso'
+            ]
+        ],
+        'rightCards' => [
+            [
+                'id' => 'ticket-redirect',
+                'type' => 'tickets-redirect',
+                'color' => 'secondary',
+                'content' => 'Gestione ticket'
+            ],
+            [
+                'id' => 'accesso-rapido-report',
+                'type' => 'quick-access-reports',
+                'color' => 'secondary',
+                'content' => 'Accesso rapido report'
+            ]
+        ]
+    ]
     // Aggiungi qui altri tenant con le rispettive configurazioni
 ];

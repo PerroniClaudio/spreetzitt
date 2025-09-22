@@ -708,4 +708,116 @@ class CompanyController extends Controller
             'request_reading_delay_notice' => $request->reading_delay_notice,
         ], 200);
     }
+
+    //? Dashboard
+
+    public function dashboardCompanies(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $companies = Company::orderBy('name', 'asc')->get();
+        $companies->makeHidden(['sla', 'sla_take_low', 'sla_take_medium', 'sla_take_high', 'sla_take_critical', 'sla_solve_low', 'sla_solve_medium', 'sla_solve_high', 'sla_solve_critical', 'sla_prob_take_low', 'sla_prob_take_medium', 'sla_prob_take_high', 'sla_prob_take_critical', 'sla_prob_solve_low', 'sla_prob_solve_medium', 'sla_prob_solve_high', 'sla_prob_solve_critical']);
+
+        if (! $companies) {
+            $companies = [];
+        }
+
+        // Aggiungi contatori per ogni company
+        $companies->each(function ($company) {
+            // Conta i ticket master aperti (status != 5)
+            $company->open_master_tickets_count = $company->tickets()
+                ->where('status', '!=', 5)
+                ->whereHas('ticketType', function ($query) {
+                    $query->where('is_master', 1);
+                })
+                ->count();
+
+            // Conta i ticket activity (is_master = 0)
+            $company->open_activity_tickets_count = $company->tickets()
+                ->whereHas('ticketType', function ($query) {
+                    $query->where('is_master', 0);
+                })
+                ->count();
+        });
+
+        return response([
+            'companies' => $companies,
+        ], 200);
+    }
+
+    public function openMasterTickets(Company $company, Request $request)
+    {
+        $user = $request->user();
+        $ticketStages = config('app.ticket_stages');
+
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        // Recupera i ticket di tipo master associati alla compagnia
+
+        $tickets = $company->tickets()
+            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname'])
+            ->where('status', '!=', 5)
+            ->whereHas('ticketType', function ($query) {
+                $query->where('is_master', 1);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id', 'created_at']);
+
+        $data = $tickets->map(function ($ticket) use ($ticketStages) {
+            return [
+                'id' => $ticket->id,
+                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
+                'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '').' '.($ticket->handler->surname ?? '')) : null,
+                'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '').' '.($ticket->user->surname ?? '')) : null,
+                'created_at' => $ticket->created_at,
+            ];
+        })->values()->toArray();
+
+        return response([
+            'master_tickets' => $data,
+        ], 200);
+    }
+
+    public function openActivityTickets(Company $company, Request $request)
+    {
+        $user = $request->user();
+        $ticketStages = config('app.ticket_stages');
+
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        // Recupera i ticket di tipo attività associati alla compagnia
+
+        $tickets = $company->tickets()
+            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname'])
+            ->whereHas('ticketType', function ($query) {
+                $query->where('is_master', 0);
+            })
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id', 'created_at'])
+            ->take(5);
+
+        $data = $tickets->map(function ($ticket) use ($ticketStages) {
+            return [
+                'id' => $ticket->id,
+                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
+                'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '').' '.($ticket->handler->surname ?? '')) : null,
+                'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '').' '.($ticket->user->surname ?? '')) : null,
+                'created_at' => $ticket->created_at,
+            ];
+        })->values()->toArray();
+
+        return response([
+            'activity_tickets' => $data,
+        ], 200);
+    }
 }

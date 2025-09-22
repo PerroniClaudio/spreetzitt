@@ -141,4 +141,12 @@ class GroupController extends Controller {
             'group' => $group,
         ], 200);
     }
+
+    public function groupsWithUsers() {
+        $groups = Group::with('users')->get();
+
+        return response([
+            'groups' => $groups,
+        ], 200);
+    }
 }

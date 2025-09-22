@@ -71,6 +71,14 @@ class Group extends Model {
         ]);
     }
 
+    /**
+     * Assignment history records related to this group.
+     */
+    public function assignmentHistoryRecords()
+    {
+        return $this->hasMany(TicketAssignmentHistoryRecord::class, 'group_id');
+    }
+
 
     // public function allTickets()
     // {

@@ -116,4 +116,24 @@ class SupplierController extends Controller
             'brands' => $supplier->brands,
         ], 200);
     }
+
+    public function getLogo(Supplier $supplier)
+    {
+        $disk = FileUploadController::getStorageDisk();
+        $imagePath = $supplier->logo_url;
+
+        if ($disk === 'public' || $disk === 'local') {
+            // Se il disco è locale, costruiamo il path assoluto
+            $imageContent = file_get_contents(Storage::path($imagePath));
+        } else {
+            // Per i dischi cloud, generiamo un URL firmato e scarichiamo il contenuto
+            $imageUrl = FileUploadController::generateSignedUrlForFile($imagePath);
+            $imageContent = file_get_contents($imageUrl);
+        }
+
+        // Restituisci l'immagine come risposta HTTP con il tipo di contenuto image/jpeg
+        return response($imageContent, 200, [
+            'Content-Type' => 'image/jpeg',
+        ]);
+    }
 }
