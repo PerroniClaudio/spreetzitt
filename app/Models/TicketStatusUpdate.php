@@ -32,5 +32,17 @@ class TicketStatusUpdate extends Model
     {
         return $this->belongsTo(Ticket::class);
     }
+
+    /* get the old stage */
+    public function oldStage()
+    {
+        return $this->belongsTo(TicketStage::class, 'old_stage_id');
+    }
+
+    /* get the new stage */
+    public function newStage()
+    {
+        return $this->belongsTo(TicketStage::class, 'new_stage_id');
+    }
     
 }

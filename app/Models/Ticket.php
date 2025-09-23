@@ -14,7 +14,7 @@ class Ticket extends Model
     protected $fillable = [
         'company_id',
         'user_id',
-        'status',
+        'status', // Vecchio status, da mantenere finchè non si migra definitivamente al nuovo sistema con stage
         'stage_id', // New TicketStage relationship
         'description',
         'file',

@@ -726,11 +726,13 @@ class CompanyController extends Controller
             $companies = [];
         }
 
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+
         // Aggiungi contatori per ogni company
-        $companies->each(function ($company) {
-            // Conta i ticket master aperti (status != 5)
+        $companies->each(function ($company) use ($closedStageId) {
+            // Conta i ticket master aperti (stage_id != $closedStageId)
             $company->open_master_tickets_count = $company->tickets()
-                ->where('status', '!=', 5)
+                ->where('stage_id', '!=', $closedStageId)
                 ->whereHas('ticketType', function ($query) {
                     $query->where('is_master', 1);
                 })
@@ -752,27 +754,28 @@ class CompanyController extends Controller
     public function openMasterTickets(Company $company, Request $request)
     {
         $user = $request->user();
-        $ticketStages = config('app.ticket_stages');
 
         if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+
         // Recupera i ticket di tipo master associati alla compagnia
 
         $tickets = $company->tickets()
-            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname'])
-            ->where('status', '!=', 5)
+            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname', 'stage'])
+            ->where('stage_id', '!=', $closedStageId)
             ->whereHas('ticketType', function ($query) {
                 $query->where('is_master', 1);
             })
             ->orderBy('created_at', 'desc')
-            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id', 'created_at']);
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'user_id', 'created_at']);
 
-        $data = $tickets->map(function ($ticket) use ($ticketStages) {
+        $data = $tickets->map(function ($ticket) {
             return [
                 'id' => $ticket->id,
-                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'stage' => $ticket->stage, // Contains all stage data
                 'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
                 'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '').' '.($ticket->handler->surname ?? '')) : null,
                 'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '').' '.($ticket->user->surname ?? '')) : null,
@@ -788,7 +791,6 @@ class CompanyController extends Controller
     public function openActivityTickets(Company $company, Request $request)
     {
         $user = $request->user();
-        $ticketStages = config('app.ticket_stages');
 
         if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
@@ -797,18 +799,18 @@ class CompanyController extends Controller
         // Recupera i ticket di tipo attività associati alla compagnia
 
         $tickets = $company->tickets()
-            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname'])
+            ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname', 'stage'])
             ->whereHas('ticketType', function ($query) {
                 $query->where('is_master', 0);
             })
             ->orderBy('created_at', 'desc')
-            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id', 'created_at'])
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'user_id', 'created_at'])
             ->take(5);
 
-        $data = $tickets->map(function ($ticket) use ($ticketStages) {
+        $data = $tickets->map(function ($ticket) {
             return [
                 'id' => $ticket->id,
-                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'stage' => $ticket->stage, // Contains all stage data
                 'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
                 'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '').' '.($ticket->handler->surname ?? '')) : null,
                 'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '').' '.($ticket->user->surname ?? '')) : null,

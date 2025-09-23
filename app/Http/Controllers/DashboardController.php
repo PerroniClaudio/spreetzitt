@@ -174,9 +174,6 @@ class DashboardController extends Controller {
             case 'ticket-master':
                 $card['data'] = $this->getTicketMasterData();
                 break;
-            case 'ticket-master':
-                $card['data'] = $this->getTicketMasterData();
-                break;
             case 'activities-open':
                 $card['data'] = $this->getNormalTicketData();
                 break;
@@ -199,7 +196,8 @@ class DashboardController extends Controller {
         $usersCount = User::where('is_admin', false)->count();
         
         // Conta i ticket aperti
-        $openTicketsCount = Ticket::whereIn('status', ['open', 'in_progress', 'pending'])->count();
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+        $openTicketsCount = Ticket::where('stage_id', '!=', $closedStageId)->count();
         
         return [
             'companies_count' => $companiesCount,
@@ -355,23 +353,22 @@ class DashboardController extends Controller {
     }
 
     public function getTicketMasterData() {
-
-        $ticketStages = config('app.ticket_stages');
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
 
         // Recupera ticket i cui tipi hanno is_master = 1 usando whereHas per evitare join e abilitare eager loading
         // Assicurati di includere la foreign key 'user_id' nella selezione, altrimenti la relazione user non viene collegata.
-        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname']) // Eager load per ottimizzare le query
-            ->where('status', '!=', 5)
+        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname', 'stage']) // Eager load per ottimizzare le query
+            ->where('stage_id', '!=', $closedStageId)
             ->whereHas('ticketType', function ($query) {
                 $query->where('is_master', 1);
             })
             ->orderBy('created_at', 'desc')
-            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id']);
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'user_id']);
 
-        return $tickets->map(function ($ticket) use ($ticketStages) {
+        return $tickets->map(function ($ticket) {
             return [
                 'id' => $ticket->id,
-                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'stage' => $ticket->stage,
                 'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
                 'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '') . ' ' . ($ticket->handler->surname ?? '')) : null,
                 'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '') . ' ' . ($ticket->user->surname ?? '')) : null,
@@ -382,23 +379,23 @@ class DashboardController extends Controller {
     }
 
     public function getNormalTicketData() {
-        $ticketStages = config('app.ticket_stages');
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
 
         // Recupera ticket i cui tipi hanno is_master = 0 usando whereHas per evitare join e abilitare eager loading
         // Assicurati di includere la foreign key 'user_id' nella selezione, altrimenti la relazione user non viene collegata.
-        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname']) // Eager load per ottimizzare le query
-            ->where('status', '!=', 5)
+        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname', 'stage']) // Eager load per ottimizzare le query
+            ->where('stage_id', '!=', $closedStageId)
             ->whereHas('ticketType', function ($query) {
                 $query->where('is_master', 0);
             })
             ->orderBy('created_at', 'desc')
-            ->get(['id', 'status', 'type_id', 'admin_user_id', 'user_id'])
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'user_id'])
             ->take(5);
 
-        return $tickets->map(function ($ticket) use ($ticketStages) {
+        return $tickets->map(function ($ticket) {
             return [
                 'id' => $ticket->id,
-                'status' => isset($ticketStages[$ticket->status]) ? $ticketStages[$ticket->status] : $ticket->status,
+                'stage' => $ticket->stage,
                 'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
                 'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '') . ' ' . ($ticket->handler->surname ?? '')) : null,
                 'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '') . ' ' . ($ticket->user->surname ?? '')) : null,

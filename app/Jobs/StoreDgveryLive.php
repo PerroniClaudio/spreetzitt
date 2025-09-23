@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Ticket;
 use App\Models\TicketMessage;
+use App\Models\TicketStage;
 use App\Models\TicketType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -36,13 +37,15 @@ class StoreDgveryLive implements ShouldQueue {
         $ticketType = TicketType::find(652);
         $group = $ticketType->groups->first();
         $groupId = $group->id;
+        $newStageId = TicketStage::where('system_key', 'new')->first()->id ?? null;
 
         $ticket = Ticket::create([
             'description' => $payload['description'],
             'type_id' => 652,
             'group_id' => $groupId,
             'user_id' => 12,
-            'status' => '0',
+            'status' => '0', // solo finchè non si migra definitivamente al nuovo sistema con stage
+            'stage_id' => $newStageId,
             'company_id' => $payload['company_id'], // 13 academ, 21 labor
             'file' => null,
             'duration' => 0,

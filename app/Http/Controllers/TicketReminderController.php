@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\TicketReminder;
+use App\Models\TicketStage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
@@ -201,7 +202,6 @@ class TicketReminderController extends Controller
     public function getTicketsWithDeadlinesThisMonth(Request $request): Response
     {
         $user = $request->user();
-        $ticketStages = config('app.ticket_stages');
 
         // Data inizio e fine del mese corrente
         $startOfMonth = now()->startOfMonth();
@@ -223,7 +223,7 @@ class TicketReminderController extends Controller
             ->get();
 
         // Raggruppa per ticket per evitare duplicati
-        $ticketsWithDeadlines = $deadlineReminders->groupBy('ticket_id')->map(function ($reminders) use ($ticketStages) {
+        $ticketsWithDeadlines = $deadlineReminders->groupBy('ticket_id')->map(function ($reminders) {
             $earliestReminder = $reminders->sortBy('reminder_date')->first();
             $ticket = $earliestReminder->ticket;
 
@@ -233,7 +233,8 @@ class TicketReminderController extends Controller
                     'nome' => $ticket->ticketType->name ?? 'N/A',
                     'id' => $ticket->type_id ?? null,
                 ],
-                'stato' => $ticketStages[$ticket->status],
+                'stato' => TicketStage::find($ticket->stage_id)?->name ?? 'N/A',
+                'id_stato' => $ticket->stage_id,
                 'azienda' => $ticket->company->name ?? 'N/A',
                 'gestore' => $ticket->handler ? [
                     'id' => $ticket->handler->id,

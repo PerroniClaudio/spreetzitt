@@ -11,6 +11,7 @@ use Illuminate\Queue\SerializesModels;
 
 use App\Models\Ticket;
 use App\Models\TicketReportPdfExport;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -66,7 +67,8 @@ class GeneratePdfReport implements ShouldQueue {
             if (!$tickets->isEmpty()) {
                 $tickets->load('ticketType');
             }
-            
+
+            $closedStageId = TicketStage::where('system_key', 'closed')->first()?->id;            
 
             // Questa parte va provata, perchè nella request dovrebbe esserci l'indicazione, ma verrà inserita negli optional parameters.
             // $filter = $report->type_filter;
@@ -234,17 +236,14 @@ class GeneratePdfReport implements ShouldQueue {
 
                     foreach ($ticket->statusUpdates as $update) {
                         if ($update->type == 'status') {
-
-                            if (strpos($update->content, 'In attesa') !== false) {
-                                $avanzamento["attesa"]++;
-                            }
-                            if (
-                                (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
-                            ) {
-                                $avanzamento["assegnato"]++;
-                            }
-                            if (strpos($update->content, 'In corso') !== false) {
-                                $avanzamento["in_corso"]++;
+                            if ($update->newStage) {
+                                if ($update->newStage->system_key == 'assigned') {
+                                    $avanzamento["assegnato"]++;
+                                } else if ($update->newStage->is_sla_pause == 1) {
+                                    $avanzamento["attesa"]++;
+                                } else {
+                                    $avanzamento["in_corso"]++;
+                                }
                             }
                         }
                     }
@@ -416,7 +415,7 @@ class GeneratePdfReport implements ShouldQueue {
 
                 // Se chiuso o meno (con le modifiche di maggio 2025 qui dovrebbero essere tutti già chiusi, se non cambia niente)
 
-                if ($ticket['data']['status'] == 5) {
+                if ($ticket['data']['stage_id'] == $closedStageId) {
                     $closed_tickets_count++;
                 } else {
                     $other_tickets_count++;
@@ -508,22 +507,7 @@ class GeneratePdfReport implements ShouldQueue {
                     ->orderBy('created_at', 'DESC')
                     ->first();
 
-                $current_status = "Aperto";
-
-                if ($latest_status_update) {
-                    if (strpos($latest_status_update->content, 'In attesa') !== false) {
-                        $current_status = "In Attesa";
-                    }
-                    if (strpos($latest_status_update->content, 'Assegnato') !== false) {
-                        $current_status = "Assegnato";
-                    }
-                    if (strpos($latest_status_update->content, 'In corso') !== false) {
-                        $current_status = "In corso";
-                    }
-                    if ($latest_status_update->type == 'closing') {
-                        $current_status = "Chiuso";
-                    }
-                }
+                $current_status = $latest_status_update->newStage?->name ?? "Aperto";
 
                 // Form non corretto
 
@@ -577,7 +561,7 @@ class GeneratePdfReport implements ShouldQueue {
                     "status_updates" => $ticket['status_updates'],
                     "description" => $ticket['data']['description'],
                     "closing_message" => $ticket['closing_message'],
-                    "closed_at" => $ticket['data']['status'] == 5 ? $closed_at : "",
+                    "closed_at" => $ticket['data']['stage_id'] == $closedStageId ? $closed_at : "",
                     'should_show_more' => false,
                     'ticket_frontend_url' => env('FRONTEND_URL') . '/support/user/ticket/' . $ticket['data']['id'],
                     'current_status' => $current_status,

@@ -415,7 +415,7 @@ class TicketController extends Controller
                 $query->select('id', 'name', 'surname', 'email', 'is_admin');
             },
             'stage' => function ($query) {
-                $query->select('id', 'name', 'description', 'admin_color', 'user_color', 'is_sla_pause');
+                $query->select('id', 'name', 'description', 'admin_color', 'user_color', 'is_sla_pause', 'system_key');
             },
             'files',
         ])->first();
@@ -1332,16 +1332,16 @@ class TicketController extends Controller
         if ($withClosed) {
             // $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
             if ($withSet) {
-                $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->get();
+                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->get();
             } else {
-                $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
+                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
             }
         } else {
             $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
             if ($withSet) {
-                $tickets = Ticket::where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->get();
+                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->get();
             } else {
-                $tickets = Ticket::where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
+                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
             }
         }
 
@@ -1879,15 +1879,16 @@ class TicketController extends Controller
         $ticket->invalidateCache();
 
         // Se lo stato è 'Nuovo' aggiornarlo in assegnato
-        $ticketStages = config('app.ticket_stages');
-        if ($ticketStages[$ticket->status] == 'Nuovo' && $request->user_id != null) {
-            $index_status_assegnato = array_search('Assegnato', $ticketStages);
-            $ticket->update(['status' => $index_status_assegnato]);
-            $new_status = $ticketStages[$ticket->status];   
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+        $newStageId = TicketStage::where('system_key', 'new')->value('id');
+        $assignedStageId = TicketStage::where('system_key', 'assigned')->value('id');
+        if ($ticket->stage_id == $newStageId && $request->user_id != null) {
+            $ticket->update(['stage_id' => $assignedStageId]);
+            $newStageText = TicketStage::find($ticket->stage_id)?->name ?? 'N/A';
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $authUser->id,
-                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$new_status.'"',
+                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$newStageText.'"',
                 'type' => 'status',
             ]);
             // Invalida la cache per chi ha creato il ticket e per i referenti.

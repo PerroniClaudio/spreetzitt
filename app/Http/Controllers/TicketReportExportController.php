@@ -9,6 +9,7 @@ use App\Jobs\GenerateUserReport;
 use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketReportExport;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\TicketType;
 use App\Models\User;
@@ -315,15 +316,11 @@ class TicketReportExportController extends Controller
         foreach ($ticket->statusUpdates as $update) {
             if ($update->type == 'status') {
 
-                if (strpos($update->content, 'In attesa') !== false) {
-                    $avanzamento['attesa']++;
-                }
-                if (
-                    (strpos($update->content, 'Assegnato') !== false) || (strpos($update->content, 'assegnato') !== false)
-                ) {
+                if(TicketStage::find($update->new_stage_id)->system_key == 'assigned'){
                     $avanzamento['assegnato']++;
-                }
-                if (strpos($update->content, 'In corso') !== false) {
+                } elseif(TicketStage::find($update->new_stage_id)->is_sla_pause == 1){
+                    $avanzamento['attesa']++;
+                } else {
                     $avanzamento['in_corso']++;
                 }
             }
@@ -379,6 +376,7 @@ class TicketReportExportController extends Controller
 
         $company = Company::find($request->company_id);
         $tickets_data = Cache::get($cacheKey);
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $tickets_by_day = [];
         $ticket_graph_data = [];
@@ -492,7 +490,7 @@ class TicketReportExportController extends Controller
 
             // Se chiuso o meno
 
-            if ($ticket['data']['status'] == 5) {
+            if ($ticket['data']['stage_id'] == $closedStageId) {
                 $closed_tickets_count++;
             } else {
                 $other_tickets_count++;
@@ -554,10 +552,17 @@ class TicketReportExportController extends Controller
 
             // Presa in carica
 
-            if ($ticket['data']['status_updates'] != null) {
-                $elapsed_minutes = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->diffInMinutes(\Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['status_updates'][0]['created_at']));
+            $firstStatusUpdate = TicketStatusUpdate::where('ticket_id', $ticket['data']['id'])
+                ->where('type', 'status')
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+            if ($firstStatusUpdate) {
+                // Questo non ha senso perchè in questo caso status_update è un array di counter. $ticket['data']['status_updates'][0]['created_at']
+                $elapsed_minutes = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->diffInMinutes(\Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $firstStatusUpdate->created_at));
             } else {
                 // $elapsed_minutes = $ticket['data']['sla_take'];
+                // Anche questo non ha senso perchè updated_at è uguale a created_at se non ci sono stati update. in quel caso si dovrebbe usare now. Non modifico perchè magari si sta pensando ancora alla funzione da usare per il calcolo.
                 $elapsed_minutes = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->diffInMinutes(\Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['updated_at']));
             }
 
@@ -581,23 +586,8 @@ class TicketReportExportController extends Controller
                 ->where('created_at', '<', \Carbon\Carbon::createFromFormat('Y-m-d', $request->to))
                 ->orderBy('created_at', 'DESC')
                 ->first();
-
-            $current_status = 'Aperto';
-
-            if ($latest_status_update) {
-                if (strpos($latest_status_update->content, 'In attesa') !== false) {
-                    $current_status = 'In Attesa';
-                }
-                if (strpos($latest_status_update->content, 'Assegnato') !== false) {
-                    $current_status = 'Assegnato';
-                }
-                if (strpos($latest_status_update->content, 'In corso') !== false) {
-                    $current_status = 'In corso';
-                }
-                if ($latest_status_update->type == 'closing') {
-                    $current_status = 'Chiuso';
-                }
-            }
+            // Alla data di fine selezionata per il report (se era ancora in gestione)
+            $current_status = TicketStage::find($latest_status_update->new_stage_id)->name ?? 'Aperto';
 
             // Form non corretto
 
@@ -628,7 +618,7 @@ class TicketReportExportController extends Controller
                 'status_updates' => $ticket['status_updates'],
                 'description' => $ticket['data']['description'],
                 'closing_message' => $ticket['closing_message'],
-                'closed_at' => $ticket['data']['status'] == 5 ? $closed_at : '',
+                'closed_at' => $ticket['data']['stage_id'] == $closedStageId ? $closed_at : '',
                 'should_show_more' => false,
                 'ticket_frontend_url' => env('FRONTEND_URL').'/support/user/ticket/'.$ticket['data']['id'],
                 'current_status' => $current_status,

@@ -138,9 +138,9 @@ return [
             //     'filterableAttributes'=> ['id', 'name', 'email'],
             // ],
             'tickets' => [
-                'filterableAttributes' => ['id', 'description', 'status', 'type'],
-                'searchableAttributes' => ['description', 'status', 'type'],
-                'sortableAttributes' => ['id', 'status', 'type', 'created_at'],
+                'filterableAttributes' => ['id', 'description', 'stage_id', 'type'],
+                'searchableAttributes' => ['description', 'stage_id', 'type'],
+                'sortableAttributes' => ['id', 'stage_id', 'type', 'created_at'],
             ],
             'old_tickets' => [
                 'filterableAttributes' => ['id', 'business_name', 'closing_notes', 'opened_by', 'ticket_type', 'opened_at', 'closed_at'],

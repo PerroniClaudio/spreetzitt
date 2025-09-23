@@ -6,6 +6,7 @@ namespace App\Console\Commands;
  
 use Illuminate\Console\Command;
 use App\Models\Ticket;
+use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -85,9 +86,10 @@ class CalculateTicketSLA extends Command
         $allHolidays = array_merge($this->holidays, $this->getEasterHolidays());
  
         $this->info('Avvio calcolo SLA per i ticket...');
- 
+        $closedStageId = TicketStage::where('system_key', 'closed')->first()?->id;
         // Recupera tutti i ticket attivi che devono essere valutati
-        $tickets = Ticket::whereNotIn('status', ['closed', 'cancelled'])
+        // $tickets = Ticket::whereNotIn('status', ['closed', 'cancelled']) // Cancelled?
+        $tickets = Ticket::whereNotIn('stage_id', [$closedStageId])
                         ->whereNotNull('sla_take')
                         ->whereNotNull('sla_solve')
                         ->get();
@@ -220,7 +222,9 @@ class CalculateTicketSLA extends Command
         // Questo dipende dalla logica specifica del tuo sistema
         // Ad esempio, potrebbe essere il primo aggiornamento di stato diverso da "new"
         $firstStatusUpdate = TicketStatusUpdate::where('ticket_id', $ticket->id)
-            ->where('status', '!=', 'new')
+            ->whereHas('newStage', function ($query) {
+                $query->where('system_key', '!=', 'new');
+            })
             ->orderBy('created_at')
             ->first();
  

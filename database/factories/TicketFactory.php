@@ -21,7 +21,8 @@ class TicketFactory extends Factory
         return [
             'user_id' => fake()->numberBetween(9, 11),
             'company_id' => fake()->numberBetween(2, 4),
-            'status' => fake()->numberBetween(0, 3),
+            'status' => 0, // Vecchio status, da mantenere finchè non si migra definitivamente al nuovo sistema con stage
+            'stage_id' => fake()->randomElement(\App\Models\TicketStage::whereIsNull('deleted_at')->pluck('id')->toArray()),
             'type_id' => fake()->numberBetween(1, 10),
             'description' => fake()->sentence(),
             'duration' => 0,
