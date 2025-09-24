@@ -39,6 +39,9 @@ class Ticket extends Model
         'is_rejected',
         'parent_ticket_id',
         'is_billable',
+        'is_billed',
+        'bill_identification',
+        'bill_date',
         'master_id',
         'reopen_parent_id',
         'no_user_response',
@@ -50,6 +53,7 @@ class Ticket extends Model
 
     protected $casts = [
         'assigned' => 'boolean',
+        'bill_date' => 'date:Y-m-d',
     ];
 
     public function toSearchableArray()
@@ -139,7 +143,8 @@ class Ticket extends Model
     /**
      * Get the ticket stage (new system)
      */
-    public function stage() {
+    public function stage()
+    {
         return $this->belongsTo(TicketStage::class, 'stage_id');
     }
 
@@ -221,12 +226,12 @@ class Ticket extends Model
         */
 
         $statusUpdates = $this->statusUpdates()->whereIn('type', ['status', 'closing'])->get();
-        
+
         // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
         $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
             return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;
         });
-        
+
         $hasBeenWaiting = false;
         $waitingRecords = [];
         $waitingEndingRecords = [];
@@ -235,7 +240,7 @@ class Ticket extends Model
         for ($i = 0; $i < count($filteredStatusUpdates); $i++) {
             if (
                 // (strpos(strtolower($statusUpdates[$i]->content), 'in attesa') !== false) || (strpos(strtolower($statusUpdates[$i]->content), 'risolto') !== false)
-                TicketStage::find($filteredStatusUpdates[$i]->new_stage_id)?->is_sla_pause 
+                TicketStage::find($filteredStatusUpdates[$i]->new_stage_id)?->is_sla_pause
             ) {
                 $hasBeenWaiting = true;
                 $waitingRecords[] = $filteredStatusUpdates[$i];
@@ -275,9 +280,10 @@ class Ticket extends Model
         return $waitingHours;
     }
 
-    public function waitingTimes() {
+    public function waitingTimes()
+    {
         $statusUpdates = $this->statusUpdates()->where('type', 'status')->get();
-        
+
         // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
         $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
             return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;

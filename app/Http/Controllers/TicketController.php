@@ -41,7 +41,7 @@ class TicketController extends Controller
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
 
         $selectedCompanyId = $this->getSelectedCompanyId($user);
-        if (!$selectedCompanyId) {
+        if (! $selectedCompanyId) {
             return response(['message' => 'No company selected'], 400);
         }
 
@@ -159,7 +159,7 @@ class TicketController extends Controller
 
             // Admin o con ticketType.company_id tra le sue aziende
             $selectedCompanyId = $this->getSelectedCompanyId($user);
-            if (!$user->is_admin && (!$selectedCompanyId || $selectedCompanyId != $ticketType->company_id)) {
+            if (! $user->is_admin && (! $selectedCompanyId || $selectedCompanyId != $ticketType->company_id)) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -427,7 +427,7 @@ class TicketController extends Controller
         }
 
         // 2. Controlla autorizzazione
-        if (!$this->canViewTicket($user, $ticket)) {
+        if (! $this->canViewTicket($user, $ticket)) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -490,7 +490,7 @@ class TicketController extends Controller
     {
         //
         $user = $request->user();
-        
+
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $ticket = Ticket::where('id', $ticket->id)->where('user_id', $user->id)->first();
@@ -558,7 +558,7 @@ class TicketController extends Controller
             'old_stage_id' => $oldStageId,
             'new_stage_id' => $request->stage_id,
             // 'content' => 'Stato del ticket modificato in "'.$ticketStages[$request->status].'"',
-            'content' => 'Stato del ticket modificato in "' . $newTicketStageText . '"',
+            'content' => 'Stato del ticket modificato in "'.$newTicketStageText.'"',
             'type' => 'status',
         ]);
 
@@ -665,6 +665,9 @@ class TicketController extends Controller
         if ($isValueChanged) {
             $ticket->save();
 
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
+
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $request->user()->id,
@@ -677,6 +680,159 @@ class TicketController extends Controller
 
         return response([
             'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketIsBilled(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'is_billed' => 'required|boolean',
+        ]);
+
+        if ($request->user()['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        // Verifica se il campo 'is_billed' è stato modificato
+        $ticket->is_billed = $fields['is_billed'];
+        $isValueChanged = $ticket->isDirty('is_billed');
+
+        if ($isValueChanged) {
+            $ticket->save();
+
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
+
+            $update = TicketStatusUpdate::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $request->user()->id,
+                'content' => 'Ticket impostato come: '.($fields['is_billed'] ? 'Fatturato' : 'Non fatturato'),
+                'type' => 'billing',
+            ]);
+
+            dispatch(new SendUpdateEmail($update));
+        }
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketBillDetails(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'bill_identification' => 'nullable|string|max:255',
+            'bill_date' => 'nullable|date',
+        ]);
+
+        if ($request->user()['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        // Verifica se almeno uno dei campi è stato modificato
+        $ticket->bill_identification = $fields['bill_identification'];
+        $ticket->bill_date = $fields['bill_date'];
+        
+        $isValueChanged = $ticket->isDirty('bill_identification') || $ticket->isDirty('bill_date');
+
+        if ($isValueChanged) {
+            $ticket->save();
+
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
+
+            $update = TicketStatusUpdate::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $request->user()->id,
+                'content' => 'Dettagli fatturazione aggiornati: '.
+                    'ID Fattura: '.($fields['bill_identification'] ?? 'N/A').', '.
+                    'Data: '.($fields['bill_date'] ? date('d/m/Y', strtotime($fields['bill_date'])) : 'N/A'),
+                'type' => 'billing',
+            ]);
+
+            dispatch(new SendUpdateEmail($update));
+        }
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketBillingInfo(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'is_billable' => 'nullable|boolean',
+            'is_billed' => 'nullable|boolean',
+            'bill_identification' => 'nullable|string|max:255',
+            'bill_date' => 'nullable|date',
+        ]);
+
+        if ($request->user()['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        $changes = [];
+        $originalValues = [];
+
+        // Prepara i campi da aggiornare e traccia le modifiche
+        foreach ($fields as $field => $value) {
+            if ($value !== null && $ticket->$field !== $value) {
+                $originalValues[$field] = $ticket->$field;
+                $ticket->$field = $value;
+                $changes[$field] = $value;
+            }
+        }
+
+        // Se non ci sono modifiche, restituisce il ticket senza salvare
+        if (empty($changes)) {
+            return response([
+                'ticket' => $ticket,
+                'message' => 'Nessuna modifica rilevata.',
+            ], 200);
+        }
+
+        $ticket->save();
+
+        // Refresh del ticket per assicurarsi che i cast siano applicati
+        $ticket->refresh();
+
+        // Genera il messaggio di log dettagliato
+        $logMessages = [];
+        
+        if (isset($changes['is_billable'])) {
+            $logMessages[] = 'Fatturabilità: '.($changes['is_billable'] ? 'Fatturabile' : 'Non fatturabile');
+        }
+        
+        if (isset($changes['is_billed'])) {
+            $logMessages[] = 'Fatturazione: '.($changes['is_billed'] ? 'Fatturato' : 'Non fatturato');
+        }
+        
+        if (isset($changes['bill_identification'])) {
+            $logMessages[] = 'ID Fattura: '.($changes['bill_identification'] ?? 'Rimosso');
+        }
+        
+        if (isset($changes['bill_date'])) {
+            $logMessages[] = 'Data Fatturazione: '.($changes['bill_date'] ? date('d/m/Y', strtotime($changes['bill_date'])) : 'Rimossa');
+        }
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $request->user()->id,
+            'content' => 'Informazioni fatturazione aggiornate: '.implode(', ', $logMessages),
+            'type' => 'billing',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+        return response([
+            'ticket' => $ticket,
+            'changes' => $changes,
         ], 200);
     }
 
@@ -1158,9 +1314,9 @@ class TicketController extends Controller
 
         $authUser = $request->user();
         $ticket = Ticket::find($id);
-        
+
         $selectedCompanyId = $this->getSelectedCompanyId($authUser);
-        if (!$authUser->is_admin && (!$selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
+        if (! $authUser->is_admin && (! $selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized.',
             ], 401);
@@ -1298,7 +1454,7 @@ class TicketController extends Controller
 
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
         $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
-        
+
         if ($withClosed) {
             $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->with('user')->get();
         } else {
@@ -1358,7 +1514,7 @@ class TicketController extends Controller
         $user = $request->user();
         $selectedCompanyId = $this->getSelectedCompanyId($user);
 
-        if ($user['is_admin'] != 1 && (!$selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
+        if ($user['is_admin'] != 1 && (! $selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1379,8 +1535,8 @@ class TicketController extends Controller
         $user = $request->user();
         $selectedCompanyId = $this->getSelectedCompanyId($user);
 
-        if ($user['is_admin'] != 1 && 
-            !($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
+        if ($user['is_admin'] != 1 &&
+            ! ($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -1429,9 +1585,9 @@ class TicketController extends Controller
     {
         $user = $request->user();
         $selectedCompanyId = $this->getSelectedCompanyId($user);
-        
-        if ($user['is_admin'] != 1 && 
-            ($user['is_company_admin'] != 1 || !$selectedCompanyId || $ticket->company_id != $selectedCompanyId)) {
+
+        if ($user['is_admin'] != 1 &&
+            ($user['is_company_admin'] != 1 || ! $selectedCompanyId || $ticket->company_id != $selectedCompanyId)) {
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
@@ -1803,16 +1959,16 @@ class TicketController extends Controller
      * La funzione di assegnazione riceve come parametri:
      * - ticket_id
      * - group_id
-     * - user_id 
+     * - user_id
      * - messaggio
-     * 
+     *
      * Una volta verificati i permessi dell'utente che fa la richiesta, crea un record in TicketAssignmentHistoryRecord con gli attuali dati del ticket.
      * Dopodichè aggiorna il ticket con i nuovi dati.
      * Infine crea un TicketStatusUpdate con il messaggio di assegnazione ed annessa notifica.
      * Se il ticket viene assegnato ad un utente, lo stato del ticket viene aggiornato in "Assegnato" se era "Nuovo".
      */
-
-    public function assign(Request $request) {
+    public function assign(Request $request)
+    {
 
         $request->validate([
             'ticket_id' => 'required|int|exists:tickets,id',
@@ -1861,9 +2017,7 @@ class TicketController extends Controller
             'last_assignment_id' => $historyRecord->id,
         ]);
 
-      
-
-        $message = 'Assegnazione ticket all\'utente '.($request->user_id ? User::find($request->user_id)->name.' '.User::find($request->user_id)->surname : 'Nessuno') .' del gruppo '.($request->group_id ? Group::find($request->group_id)->name : 'Nessuno') . ', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
+        $message = 'Assegnazione ticket all\'utente '.($request->user_id ? User::find($request->user_id)->name.' '.User::find($request->user_id)->surname : 'Nessuno').' del gruppo '.($request->group_id ? Group::find($request->group_id)->name : 'Nessuno').', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
 
         $update = TicketStatusUpdate::create([
             'ticket_id' => $ticket->id,
@@ -1873,7 +2027,6 @@ class TicketController extends Controller
         ]);
 
         dispatch(new SendUpdateEmail($update));
-
 
         // Invalida la cache per chi ha creato il ticket e per i referenti.
         $ticket->invalidateCache();
@@ -1899,14 +2052,14 @@ class TicketController extends Controller
             'ticket' => $ticket,
             'assignment_history_record' => $historyRecord,
         ], 200);
-       
+
     }
 
     /**
      * Recupera la history delle assegnazioni di un ticket.
      */
-
-    public function asignmentHistory(Ticket $ticket) {
+    public function asignmentHistory(Ticket $ticket)
+    {
 
         $history = $ticket->assignmentHistoryRecords()->with([
             'adminUser',
@@ -1923,11 +2076,11 @@ class TicketController extends Controller
      * La funzione di riassegnazione riceve come parametri:
      * - id della history a cui si deve tornare
      * - messaggio
-     * 
+     *
      * Dopo di che si assegna il ticket a utente e gruppo di quel record, si crea un nuovo record in history con i dati attuali del ticket e si crea un TicketStatusUpdate con il messaggio di riassegnazione.
      */
-
-    public function reassign(Request $request) {
+    public function reassign(Request $request)
+    {
 
         $request->validate([
             'history_id' => 'required|int|exists:ticket_assignment_history_records,id',
@@ -1974,7 +2127,7 @@ class TicketController extends Controller
             'last_assignment_id' => $newHistoryRecord->id,
         ]);
 
-        $message = 'Riassegnazione ticket all\'utente '.($historyRecord->adminUser ? $historyRecord->adminUser->name.' '.$historyRecord->adminUser->surname : 'Nessuno') .' del gruppo '.($historyRecord->group ? $historyRecord->group->name : 'Nessuno') . ', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
+        $message = 'Riassegnazione ticket all\'utente '.($historyRecord->adminUser ? $historyRecord->adminUser->name.' '.$historyRecord->adminUser->surname : 'Nessuno').' del gruppo '.($historyRecord->group ? $historyRecord->group->name : 'Nessuno').', con la motivazione: '.($request->message ?? 'Nessuna motivazione');
         $update = TicketStatusUpdate::create([
             'ticket_id' => $ticket->id,
             'user_id' => $authUser->id,
@@ -1987,7 +2140,6 @@ class TicketController extends Controller
         // Invalida la cache per chi ha creato il ticket e per i referenti.
         $ticket->invalidateCache();
 
-
         return response([
             'ticket' => $ticket,
             'assignment_history_record' => $newHistoryRecord,
@@ -1995,20 +2147,17 @@ class TicketController extends Controller
 
     }
 
-    /**
-     * 
-     */
-
-    public function getCurrentHandler(Ticket $ticket) {
+    public function getCurrentHandler(Ticket $ticket)
+    {
 
         $admin_handler = null;
         if ($ticket->admin_user_id !== null) {
             $adminUser = User::select('id', 'name', 'surname')->find($ticket->admin_user_id);
             if ($adminUser) {
-            $admin_handler = [
-                'id' => $adminUser->id,
-                'name' => trim($adminUser->name.' '.($adminUser->surname ?? '')),
-            ];
+                $admin_handler = [
+                    'id' => $adminUser->id,
+                    'name' => trim($adminUser->name.' '.($adminUser->surname ?? '')),
+                ];
             }
         }
 
@@ -2016,10 +2165,10 @@ class TicketController extends Controller
         if ($ticket->group_id !== null) {
             $groupModel = Group::select('id', 'name')->find($ticket->group_id);
             if ($groupModel) {
-            $group_handler = [
-                'id' => $groupModel->id,
-                'name' => $groupModel->name,
-            ];
+                $group_handler = [
+                    'id' => $groupModel->id,
+                    'name' => $groupModel->name,
+                ];
             }
         }
 
@@ -2064,16 +2213,16 @@ class TicketController extends Controller
         }
 
         $selectedCompany = $user->selectedCompany();
-        
+
         // Controlli per utenti senza company selezionata
-        if (!$selectedCompany) {
-            return $this->hasAssignmentHistory($user, $ticket) || 
-                   $this->isReferer($user, $ticket) || 
+        if (! $selectedCompany) {
+            return $this->hasAssignmentHistory($user, $ticket) ||
+                   $this->isReferer($user, $ticket) ||
                    $this->isDataOwner($user, $ticket);
         }
 
         // Controlli per utenti con company selezionata
-        return ($this->isSameCompany($selectedCompany, $ticket) && 
+        return ($this->isSameCompany($selectedCompany, $ticket) &&
                 ($user->is_company_admin || $ticket->user_id === $user->id)) ||
                $this->hasAssignmentHistory($user, $ticket) ||
                $this->isReferer($user, $ticket) ||
@@ -2127,7 +2276,7 @@ class TicketController extends Controller
      */
     private function maskSupportUserIfNeeded($user, $ticket): void
     {
-        if (!$user->is_admin && $ticket->user->is_admin) {
+        if (! $user->is_admin && $ticket->user->is_admin) {
             $ticket->user->id = 1;
             $ticket->user->name = 'Supporto';
             $ticket->user->surname = '';
@@ -2141,8 +2290,8 @@ class TicketController extends Controller
     private function markMessagesAsRead($user, $ticket): void
     {
         if ($user->is_admin) {
-            if (isset($ticket->admin_user_id) && 
-                $ticket->admin_user_id === $user->id && 
+            if (isset($ticket->admin_user_id) &&
+                $ticket->admin_user_id === $user->id &&
                 $ticket->unread_mess_for_adm > 0) {
                 $ticket->update(['unread_mess_for_adm' => 0]);
                 $this->clearUserCache($user);
@@ -2178,13 +2327,13 @@ class TicketController extends Controller
      */
     private function canReopenTicket($ticket, $closingUpdate, $childTicket): bool
     {
-        if (!$closingUpdate) {
+        if (! $closingUpdate) {
             return false;
         }
 
         return $ticket->status == 5 &&
                (time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60) &&
-               !$childTicket;
+               ! $childTicket;
     }
 
     /**
@@ -2202,6 +2351,7 @@ class TicketController extends Controller
     private function getSelectedCompanyId($user)
     {
         $selectedCompany = $user->selectedCompany();
+
         return $selectedCompany ? $selectedCompany->id : null;
     }
 }

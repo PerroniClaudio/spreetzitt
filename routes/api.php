@@ -90,6 +90,9 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/files', [App\Http\Controllers\TicketController::class, 'storeFiles']);
     Route::post('/ticket/{ticket}/priority-update', [App\Http\Controllers\TicketController::class, 'updateTicketPriority']);
     Route::post('/ticket/{ticket}/billable-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBillable']);
+    Route::post('/ticket/{ticket}/billed-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBilled']);
+    Route::post('/ticket/{ticket}/bill-details-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillDetails']);
+    Route::post('/ticket/{ticket}/billing-info-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillingInfo']);
     Route::get('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'getTicketBlame']);
     Route::post('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
     Route::post('/ticket/{ticket}/blame-update', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
@@ -371,6 +374,5 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket-stages/{id}/restore', [App\Http\Controllers\TicketStageController::class, 'restore']);
     Route::get('/all-ticket-stages', [App\Http\Controllers\TicketStageController::class, 'all']);
     Route::get('/ticket-stages-options', [App\Http\Controllers\TicketStageController::class, 'options']);
-    
 
 });
