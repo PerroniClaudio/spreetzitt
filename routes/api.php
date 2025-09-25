@@ -33,6 +33,12 @@ Route::get('/brand/{brand}/logo', [BrandController::class, 'getLogo']);
 Route::get('/supplier/{supplier}/logo', [SupplierController::class, 'getLogo']);
 Route::get('/brands/logos', [BrandController::class, 'getLogos']);
 
+// Company Document Routes (Public with rate limiting)
+Route::middleware('throttle:60,1')->group(function () {
+    Route::get('/companies-documents/{company}/privacy-policy', [CompanyController::class, 'downloadPrivacyPolicy']);
+    Route::get('/companies-documents/{company}/cookie-policy', [CompanyController::class, 'downloadCookiePolicy']);
+});
+
 // File Upload Routes
 Route::post('/upload-file', [App\Http\Controllers\FileUploadController::class, 'uploadFileToCloud']);
 
@@ -141,6 +147,12 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/companies/{company}/weekly-times', [CompanyController::class, 'editWeeklyTime']);
     Route::post('/companies/{company}/logo', [CompanyController::class, 'uploadLogo']);
     Route::post('/companies/{company}/update-reading-delay-warning', [CompanyController::class, 'updateDelayWarning']);
+
+    // Company Documents Routes
+    Route::post('/companies/privacy-policy', [CompanyController::class, 'uploadPrivacyPolicy']);
+    Route::post('/companies/cookie-policy', [CompanyController::class, 'uploadCookiePolicy']);
+    Route::get('/companies/{company}/privacy-policy', [CompanyController::class, 'downloadPrivacyPolicy']);
+    Route::get('/companies/{company}/cookie-policy', [CompanyController::class, 'downloadCookiePolicy']);
 
     Route::get('/companies-dashboard', [CompanyController::class, 'dashboardCompanies']);
     Route::get('/companies-dashboard/{company}/open-master-tickets', [CompanyController::class, 'openMasterTickets']);
@@ -371,6 +383,5 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket-stages/{id}/restore', [App\Http\Controllers\TicketStageController::class, 'restore']);
     Route::get('/all-ticket-stages', [App\Http\Controllers\TicketStageController::class, 'all']);
     Route::get('/ticket-stages-options', [App\Http\Controllers\TicketStageController::class, 'options']);
-    
 
 });

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\CompanyDocumentUploadRequest;
 use App\Models\Brand;
 use App\Models\Company;
 use App\Models\CustomUserGroup;
@@ -821,5 +822,153 @@ class CompanyController extends Controller
         return response([
             'activity_tickets' => $data,
         ], 200);
+    }
+
+    /**
+     * Carica la privacy policy per una company
+     */
+    public function uploadPrivacyPolicy(CompanyDocumentUploadRequest $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $validatedData = $request->validated();
+            $company = Company::findOrFail($validatedData['company_id']);
+
+            $user = $request->user();
+            if (! $user->is_admin && ! ($user->is_company_admin && $user->companies()->where('companies.id', $company->id)->exists())) {
+                return response()->json([
+                    'error' => 'Non autorizzato',
+                ], 403);
+            }
+
+            $file = $request->file('document');
+            $fileName = 'privacy_policy_'.time().'_'.$file->getClientOriginalName();
+            $path = 'company/'.$company->id.'/documents/';
+
+            // Elimina il file precedente se esiste
+            if ($company->privacy_policy_path) {
+                Storage::disk(FileUploadController::getStorageDisk())->delete($company->privacy_policy_path);
+            }
+
+            $filePath = FileUploadController::storeFile($file, $path, $fileName);
+
+            $company->update([
+                'privacy_policy_path' => $filePath,
+            ]);
+
+            return response()->json([
+                'message' => 'Privacy policy caricata con successo',
+                'file_path' => $filePath,
+                'download_url' => $company->temporaryPrivacyPolicyUrl(),
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Errore durante l\'upload della privacy policy: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Carica la cookie policy per una company
+     */
+    public function uploadCookiePolicy(CompanyDocumentUploadRequest $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $validatedData = $request->validated();
+            $company = Company::findOrFail($validatedData['company_id']);
+
+            $user = $request->user();
+            if (! $user->is_admin && ! ($user->is_company_admin && $user->companies()->where('companies.id', $company->id)->exists())) {
+                return response()->json([
+                    'error' => 'Non autorizzato',
+                ], 403);
+            }
+
+            $file = $request->file('document');
+            $fileName = 'cookie_policy_'.time().'_'.$file->getClientOriginalName();
+            $path = 'company/'.$company->id.'/documents/';
+
+            // Elimina il file precedente se esiste
+            if ($company->cookie_policy_path) {
+                Storage::disk(FileUploadController::getStorageDisk())->delete($company->cookie_policy_path);
+            }
+
+            $filePath = FileUploadController::storeFile($file, $path, $fileName);
+
+            $company->update([
+                'cookie_policy_path' => $filePath,
+            ]);
+
+            return response()->json([
+                'message' => 'Cookie policy caricata con successo',
+                'file_path' => $filePath,
+                'download_url' => $company->temporaryCookiePolicyUrl(),
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Errore durante l\'upload della cookie policy: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Scarica la privacy policy di una company
+     */
+    public function downloadPrivacyPolicy(Company $company)
+    {
+        if (! $company->privacy_policy_path) {
+            return response()->json([
+                'error' => 'Privacy policy non trovata',
+            ], 404);
+        }
+
+        $disk = FileUploadController::getStorageDisk();
+        
+        if (! Storage::disk($disk)->exists($company->privacy_policy_path)) {
+            return response()->json([
+                'error' => 'File privacy policy non trovato',
+            ], 404);
+        }
+
+        $fileContent = Storage::disk($disk)->get($company->privacy_policy_path);
+        $fileName = basename($company->privacy_policy_path);
+
+        return response($fileContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="privacy_policy_' . $company->name . '.pdf"')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
+    }
+
+    /**
+     * Scarica la cookie policy di una company
+     */
+    public function downloadCookiePolicy(Company $company)
+    {
+        if (! $company->cookie_policy_path) {
+            return response()->json([
+                'error' => 'Cookie policy non trovata',
+            ], 404);
+        }
+
+        $disk = FileUploadController::getStorageDisk();
+        
+        if (! Storage::disk($disk)->exists($company->cookie_policy_path)) {
+            return response()->json([
+                'error' => 'File cookie policy non trovato',
+            ], 404);
+        }
+
+        $fileContent = Storage::disk($disk)->get($company->cookie_policy_path);
+        $fileName = basename($company->cookie_policy_path);
+
+        return response($fileContent)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'inline; filename="cookie_policy_' . $company->name . '.pdf"')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 }
