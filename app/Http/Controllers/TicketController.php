@@ -672,7 +672,7 @@ class TicketController extends Controller
                 'type' => 'billing',
             ]);
 
-            dispatch(new SendUpdateEmail($update));
+            // dispatch(new SendUpdateEmail($update));
         }
 
         return response([
@@ -1409,6 +1409,23 @@ class TicketController extends Controller
                     : $slaveTicket->user->name
                 );
             $slaveTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $slaveTicket->ticketType;
+            $slaveTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $slaveTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $slaveTicket->adminUser;
+            if ($adminUser) {
+                $slaveTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $slaveTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $slaveTicket->admin_user_full_name = null;
+                $slaveTicket->makeVisible(['admin_user_full_name']);
+            }
 
             $referer = $slaveTicket->referer;
             if ($referer) {
