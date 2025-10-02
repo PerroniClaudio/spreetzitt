@@ -42,6 +42,7 @@ class Ticket extends Model
         'is_billed',
         'bill_identification',
         'bill_date',
+        'is_billing_validated',
         'master_id',
         'reopen_parent_id',
         'no_user_response',
@@ -66,6 +67,20 @@ class Ticket extends Model
             'user_surname' => $this->user->surname,
             'company' => $this->company->name,
         ];
+    }
+
+    protected static function booted()
+    {
+        static::updating(function ($ticket) {
+            // Se is_billing_validated viene impostato a 1, controlla is_billable
+            if (
+                $ticket->isDirty('is_billing_validated') &&
+                $ticket->is_billing_validated == 1 &&
+                is_null($ticket->is_billable)
+            ) {
+                throw new \Exception('Non puoi validare la fatturabilità se non hai prima impostato se il ticket è fatturabile o meno (is_billable).');
+            }
+        });
     }
 
     /* get the owner */

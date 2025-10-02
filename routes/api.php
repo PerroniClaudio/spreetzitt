@@ -106,6 +106,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/file/{id}/recover', [App\Http\Controllers\TicketController::class, 'recoverFile']);
     Route::get('/ticket-admin', [App\Http\Controllers\TicketController::class, 'adminGroupsTickets']);
     Route::get('/ticket-admin-billing', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingTickets']);
+    Route::get('/ticket-admin-billing-counters', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingCounters']);
     Route::post('/ticket/{ticket}/assign-to-admin', [App\Http\Controllers\TicketController::class, 'assignToAdminUser']);
     Route::post('/ticket/{ticket}/assign-to-group', [App\Http\Controllers\TicketController::class, 'assignToGroup']);
     Route::get('/ticket/{ticket}/closing-messages', [App\Http\Controllers\TicketController::class, 'closingMessages']);
@@ -375,4 +376,13 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/all-ticket-stages', [App\Http\Controllers\TicketStageController::class, 'all']);
     Route::get('/ticket-stages-options', [App\Http\Controllers\TicketStageController::class, 'options']);
 
+    Route::get('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'index']);
+    Route::get('/ticket-pro-forma-bill/list/{company}', [App\Http\Controllers\TicketProFormaBillController::class, 'companyProFormaBills']);
+    // Route::get('/ticket-pro-forma-bill/{id}', [App\Http\Controllers\TicketProFormaBillController::class, 'show']);
+    Route::post('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'store']);
+    Route::post('/ticket-pro-forma-bill/regenerate', [App\Http\Controllers\TicketProFormaBillController::class, 'regenerate']);
+    Route::patch('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'update']);
+    Route::delete('/ticket-pro-forma-bill/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'destroy']);
+    Route::get('/ticket-pro-forma-bill/preview/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfPreview']);
+    Route::get('/ticket-pro-forma-bill/download/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfDownload']);
 });

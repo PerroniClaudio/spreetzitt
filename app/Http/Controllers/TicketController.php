@@ -662,21 +662,32 @@ class TicketController extends Controller
         $ticket->is_billable = $fields['is_billable'];
         $isValueChanged = $ticket->isDirty('is_billable');
 
-        if ($isValueChanged) {
-            $ticket->save();
-
-            // Refresh del ticket per assicurarsi che i cast siano applicati
-            $ticket->refresh();
-
-            $update = TicketStatusUpdate::create([
-                'ticket_id' => $ticket->id,
-                'user_id' => $request->user()->id,
-                'content' => 'Ticket impostato come: '.($fields['is_billable'] ? 'Fatturabile' : 'Non fatturabile'),
-                'type' => 'billing',
-            ]);
-
-            dispatch(new SendUpdateEmail($update));
+        if (! $isValueChanged) {
+            return response([
+                'message' => 'Nessuna modifica apportata alla fatturabilità del ticket.',
+            ], 400);
         }
+
+        if ($ticket->is_billing_validated == 1) {
+            // Se la fatturabilità è già stata validata, non può essere modificata.
+            return response([
+                'message' => 'La fatturabilità del ticket è già stata validata. Non può essere modificata.',
+            ], 400);
+        }
+
+        $ticket->save();
+
+        // Refresh del ticket per assicurarsi che i cast siano applicati
+        $ticket->refresh();
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $request->user()->id,
+            'content' => 'Ticket impostato come: '.($fields['is_billable'] ? 'Fatturabile' : 'Non fatturabile'),
+            'type' => 'billing',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
 
         return response([
             'ticket' => $ticket,
@@ -727,16 +738,16 @@ class TicketController extends Controller
             'bill_date' => 'nullable|date',
         ]);
 
-        if ($request->user()['is_admin'] != 1) {
+        if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
             return response([
-                'message' => 'The user must be an admin.',
+                'message' => 'The user must be superadmin.',
             ], 401);
         }
 
         // Verifica se almeno uno dei campi è stato modificato
         $ticket->bill_identification = $fields['bill_identification'];
         $ticket->bill_date = $fields['bill_date'];
-        
+
         $isValueChanged = $ticket->isDirty('bill_identification') || $ticket->isDirty('bill_date');
 
         if ($isValueChanged) {
@@ -769,12 +780,28 @@ class TicketController extends Controller
             'is_billed' => 'nullable|boolean',
             'bill_identification' => 'nullable|string|max:255',
             'bill_date' => 'nullable|date',
+            'is_billing_validated' => 'sometimes|boolean',
         ]);
 
-        if ($request->user()['is_admin'] != 1) {
+        if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
             return response([
-                'message' => 'The user must be an admin.',
+                'message' => 'The user must be superadmin.',
             ], 401);
+        }
+
+        // Validazione custom: is_billing_validated può essere impostato solo se is_billable è stato impostato (true o false, ma non null)
+        if (isset($fields['is_billing_validated'])) {
+            // Determina il valore finale di is_billable considerando che null nella richiesta significa "mantieni il valore corrente"
+            $finalIsBillable = (isset($fields['is_billable']) && ($fields['is_billable'] !== null))
+                ? $fields['is_billable']
+                : $ticket->is_billable;
+
+            if ($fields['is_billing_validated'] == 1 && ($finalIsBillable === null)) {
+                return response([
+                    'message' => 'Non è possibile validare la fatturazione se la fatturabilità del ticket non è ancora stata definita.',
+                    'error' => 'is_billing_validated can only be set to true when is_billable has been explicitly set (true or false)',
+                ], 422);
+            }
         }
 
         $changes = [];
@@ -782,7 +809,7 @@ class TicketController extends Controller
 
         // Prepara i campi da aggiornare e traccia le modifiche
         foreach ($fields as $field => $value) {
-            if ($value !== null && $ticket->$field !== $value) {
+            if ($value !== null && $value !== $ticket->$field) {
                 $originalValues[$field] = $ticket->$field;
                 $ticket->$field = $value;
                 $changes[$field] = $value;
@@ -804,21 +831,25 @@ class TicketController extends Controller
 
         // Genera il messaggio di log dettagliato
         $logMessages = [];
-        
+
         if (isset($changes['is_billable'])) {
             $logMessages[] = 'Fatturabilità: '.($changes['is_billable'] ? 'Fatturabile' : 'Non fatturabile');
         }
-        
+
         if (isset($changes['is_billed'])) {
             $logMessages[] = 'Fatturazione: '.($changes['is_billed'] ? 'Fatturato' : 'Non fatturato');
         }
-        
+
         if (isset($changes['bill_identification'])) {
             $logMessages[] = 'ID Fattura: '.($changes['bill_identification'] ?? 'Rimosso');
         }
-        
+
         if (isset($changes['bill_date'])) {
             $logMessages[] = 'Data Fatturazione: '.($changes['bill_date'] ? date('d/m/Y', strtotime($changes['bill_date'])) : 'Rimossa');
+        }
+
+        if (isset($changes['is_billing_validated'])) {
+            $logMessages[] = 'Validazione: '.($changes['is_billing_validated'] ? 'Validato' : 'Non validato');
         }
 
         $update = TicketStatusUpdate::create([
@@ -1467,7 +1498,7 @@ class TicketController extends Controller
     }
 
     /**
-     * Show only the tickets belonging to the authenticated admin groups.
+     * Show all tickets (if superadmin) or only the tickets belonging to the authenticated admin groups.
      */
     public function adminGroupsBillingTickets(Request $request)
     {
@@ -1476,33 +1507,109 @@ class TicketController extends Controller
 
         if ($user['is_admin'] != 1) {
             return response([
-                'message' => 'The user must be an admin.',
+                'message' => 'The user must be at least an admin.',
             ], 401);
         }
 
-        $groups = $user->groups;
-
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
         $withSet = $request->query('with-set') == 'true' ? true : false;
+        $withValidated = $request->query('with-validated') == 'true' ? true : false;
+        $companyId = $request->query('company') ? intval($request->query('company')) : null;
 
-        if ($withClosed) {
-            // $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            if ($withSet) {
-                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->get();
-            } else {
-                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            }
+        if ($user['is_superadmin'] == 1) {
+            $ticketsQuery = Ticket::with('stage');
         } else {
+            $groups = $user->groups;
+            $ticketsQuery = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'));
+        }
+
+        if (! $withSet) {
+            $ticketsQuery->where('is_billable', null);
+        }
+        if (! $withClosed) {
             $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
-            if ($withSet) {
-                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->get();
-            } else {
-                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            }
+            $ticketsQuery->where('stage_id', '!=', $closedStageId);
+        }
+        if (! $withValidated) {
+            $ticketsQuery->where('is_billing_validated', false);
+        }
+        if ($companyId) {
+            $ticketsQuery->where('company_id', $companyId);
         }
 
         return response([
-            'tickets' => $tickets,
+            'tickets' => $ticketsQuery->get(),
+        ], 200);
+    }
+
+    /**
+     * Show counters of all tickets (if superadmin) or only those belonging to the authenticated admin groups.
+     */
+    public function adminGroupsBillingCounters(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be at least an admin.',
+            ], 401);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        if ($user['is_superadmin'] == 1) {
+            $counters = [
+                'billable_missing' => 0,
+                'billing_validation_missing' => 0,
+                'billed_missing' => 0,
+                'billed_bill_identification_missing' => 0,
+                'billed_bill_date_missing' => 0,
+                'open_billable_missing' => 0,
+                'open_billing_validation_missing' => 0,
+                'open_billed_missing' => 0,
+                'open_billed_bill_identification_missing' => 0,
+                'open_billed_bill_date_missing' => 0,
+            ];
+            // Singola query ottimizzata per tutti i contatori
+            $counters = DB::selectOne('
+                SELECT 
+                    COUNT(CASE WHEN is_billable IS NULL THEN 1 END) as billable_missing,
+                    COUNT(CASE WHEN is_billing_validated = 0 THEN 1 END) as billing_validation_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billed_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL THEN 1 END) as billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL THEN 1 END) as billed_bill_date_missing,
+                    COUNT(CASE WHEN is_billable IS NULL AND stage_id != ? THEN 1 END) as open_billable_missing,
+                    COUNT(CASE WHEN is_billing_validated = 0 AND stage_id != ? THEN 1 END) as open_billing_validation_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billed_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_date_missing
+                FROM tickets
+            ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
+
+            $counters = [
+                'billable_missing' => $counters->billable_missing,
+                'billing_validation_missing' => $counters->billing_validation_missing,
+                'billed_missing' => $counters->billed_missing,
+                'billed_bill_identification_missing' => $counters->billed_bill_identification_missing,
+                'billed_bill_date_missing' => $counters->billed_bill_date_missing,
+                'open_billable_missing' => $counters->open_billable_missing,
+                'open_billing_validation_missing' => $counters->open_billing_validation_missing,
+                'open_billed_missing' => $counters->open_billed_missing,
+                'open_billed_bill_identification_missing' => $counters->open_billed_bill_identification_missing,
+                'open_billed_bill_date_missing' => $counters->open_billed_bill_date_missing,
+            ];
+        } else {
+            $counters = [
+                'billable_to_set' => 0,
+            ];
+            $groups = $user->groups;
+            $counters['billable_to_set'] += Ticket::whereIn('group_id', $groups->pluck('id'))
+                ->where('is_billable', null)
+                ->count();
+        }
+
+        return response([
+            'counters' => $counters,
         ], 200);
     }
 

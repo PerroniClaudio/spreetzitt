@@ -33,7 +33,7 @@ class TicketReportPdfExportController extends Controller
 
         $reports = TicketReportPdfExport::where('company_id', $company->id)
             // ->where('is_generated', true)
-            ->orderBy('created_at', 'DESC')
+            ->orderBy('start_date', 'DESC')
             ->get();
 
         return response([
@@ -54,10 +54,10 @@ class TicketReportPdfExportController extends Controller
         }
 
         $reports = TicketReportPdfExport::where([
-            'company_id' => $company->id,
-            'is_approved_billing' => true,
-        ])
-            ->orderBy('created_at', 'DESC')
+                'company_id' => $company->id,
+                'is_approved_billing' => true,
+            ])
+            ->orderBy('start_date', 'DESC')
             ->get();
 
         return response([
@@ -309,10 +309,10 @@ class TicketReportPdfExportController extends Controller
             // Cancello il file dal bucket
             if ($ticketReportPdfExport->is_generated) {
                 $filePath = $ticketReportPdfExport->file_path;
-                    $disk = FileUploadController::getStorageDisk();
-                    if (Storage::disk($disk)->exists($filePath)) {
-                        Storage::disk($disk)->delete($filePath);
-                    }
+                $disk = FileUploadController::getStorageDisk();
+                if (Storage::disk($disk)->exists($filePath)) {
+                    Storage::disk($disk)->delete($filePath);
+                }
             }
 
             // Imposta come non generato e cancella il messaggio di errore

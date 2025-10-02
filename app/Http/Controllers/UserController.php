@@ -194,6 +194,7 @@ class UserController extends Controller
             'name' => 'required|string',
             'email' => 'required|string',
             'surname' => 'required|string',
+            'is_superadmin' => 'sometimes|boolean',
         ]);
 
         $req_user = $request->user();
@@ -211,6 +212,28 @@ class UserController extends Controller
             return response([
                 'message' => 'Unauthorized',
             ], 401);
+        }
+
+        // Per essere superadmin deve essere prima admin
+        if ($fields['is_superadmin'] == 1 && ! $user['is_admin']) {
+            return response([
+                'message' => 'A user must be an admin to be a superadmin',
+            ], 400);
+        }
+        // Solo i superadmin possono modificare lo stato di superadmin
+        if (isset($fields['is_superadmin']) && ($fields['is_superadmin'] != $user['is_superadmin']) && ($req_user['is_superadmin'] != 1)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+        // Se c'è solo un utente superadmin non si può togliere lo stato di superadmin
+        if (isset($fields['is_superadmin']) && ($fields['is_superadmin'] == 0) && ($user['is_superadmin'] == 1)) {
+            $superadminCount = User::where('is_superadmin', 1)->count();
+            if ($superadminCount <= 1) {
+                return response([
+                    'message' => 'There must be at least one superadmin',
+                ], 400);
+            }
         }
 
         $updatedFields = [];
@@ -234,6 +257,7 @@ class UserController extends Controller
             'city' => $updatedFields['city'],
             'zip_code' => $updatedFields['zip_code'],
             // 'password' => $updatedFields['password'] ?? $user->password,
+            'is_superadmin' => $updatedFields['is_superadmin'] ?? $user['is_superadmin'],
         ]);
 
         return response([
@@ -252,6 +276,21 @@ class UserController extends Controller
         if ($req_user['is_admin'] == 1 && $id) {
             // In ogni caso si disabilita l'utente, senza eliminarlo.
             $user = User::where('id', $id)->first();
+            if($user->is_superadmin == 1){
+                if($req_user->is_superadmin != 1){
+                    return response([
+                        'message' => 'Unauthorized',
+                    ], 401);
+                }
+                // Se c'è solo un utente superadmin non si può disabilitare
+                $superadminCount = User::where('is_superadmin', 1)->count();
+                if ($superadminCount <= 1) {
+                    return response([
+                        'message' => 'There must be at least one superadmin',
+                    ], 400);
+                }
+            }
+
             $disabled = $user->update([
                 'is_deleted' => true,
             ]);
@@ -284,6 +323,13 @@ class UserController extends Controller
         }
 
         $user = User::where('id', $id)->first();
+
+        if($user->is_superadmin == 1 && ($req_user->is_superadmin != 1)){
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+            
         $enabled = $user->update([
             'is_deleted' => 0,
         ]);

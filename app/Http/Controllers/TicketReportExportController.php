@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\GenerateGenericReport;
-use App\Jobs\GeneratePdfReport;
 use App\Jobs\GenerateReport;
 use App\Jobs\GenerateUserReport;
 use App\Models\Company;
@@ -16,7 +15,6 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
 
 class TicketReportExportController extends Controller
 {

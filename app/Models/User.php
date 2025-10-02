@@ -29,6 +29,7 @@ class User extends Authenticatable
         'zip_code',
         'address',
         'is_admin',
+        'is_superadmin',
         'company_id',
         'is_company_admin',
         'microsoft_token',
