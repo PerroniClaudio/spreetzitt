@@ -480,9 +480,15 @@ class UserController extends Controller
     {
         $suppliers = Supplier::all()->toArray();
 
-        // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
-        $selectedCompany = $request->user()->selectedCompany();
-        $brands = $selectedCompany ? $selectedCompany->brands()->toArray() : [];
+        $authUser = $request->user();
+
+        if($authUser['is_admin'] == 1){
+            $brands = \App\Models\Brand::all()->toArray();
+        } else {
+            // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
+            $selectedCompany = $request->user()->selectedCompany();
+            $brands = $selectedCompany ? $selectedCompany->brands()->toArray() : [];
+        }
 
         // Filtra i brand omonimo alle aziende interne ed utilizza quello dell'azienda interna con l'id piu basso
         $sameNameSuppliers = array_filter($suppliers, function ($supplier) use ($brands) {
