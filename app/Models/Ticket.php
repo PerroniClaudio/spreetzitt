@@ -341,7 +341,7 @@ class Ticket extends Model
     // }
 
     // Dato che c'è già parent (e child/children non c'è ma sarebbe il suo corrispettivo),
-    // per il collegamento tra ticket on site e ticket normali uso master e slave (un ticket on site può avere da 0 a n ticket normali a lui collegati e questi due vengono trattati diversamente nel report).
+    // per il collegamento tra ticket on site e ticket normali uso master (operazione strutturata) e slave (collegato ad operazione strutturata) (un ticket on site può avere da 0 a n ticket normali a lui collegati e questi due vengono trattati diversamente nel report).
     public function master()
     {
         return $this->belongsTo(Ticket::class, 'master_id');

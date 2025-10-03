@@ -153,7 +153,7 @@ class TicketController extends Controller
             }
             if ($ticketType->is_master && ($user->is_admin != 1)) {
                 return response([
-                    'message' => 'Only support admins can create master tickets.',
+                    'message' => 'Solo il supporto può creare operazioni strutturate.',
                 ], 401);
             }
 
@@ -1071,7 +1071,7 @@ class TicketController extends Controller
         if ($request->masterTicketId) {
             if ($ticket->ticketType->is_master) {
                 return response([
-                    'message' => 'This is a master ticket. Master ticket cannot be slave.',
+                    'message' => 'Questa è un\'operazione strutturata. Le operazioni strutturate non possono essere associate ad altre operazioni strutturate.',
                 ], 400);
             }
             $masterTicket = Ticket::where('id', $request->masterTicketId)
@@ -1081,7 +1081,7 @@ class TicketController extends Controller
                 ->first();
             if (! $masterTicket) {
                 return response([
-                    'message' => 'Master ticket not found or not of master type.',
+                    'message' => 'Ticket non trovato o non di tipo operazione strutturata.',
                 ], 400);
             }
         }
@@ -1635,7 +1635,7 @@ class TicketController extends Controller
     }
 
     /**
-     * Get all slave tickets of a master ticket
+     * Prende tutti i ticket associati a questa operazione strutturata.
      */
     public function getSlaveTickets(Ticket $ticket, Request $request)
     {
@@ -1681,6 +1681,8 @@ class TicketController extends Controller
                     : $referer->name;
                 $slaveTicket->makeVisible(['referer_full_name']);
             }
+            $slaveTicket->ticket_type_name = $slaveTicket->ticketType ? $slaveTicket->ticketType->name : '';
+            $slaveTicket->makeVisible(['ticket_type_name']);
         }
 
         return response([

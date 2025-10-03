@@ -60,7 +60,7 @@
     <div class="card">
         <p style="margin-bottom: 0.5rem;"><b>Conteggio e fatturabilità ticket</b></p>
         <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-            In caso di ticket Master e collegati, viene conteggiato solo il tempo del ticket Master.
+            In caso di operazioni strutturate e ticket a esse collegati, viene conteggiato solo il tempo dell'operazione strutturata.
             <br>
             Per "Remoto fatturabile" si intendono ad esempio: attività di progetto, non incluse nel contratto, ecc.
         </p>
@@ -152,7 +152,7 @@
             <thead>
                 <tr style="border: 1px solid #353131;">
                     <th style="border: 1px solid #353131;" class="text-small-plus  ">
-                        Descrizione delle attività incluse nei ticket master o nel contratto accordi di servizio
+                        Descrizione delle attività incluse nelle operazioni strutturate o nel contratto accordi di servizio
                     </th>
                     <th style="border: 1px solid #353131; width:15%;" class="text-small-plus  ">
                         Conteggio ticket
@@ -166,7 +166,7 @@
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività onsite incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un master)
+                            Attività onsite incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un'operazione strutturata)
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
@@ -183,7 +183,7 @@
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività onsite non fatturabili incluse in un master
+                            Attività onsite non fatturabili incluse in un'operazione strutturata
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
@@ -295,7 +295,7 @@
             {{-- Tabella ticket fatturabili col dettaglio del tempo, divisi per categoria --}}
             <p style="margin-bottom: 0.5rem;"><b>Tempo di gestione ticket fatturabili per categoria</b></p>
             <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati ai master.
+                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati alle operazioni strutturate.
             </p>
     
             <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
@@ -732,7 +732,7 @@
         <p style="font-size:9">
             <span>R/I indica Request/Incident ovvero Richiesta/Problema.</span>
             <br>
-            <span>M/C/S indica se è un Master, se Collegato a un master o se è Singolo.</span>
+            <span>O/C/S indica se è un'operazione strutturata, se Collegato a un'operazione strutturata o se è Singolo.</span>
             <br>
             <span>SUP indica il Supporto.</span>
             <br>
@@ -770,7 +770,7 @@
                         Aperto da
                     </th>
                     <th style="width:8%; border: 1px solid #353131;">
-                        M/C/S
+                        O/C/S
                     </th>
                     <th style="width:8%; border: 1px solid #353131;">
                         Stato attuale
@@ -809,7 +809,7 @@
                             @if ($ticket['master_id'] != null)
                                 C
                             @elseif ($ticket['is_master'])
-                                M
+                                O
                             @else
                                 S
                             @endif
@@ -872,9 +872,9 @@
                                         <span class="ticket-section-title">Ticket </span>
                                         <span>{{ $ticket['master_id'] != null
                                             ? // ? 'Collegato a <a href="#ticket-'.e($ticket['master_id']).'">#'.e($ticket['master_id']).'</a>'
-                                            'Collegato'
+                                            'Collegato a operazione strutturata'
                                             : ($ticket['is_master']
-                                                ? 'Master'
+                                                ? 'Operazione strutturata'
                                                 : 'Singolo') }}</span>
                                     </p>
                                 </td>
@@ -930,7 +930,7 @@
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
                                             <p>
-                                                <span class="ticket-section-title">Ticket master: </span>
+                                                <span class="ticket-section-title">Operazione strutturata: </span>
                                                 <a href="#ticket-{{ $ticket['master_id'] }}">
                                                     #{{ $ticket['master_id'] }}
                                                 </a>
@@ -1097,9 +1097,9 @@
                                         <span class="ticket-section-title">Ticket </span>
                                         <span>{{ $ticket['master_id'] != null
                                             ? // ? 'Collegato a <a href="#ticket-'.e($ticket['master_id']).'">#'.e($ticket['master_id']).'</a>'
-                                            'Collegato'
+                                            'Collegato a operazione strutturata'
                                             : ($ticket['is_master']
-                                                ? 'Master'
+                                                ? 'Operazione strutturata'
                                                 : 'Singolo') }}</span>
                                     </p>
                                 </td>
@@ -1155,7 +1155,7 @@
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
                                             <p>
-                                                <span class="ticket-section-title">Ticket master: </span>
+                                                <span class="ticket-section-title">Operazione strutturata: </span>
                                                 <a href="#ticket-{{ $ticket['master_id'] }}">
                                                     #{{ $ticket['master_id'] }}
                                                 </a>

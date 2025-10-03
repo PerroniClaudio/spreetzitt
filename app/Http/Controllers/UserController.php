@@ -364,7 +364,7 @@ class UserController extends Controller
                 $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with('category')->get());
             }
 
-            // Gli utenti normali non devono vedere i ticket master, mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
+            // Gli utenti normali non devono vedere i ticket master (operazioni strutturate), mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
             if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
                 $ticketTypes = $ticketTypes->filter(function ($ticketType) {
                     return ! $ticketType->is_master;
