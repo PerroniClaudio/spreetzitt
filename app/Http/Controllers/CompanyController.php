@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TicketTypesExportCompany;
+use App\Models\TicketType;
 
 class CompanyController extends Controller
 {
@@ -284,6 +285,27 @@ class CompanyController extends Controller
         $name = 'ticket_types_company_'.$company->name.'_'.time().'.xlsx';
 
         return Excel::download(new TicketTypesExportCompany($ticketTypes), $name);
+    }
+
+    public function ticketTypesDuplicate(Company $host, Company $guest) {
+        $copyCompanyId = $guest->id;
+        $pasteCompanyId = $host->id;
+        $res = '';
+        $oldTypes = TicketType::where('company_id', $copyCompanyId)->get();
+        foreach ($oldTypes as $type) {
+            $newType = $type->replicate()->fill(['company_id' => $pasteCompanyId]);
+            $newType->save();
+            $newType->groups()->sync($type->groups->pluck('id'));
+            $formFields = $type->typeFormField;
+            $res .= "Tipo: " . $newType->id . " - " . $newType->name . "<br>";
+            foreach ($formFields as $field) {
+                $field->replicate()->fill(['ticket_type_id' => $newType->id])->save();
+            }
+        }
+        
+        return response([
+            'message' => 'Import completato. '.$res,
+        ], 200);
     }
 
     public function brands(Company $company)
