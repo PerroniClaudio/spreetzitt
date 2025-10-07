@@ -10,6 +10,8 @@ use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\TicketTypesExportCompany;
 
 class CompanyController extends Controller
 {
@@ -273,6 +275,15 @@ class CompanyController extends Controller
         return response([
             'companyTicketTypes' => $ticketTypes,
         ], 200);
+    }
+
+    public function ticketTypesExport(Company $company)
+    {
+    $ticketTypes = $company->ticketTypes()->where('is_deleted', 0)->with('category')->get();
+
+        $name = 'ticket_types_company_'.$company->name.'_'.time().'.xlsx';
+
+        return Excel::download(new TicketTypesExportCompany($ticketTypes), $name);
     }
 
     public function brands(Company $company)

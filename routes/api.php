@@ -138,6 +138,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/companies/{company}/offices', [CompanyController::class, 'offices']);
     Route::get('/companies/{company}/admins', [CompanyController::class, 'admins']);
     Route::get('/companies/{company}/allusers', [CompanyController::class, 'allusers']);
+    Route::get('/companies/{company}/ticket-types/export', [CompanyController::class, 'ticketTypesExport']);
     Route::get('/companies/{company}/ticket-types', [CompanyController::class, 'ticketTypes']);
     Route::get('/companies/{company}/brands', [CompanyController::class, 'brands']);
     Route::get('/companies/{company}/frontend-logo', [CompanyController::class, 'getFrontendLogoUrl']);
