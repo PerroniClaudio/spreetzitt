@@ -385,6 +385,9 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // News
     Route::get('/news/source/{newsSource}', [App\Http\Controllers\NewsController::class, 'bySource']);
 
+    // Vertex AI Routes
+    Route::post('/vertex-ai/generate-report', [App\Http\Controllers\VertexAiController::class, 'generateReportFromPrompt']);
+
     // Ticket Stages Management
     Route::apiResource('ticket-stages', App\Http\Controllers\TicketStageController::class);
     Route::post('/ticket-stages/{id}/restore', [App\Http\Controllers\TicketStageController::class, 'restore']);
