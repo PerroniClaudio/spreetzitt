@@ -445,14 +445,17 @@ class DashboardController extends Controller {
                 'configuration' => $defaultConfig,
                 'enabled_widgets' => [],
                 'settings' => [],
+               
             ]);
         }
 
         // Ottieni la configurazione delle card
         $cardConfig = $dashboard->configuration;
         
+        
         // Aggiungi i dati statistici per ogni card
         $cardConfig = $this->enrichUserCardsWithData($cardConfig);
+
 
         return response()->json($cardConfig);
     }
@@ -461,6 +464,42 @@ class DashboardController extends Controller {
      * Ottiene la configurazione predefinita delle card per gli utenti standard
      */
     private function getDefaultConfigForUser() {
+        $tenant = $this->getCurrentTenant();
+        $user = auth()->user();
+        
+        $rightCards = [
+            [
+                'id' => 'user-ticket-redirect',
+                'type' => 'user-tickets-redirect',
+                'color' => 'primary',
+                'content' => 'Gestione ticket',
+                'icon' => 'mdi-view-list',
+                'description' => 'Visualizza tutti i tuoi ticket'
+            ]
+        ];
+        
+        // Se il tenant è spreetzit, mostriamo la card hardware-stats
+        if ($tenant === 'spreetzit') {
+            $rightCards[] = [
+                'id' => 'user-hardware-stats',
+                'type' => 'user-hardware-stats',
+                'color' => 'secondary',
+                'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
+                'icon' => 'mdi-laptop',
+                'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato'
+            ];
+        } else {
+            // Per gli altri tenant, mostriamo la card new-ticket standard
+            $rightCards[] = [
+                'id' => 'user-new-ticket',
+                'type' => 'user-new-ticket',
+                'color' => 'secondary',
+                'content' => 'Nuovo ticket',
+                'icon' => 'mdi-plus-circle',
+                'description' => 'Crea una nuova richiesta di assistenza'
+            ];
+        }
+        
         return [
             'leftCards' => [
                 [
@@ -480,24 +519,7 @@ class DashboardController extends Controller {
                     'description' => 'Attività recenti'
                 ]
             ],
-            'rightCards' => [
-                [
-                    'id' => 'user-ticket-redirect',
-                    'type' => 'user-tickets-redirect',
-                    'color' => 'primary',
-                    'content' => 'Gestione ticket',
-                    'icon' => 'mdi-view-list',
-                    'description' => 'Visualizza tutti i tuoi ticket'
-                ],
-                [
-                    'id' => 'user-new-ticket',
-                    'type' => 'user-new-ticket',
-                    'color' => 'secondary',
-                    'content' => 'Nuovo ticket',
-                    'icon' => 'mdi-plus-circle',
-                    'description' => 'Crea una nuova richiesta di assistenza'
-                ]
-            ]
+            'rightCards' => $rightCards
         ];
     }
 
@@ -591,6 +613,15 @@ class DashboardController extends Controller {
                     'label' => 'Apri nuovo ticket'
                 ];
                 $card['data'] = $this->getUserFrequentTicketTypes();
+                break;
+            case 'user-hardware-stats':
+                $user = auth()->user();
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => $user->is_company_admin ? '/support/user/hardware' : '/support/user/profile',
+                    'label' => $user->is_company_admin ? 'Gestione hardware' : 'Visualizza hardware'
+                ];
+                $card['data'] = $this->getUserHardwareStats();
                 break;
             case 'user-recent-tickets':
                 $card['data'] = $this->getUserRecentTicketsData();
@@ -738,5 +769,106 @@ class DashboardController extends Controller {
         }
         
         return $result;
+    }
+    
+    /**
+     * Ottiene le statistiche dell'hardware per l'utente
+     */
+    private function getUserHardwareStats() {
+        $user = auth()->user();
+        $selectedCompany = $user->selectedCompany();
+        
+        if (!$selectedCompany) {
+            return [
+                'error' => 'Nessuna azienda selezionata',
+            ];
+        }
+
+        // Aggiungi sempre l'informazione is_company_admin nella risposta
+        $result = [
+            'is_company_admin' => $user->is_company_admin
+        ];
+
+        // Se l'utente è un amministratore dell'azienda, mostra statistiche aggregate
+        if ($user->is_company_admin) {
+            // Conta l'hardware totale dell'azienda
+            $totalHardware = \App\Models\Hardware::where('company_id', $selectedCompany->id)->count();
+            
+            // Conta l'hardware assegnato
+            $assignedHardware = \App\Models\Hardware::where('company_id', $selectedCompany->id)
+                ->whereHas('users')
+                ->count();
+            
+            // Calcola l'hardware in magazzino
+            $unassignedHardware = $totalHardware - $assignedHardware;
+            
+            // Statistiche per tipo di hardware
+            $hardwareByType = \App\Models\Hardware::where('company_id', $selectedCompany->id)
+                ->with('hardwareType')
+                ->get()
+                ->groupBy('hardware_type_id')
+                ->map(function($items, $key) {
+                    $type = $items->first()->hardwareType ? $items->first()->hardwareType->name : 'Non specificato';
+                    $total = $items->count();
+                    $assigned = $items->filter(function($item) {
+                        return $item->users->count() > 0;
+                    })->count();
+                    
+                    return [
+                        'type' => $type,
+                        'total' => $total,
+                        'assigned' => $assigned,
+                        'unassigned' => $total - $assigned,
+                        'percent_assigned' => $total > 0 ? round(($assigned / $total) * 100) : 0
+                    ];
+                })
+                ->sortByDesc('total')
+                ->take(5)
+                ->values()
+                ->toArray();
+            
+            $result['total'] = $totalHardware;
+            $result['assigned'] = $assignedHardware;
+            $result['unassigned'] = $unassignedHardware;
+            $result['percent_assigned'] = $totalHardware > 0 ? round(($assignedHardware / $totalHardware) * 100) : 0;
+            $result['by_type'] = $hardwareByType;
+            
+            return $result;
+        } 
+        // Altrimenti, mostra solo l'hardware assegnato all'utente
+        else {
+            $userHardware = $user->hardware()
+                ->where('company_id', $selectedCompany->id)
+                ->with(['hardwareType'])
+                ->get();
+            
+            $hardwareByType = $userHardware
+                ->groupBy(function($item) {
+                    return $item->hardwareType ? $item->hardwareType->name : 'Non specificato';
+                })
+                ->map(function($items, $key) {
+                    return [
+                        'type' => $key,
+                        'count' => $items->count(),
+                        'items' => $items->map(function($item) {
+                            return [
+                                'id' => $item->id,
+                                'make' => $item->make,
+                                'model' => $item->model,
+                                'serial_number' => $item->serial_number,
+                                'support_label' => $item->support_label,
+                                'company_asset_number' => $item->company_asset_number,
+                            ];
+                        })->values()->toArray()
+                    ];
+                })
+                ->values()
+                ->toArray();
+            
+            $result['total_assigned'] = $userHardware->count();
+            $result['by_type'] = $hardwareByType;
+            
+            return $result;
+        }
     }
 }
