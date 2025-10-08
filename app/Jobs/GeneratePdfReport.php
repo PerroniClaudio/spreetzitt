@@ -1587,7 +1587,7 @@ class GeneratePdfReport implements ShouldQueue {
             ]);
 
             if ($report->send_email) {
-                $admins = $company->users()->where('is_admin', true)->get();
+                $admins = $company->users()->where('is_company_admin', true)->get();
                 foreach ($admins as $admin) {
                     Mail::to($admin)->send(new AvailableReportNotification($report));
                 }
