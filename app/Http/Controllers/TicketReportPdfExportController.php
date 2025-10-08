@@ -106,6 +106,7 @@ class TicketReportPdfExportController extends Controller
                 'end_date' => $request->end_date,
                 'optional_parameters' => json_encode($request->optional_parameters),
                 'user_id' => $user->id,
+                'send_email' => $request->send_email,
             ]);
 
             dispatch(new GeneratePdfReport($report));

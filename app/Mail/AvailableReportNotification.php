@@ -30,7 +30,7 @@ class AvailableReportNotification extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Available Report Notification',
+            subject: 'Nuovo report disponibile',
         );
     }
 
