@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Mail\AvailableReportNotification;
 use App\Models\Company;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,6 +18,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use \Exception as Exception;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class GeneratePdfReport implements ShouldQueue {
@@ -1583,6 +1585,13 @@ class GeneratePdfReport implements ShouldQueue {
                 'error_message' => null,
                 'is_failed' => false
             ]);
+
+            if ($report->send_email) {
+                $admins = $company->users()->where('is_admin', true)->get();
+                foreach ($admins as $admin) {
+                    Mail::to($admin)->send(new AvailableReportNotification($report));
+                }
+            }
         } catch (Exception $e) {
             $shortenedMessage = $e->getMessage();
             if (strlen($shortenedMessage) > 500) {
