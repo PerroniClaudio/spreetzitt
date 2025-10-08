@@ -373,16 +373,24 @@ class VertexAiController extends Controller
 
     private function isPromptSuspicious(string $prompt): bool
     {
-        // Lista di parole/frasi pericolose per prompt injection
+        // Lista di parole/frasi pericolose per prompt injection (inglese e italiano)
         $dangerousPatterns = [
-            // SQL Injection patterns
+            // SQL Injection patterns EN
             'drop table', 'delete from', 'truncate', 'alter table', 'create table',
             'insert into', 'update set', 'grant', 'revoke', 'union select',
-            // Prompt injection patterns
+            // SQL Injection patterns IT
+            'elimina tabella', 'cancella tabella', 'trunca', 'modifica tabella', 'crea tabella',
+            'inserisci in', 'aggiorna set', 'concedi', 'revoca', 'unisci select',
+            // Prompt injection patterns EN
             'ignore previous', 'forget previous', 'new instructions', 'system prompt',
             'override', 'admin mode', 'bypass security', 'execute code',
-            // System commands
+            // Prompt injection patterns IT
+            'ignora istruzioni precedenti', 'dimentica istruzioni precedenti', 'nuove istruzioni', 'prompt di sistema',
+            'sovrascrivi', 'modalità admin', 'bypassa sicurezza', 'esegui codice',
+            // System commands EN
             'exec(', 'eval(', 'system(', 'shell_exec', 'passthru',
+            // System commands IT
+            'esegui(', 'valuta(', 'sistema(', 'shell_exec', 'passa_attraverso',
         ];
 
         $lowerPrompt = strtolower($prompt);
