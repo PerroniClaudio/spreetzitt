@@ -25,6 +25,8 @@ class TicketType extends Model {
         'expected_is_billable',
         'is_custom_group_exclusive',
         'is_master',
+        'is_scheduling',
+        'is_grouping',
     ];
 
     public function tickets() {
@@ -75,4 +77,33 @@ class TicketType extends Model {
     public function customGroups() {
         return $this->belongsToMany(CustomUserGroup::class, 'ticket_types_custom_groups', 'ticket_type_id', 'custom_user_group_id');
     }
+
+    /**
+     * TicketType slave associati a questo tipo master.
+     * Restituisce anche il campo is_required dalla tabella pivot.
+     */
+    public function slaveTypes()
+    {
+        return $this->belongsToMany(
+            TicketType::class,
+            'ticket_type_master_slave',
+            'master_type_id', // foreign key su questa tabella
+            'slave_type_id' // foreign key sulla tabella slave
+        )->withPivot('is_required');
+    }
+
+        /**
+     * TicketType master di cui questo tipo è uno slave. (non dovrebbe servire, ma lo lascio commentato per averlo a disposizione se serve)
+     */
+    // public function masterTypes()
+    // {
+    //     return $this->belongsToMany(
+    //         TicketType::class,
+    //         'ticket_type_master_slave',
+    //         'slave_type_id', // foreign key su questa tabella
+    //         'master_type_id' // foreign key sulla tabella master
+    //     );
+    // }
+
+    
 }

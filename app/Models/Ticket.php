@@ -44,6 +44,8 @@ class Ticket extends Model
         'bill_date',
         'is_billing_validated',
         'master_id',
+        'scheduling_id',
+        'grouping_id',
         'reopen_parent_id',
         'no_user_response',
         'referer_id',

@@ -249,6 +249,12 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-type/custom-groups', [App\Http\Controllers\TicketTypeController::class, 'removeCustomGroup']);
     Route::get('/ticket-type/{ticketType}/available-custom-groups', [App\Http\Controllers\TicketTypeController::class, 'getAvailableCustomGroups']);
     Route::post('/ticket-type/{ticketType}/custom-group-exclusive', [App\Http\Controllers\TicketTypeController::class, 'setCustomGroupExclusive']);
+    
+    // Slaves
+
+    Route::get('/ticket-type/{ticketType}/slaves', [App\Http\Controllers\TicketTypeController::class, 'getSlaveTypes']);
+    Route::post('/ticket-type/{ticketType}/slaves', [App\Http\Controllers\TicketTypeController::class, 'editSlaveTypes']);
+    Route::get('/ticket-type/{ticketType}/available-slaves', [App\Http\Controllers\TicketTypeController::class, 'getAvailableSlaveTypes']);
 
     // Ticket Report Routes
 

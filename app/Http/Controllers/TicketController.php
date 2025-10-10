@@ -151,10 +151,25 @@ class TicketController extends Controller
                     'message' => 'Ticket type not found',
                 ], 404);
             }
-            if ($ticketType->is_master && ($user->is_admin != 1)) {
-                return response([
-                    'message' => 'Solo il supporto può creare operazioni strutturate.',
-                ], 401);
+
+            $slaveTicketsRequest = collect();
+            if ($ticketType->is_master == 1) {
+
+                $slaveTypes = $ticketType->slaveTypes();
+                
+                $decodedSlaveTickets = $request->slaveTickets ? json_decode($request->slaveTickets, true) : [];
+                $slaveTicketsRequest = collect($decodedSlaveTickets);
+
+                if (
+                    !isset($request->slaveTickets) ||
+                    ($slaveTypes->wherePivot('is_required', 1)->pluck('ticket_types.id')->diff($slaveTicketsRequest->pluck('type_id'))->count() > 0)
+                ) {
+                    return response([
+                        'message' => 'Dati mancanti o incompleti per i ticket collegati. ' 
+                        . $slaveTypes->wherePivot('is_required', 1)->pluck('id')->diff($slaveTicketsRequest->pluck('type_id'))->count()
+                        . ' di '. $slaveTypes->wherePivot('is_required', 1)->count(),
+                    ], 400);
+                }
             }
 
             // Admin o con ticketType.company_id tra le sue aziende
@@ -318,11 +333,12 @@ class TicketController extends Controller
                     $hardwareIds = $request['messageData'][$field->field_label];
                     foreach ($hardwareIds as $id) {
                         $hardware = Hardware::find($id);
-                        if ($hardware) {
-                            $ticket->hardware()->syncWithoutDetaching($id);
-                            if (! in_array($id, $addedHardware)) {
-                                $addedHardware[] = $id;
-                            }
+                        if (!$hardware) {
+                            throw new \Exception('Hardware con id '.$id.' non trovato.');
+                        }
+                        $ticket->hardware()->syncWithoutDetaching($id);
+                        if (! in_array($id, $addedHardware)) {
+                            $addedHardware[] = $id;
                         }
                     }
                 }
@@ -336,6 +352,10 @@ class TicketController extends Controller
                     'hardware_ids' => $addedHardware,
                 ]),
             ]);
+
+            foreach ($slaveTicketsRequest as $slaveTicketToStore) {
+                $this->storeSlaveTickets($slaveTicketToStore, $ticket);
+            }
 
             DB::commit();
 
@@ -358,6 +378,207 @@ class TicketController extends Controller
                 'message' => 'Errore durante la creazione del ticket: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    private function storeSlaveTickets($slaveTicketToStore, $masterTicket)
+    {
+        try {
+            $user = $masterTicket->user;
+            $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+
+            $ticketType = TicketType::find($slaveTicketToStore['type_id']);
+            $group = $ticketType->groups->first();
+            $groupId = $group ? $group->id : null;
+
+            if (!$ticketType) {
+                throw new \Exception('Tipo di ticket non trovato.' . $slaveTicketToStore['type_id']);
+            }
+            if ($masterTicket->company_id != $ticketType->company_id) {
+                throw new \Exception('Il tipo di ticket non appartiene alla stessa compagnia del ticket master. Master: ' . $masterTicket->company_id . ' - Collegato: ' . $ticketType->company_id);
+            }
+            if ($ticketType->is_master == 1) {
+                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: ' . $ticketType->id);
+            }
+
+            $newSlaveTicket = Ticket::create([
+                'description' => $slaveTicketToStore['description'],
+                'type_id' => $slaveTicketToStore['type_id'],
+                'group_id' => $groupId,
+                'user_id' => $masterTicket->user_id,
+                'status' => '0', // per il momento lo lasciamo perchè non ha un valore di default. Poi questo campo verrà eliminato.
+                'stage_id' => $newTicketStageId,
+                'company_id' => $masterTicket->company_id ?? $ticketType->company_id,
+                'file' => null,
+                'duration' => 0,
+                'sla_take' => $ticketType['default_sla_take'],
+                'sla_solve' => $ticketType['default_sla_solve'],
+                'priority' => $ticketType['default_priority'],
+                'unread_mess_for_adm' => $user['is_admin'] == 1 ? 0 : 1,
+                'unread_mess_for_usr' => $user['is_admin'] == 1 ? 1 : 0,
+                'source' => $user['is_admin'] == 1 ? ($masterTicket->source ?? null) : 'platform',
+                'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
+                'is_billable' => $ticketType['expected_is_billable'],
+                'referer_it_id' => $masterTicket->referer_it ?? null,
+                'referer_id' => $masterTicket->referer ?? null,
+                'master_id' => $masterTicket->id,
+            ]);
+
+            if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
+                $domustartTicket = DomustartTicket::firstOrNew(['id' => $newSlaveTicket->id]);
+                $domustartTicket->is_visible_all_users = $masterTicket->is_visible_all_users ? 1 : 0;
+                $domustartTicket->is_visible_admin = $masterTicket->is_visible_admin ? 1 : 0;
+                $domustartTicket->save();
+            }
+
+            // Al momento il parent ticket si prende dal master ticket se serve. (non si riporta nello slave)
+            // if ($request->parent_ticket_id) {
+            //     $parentTicket = Ticket::find($request->parent_ticket_id);
+            //     if ($parentTicket) {
+            //         // Se il padre ha già un figlio non può averne un altro.
+            //         if (Ticket::where('parent_ticket_id', $parentTicket->id)->exists()) {
+            //             return response([
+            //                 'message' => 'Il ticket padre ha già un figlio. Impossibile associarne altri.',
+            //             ], 400);
+            //         }
+
+            //         $ticket->parent_ticket_id = $parentTicket->id;
+            //         $ticket->save();
+
+            //         // Salva lo stato del ticket prima di modificarlo
+            //         $parentOldStageId = $parentTicket->stage_id;
+
+            //         // Chiude il ticket padre, segnala che il ticket procede in quello nuovo
+            //         $parentTicket->stage_id = $closedTicketStageId;
+            //         $parentTicket->is_rejected = 1;
+            //         $parentTicket->is_form_correct = 0;
+
+            //         $parentTicket->save();
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $parentTicket->id,
+            //             'user_id' => $user->id,
+            //             'old_stage_id' => $parentOldStageId,
+            //             'new_stage_id' => $closedTicketStageId,
+            //             'content' => 'Ticket chiuso automaticamente in quanto è stato aperto un nuovo ticket collegato: '.$ticket->id,
+            //             'type' => 'closing',
+            //         ]);
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $ticket->id,
+            //             'user_id' => $user->id,
+            //             'content' => 'Questo ticket è stato aperto come continuazione del ticket: '.$parentTicket->id,
+            //             'type' => 'note',
+            //         ]);
+
+            //         // Invalida la cache per chi ha creato il ticket e per i referenti.
+
+            //         $parentTicket->invalidateCache();
+            //     }
+            // }
+
+            // Se è una riapertura si vede dal master ticket. non si riporta nello slave.
+            // Richiesta di riapertura ticket. Tutti possono riaprire un ticket, entro 7 giorni dalla chiusura.
+            // if ($request->reopen_parent_ticket_id) {
+            //     $reopenedTicket = Ticket::find($request->reopen_parent_ticket_id);
+            //     if ($reopenedTicket) {
+            //         if ($reopenedTicket->stage_id != $closedTicketStageId) {
+            //             return response([
+            //                 'message' => 'Il ticket non è chiuso. Impossibile riaprirlo.',
+            //             ], 400);
+            //         }
+            //         // Se il ticket con l'id da inserire in reopen_parent_id è già stato riaperto, non può essere riaperto di nuovo (si dovrebbe riaprire quello successivo).
+            //         $existingChildTicket = Ticket::where('reopen_parent_id', $reopenedTicket->id)->first();
+            //         if ($existingChildTicket) {
+            //             return response([
+            //                 'message' => 'Il ticket è già stato riaperto. Impossibile riaprirlo nuovamente. Provare col ticket '.$existingChildTicket->id,
+            //             ], 400);
+            //         }
+
+            //         // Se il ticket è stato chiuso e sono passati più di 7 giorni dalla chiusura, non può essere riaperto.
+            //         $can_reopen = false;
+            //         $closingUpdate = $reopenedTicket->statusUpdates()
+            //             ->where('type', 'closing')
+            //             ->orderBy('created_at', 'desc')
+            //             ->first();
+            //         if ($closingUpdate) {
+            //             $can_reopen = (time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60);
+            //         }
+            //         if (! $can_reopen) {
+            //             return response([
+            //                 'message' => 'Il ticket è stato chiuso da più di 7 giorni. Impossibile riaprirlo.',
+            //             ], 400);
+            //         }
+
+            //         $ticket->reopen_parent_id = $reopenedTicket->id;
+            //         $ticket->save();
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $ticket->id,
+            //             'user_id' => $user->id,
+            //             'content' => 'Questo ticket è stato aperto come riapertura del ticket: '.$reopenedTicket->id,
+            //             'type' => 'note',
+            //         ]);
+
+            //         // Invalida la cache per chi ha creato il ticket e per i referenti.
+            //         // Anche se non ci sono modifiche al modello la invalidiamo perchè nella risposta potremmo inserire dati sulla riapertura.
+            //         $reopenedTicket->invalidateCache();
+            //     }
+            // }
+
+            // if ($request->file('file') != null) {
+            //     $file = $request->file('file');
+            //     $file_name = time().'_'.$file->getClientOriginalName();
+            //     $storeFile = FileUploadController::storeFile($file, 'tickets/'.$ticket->id.'/', $file_name);
+            //     $ticket->update([
+            //         'file' => $file_name,
+            //     ]);
+            // }
+
+            TicketMessage::create([
+                'ticket_id' => $newSlaveTicket->id,
+                'user_id' => $user->id,
+                'message' => json_encode($slaveTicketToStore['messageData']),
+                // 'is_read' => 1
+            ]);
+
+            TicketMessage::create([
+                'ticket_id' => $newSlaveTicket->id,
+                'user_id' => $user->id,
+                'message' => $slaveTicketToStore['description'],
+                // 'is_read' => 0
+            ]);
+
+            // Associazioni ticket-hardware
+            $hardwareFields = $ticketType->typeHardwareFormField();
+            $addedHardware = [];
+            foreach ($hardwareFields as $field) {
+                if (isset($request['messageData'][$field->field_label])) {
+                    $hardwareIds = $request['messageData'][$field->field_label];
+                    foreach ($hardwareIds as $id) {
+                        $hardware = Hardware::find($id);
+                        if (!$hardware) {
+                            throw new \Exception('Hardware con id '.$id.' non trovato.');
+                        }
+                        $newSlaveTicket->hardware()->syncWithoutDetaching($id);
+                        if (! in_array($id, $addedHardware)) {
+                            $addedHardware[] = $id;
+                        }
+                    }
+                }
+            }
+            HardwareAuditLog::create([
+                'modified_by' => $user->id,
+                'log_subject' => 'hardware_ticket',
+                'log_type' => 'create',
+                'new_data' => json_encode([
+                    'ticket_id' => $newSlaveTicket->id,
+                    'hardware_ids' => $addedHardware,
+                ]),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw new \Exception('Dati mancanti o non validi per i ticket collegati. ' . $e->getMessage());
+        }
+        
     }
 
     /**
@@ -1068,23 +1289,24 @@ class TicketController extends Controller
 
         // Se viene indicato un master_id si controlla che questo ticket non sia master
         // e che il ticket con l'id indicato esista e sia master. quindi non può essere nemmeno l'id del ticket stesso.
-        if ($request->masterTicketId) {
-            if ($ticket->ticketType->is_master) {
-                return response([
-                    'message' => 'Questa è un\'operazione strutturata. Le operazioni strutturate non possono essere associate ad altre operazioni strutturate.',
-                ], 400);
-            }
-            $masterTicket = Ticket::where('id', $request->masterTicketId)
-                ->whereHas('ticketType', function ($query) {
-                    $query->where('is_master', true);
-                })
-                ->first();
-            if (! $masterTicket) {
-                return response([
-                    'message' => 'Ticket non trovato o non di tipo operazione strutturata.',
-                ], 400);
-            }
-        }
+        // Non è prevista l'associazione del ticket a un'operazione strutturata, in nessun momento successivo all'apertura della stessa.
+        // if ($request->masterTicketId) {
+        //     if ($ticket->ticketType->is_master) {
+        //         return response([
+        //             'message' => 'Questa è un\'operazione strutturata. Le operazioni strutturate non possono essere associate ad altre operazioni strutturate.',
+        //         ], 400);
+        //     }
+        //     $masterTicket = Ticket::where('id', $request->masterTicketId)
+        //         ->whereHas('ticketType', function ($query) {
+        //             $query->where('is_master', true);
+        //         })
+        //         ->first();
+        //     if (! $masterTicket) {
+        //         return response([
+        //             'message' => 'Ticket non trovato o non di tipo operazione strutturata.',
+        //         ], 400);
+        //     }
+        // }
 
         DB::beginTransaction();
 

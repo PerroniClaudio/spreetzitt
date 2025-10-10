@@ -264,9 +264,9 @@ class CompanyController extends Controller
     {
         $isMassive = $request->query('is_massive');
         if ($isMassive) {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with('category')->get();
+            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with(['category', 'slaveTypes'])->get();
         } else {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with('category')->get();
+            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with(['category', 'slaveTypes'])->get();
         }
 
         return response([

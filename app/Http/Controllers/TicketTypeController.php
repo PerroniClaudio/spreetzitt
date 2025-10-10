@@ -70,7 +70,10 @@ class TicketTypeController extends Controller {
             // 'company_id' => 'required|numeric',
             'default_priority' => 'required|string',
             'default_sla_solve' => 'required|numeric',
-            'default_sla_take' => 'required|numeric'
+            'default_sla_take' => 'required|numeric',
+            'is_master' => 'required|boolean',
+            'is_scheduling' => 'required|boolean',
+            'is_grouping' => 'required|boolean',
         ]);
 
         // $ticketType = TicketType::create($validated);
@@ -205,6 +208,7 @@ class TicketTypeController extends Controller {
 
         return response([
             'webform' => $ticketType->typeFormField,
+            'slaves_with_webforms' => $ticketType->slaveTypes()->with(['category', 'typeFormField'])->get(),
         ], 200);
     }
 
@@ -537,6 +541,66 @@ class TicketTypeController extends Controller {
 
         return response([
             'context' => $context,
+        ], 200);
+    }
+
+    function getSlaveTypes(TicketType $ticketType) {
+        $slaveTypes = $ticketType->slaveTypes()->with('category')->get();
+
+        return response([
+            'slaveTypes' => $slaveTypes,
+        ], 200);
+    }
+
+    function editSlaveTypes(TicketType $ticketType, Request $request) {
+        /**
+         * Expected structure:
+         * slave_types = '[{"id": 1, "is_required": true}, {"id": 2, "is_required": false}]'
+         */
+        $fields = $request->validate([
+            'slave_types' => 'required|json',
+        ]);
+
+        $slave_types = json_decode($fields['slave_types'], true);
+
+        $pivotData = [];
+        foreach ($slave_types as $slave) {
+            $pivotData[$slave['id']] = ['is_required' => $slave['is_required']];
+        }
+        $ticketType->slaveTypes()->sync($pivotData);
+
+        $slaveTypes = $ticketType->slaveTypes()->get();
+
+        return response([
+            'slaveTypes' => $slaveTypes,
+        ], 200);
+    }
+
+    // Prende tutti i possibili tipi di ticket slave 
+    // che si possono associare a questo master type (compresi quelli già associati)
+    function getAvailableSlaveTypes(TicketType $ticketType) {
+        if (!$ticketType->is_master || !$ticketType->company()) {
+            return response([
+                'availableTypes' => [],
+            ], 200);
+        }
+        $allTypes = TicketType::where([
+            ['is_deleted', false],
+            ['company_id', $ticketType->company_id],
+            ['id', '!=', $ticketType->id],
+            ['is_master', false],
+            ['is_scheduling', false],
+            ['is_grouping', false],
+        ])
+        ->with('category')
+        ->get();
+
+        // $availableSlaveTypes = $ticketType->slaveTypes()->get();
+        // $availableTypes = $allTypes->diff($availableSlaveTypes);
+
+
+        return response([
+            'availableSlaveTypes' => $allTypes,
         ], 200);
     }
 }
