@@ -152,9 +152,28 @@ class TicketTypeController extends Controller {
             $request->only((new TicketType)->getFillable())
         );
 
-        $ticketType->update($fillableFields);
+        // Se si vuole togliere it_referer_limited su un tipo master, verifica gli slave obbligatori
+        if (
+            isset($fillableFields['it_referer_limited']) && $fillableFields['it_referer_limited'] == 0 &&
+            $ticketType->is_master == 1
+        ) {
+            $requiredSlaves = $ticketType->slaveTypes()->wherePivot('is_required', 1)->get();
+            $hasLimitedSlave = $requiredSlaves->contains(function ($slave) {
+                return $slave->it_referer_limited == 1;
+            });
+            if ($hasLimitedSlave) {
+                // Per sicurezza, nel caso non fosse già a 1 lo si corregge.
+                if($ticketType->it_referer_limited != 1) {
+                    $ticketType->it_referer_limited = 1;
+                    $ticketType->save();
+                }
+                return response([
+                    'message' => 'Non puoi disattivare la limitazione ai referenti IT: uno dei tipi slave obbligatori è limitato ai referenti IT.'
+                ], 400);
+            }
+        }
 
-        // $ticketType->update($validated);
+        $ticketType->update($fillableFields);
 
         $tt = TicketType::where('id', $ticketType->id)->with('category')->first();
 
@@ -569,10 +588,28 @@ class TicketTypeController extends Controller {
         }
         $ticketType->slaveTypes()->sync($pivotData);
 
+        // Se uno degli slave associati ha is_required=1 nella pivot e it_referer_limited=1, aggiorna il master
+        $updatedSlaves = $ticketType->slaveTypes()->get();
+        $refererLimited = false;
+        $warning = null;
+        foreach ($updatedSlaves as $slave) {
+            $pivot = $slave->pivot;
+            if ($pivot && $pivot->is_required == 1 && $slave->it_referer_limited == 1) {
+                $refererLimited = true;
+                break;
+            }
+        }
+        if ($refererLimited && ($ticketType->it_referer_limited != 1)) {
+            $ticketType->it_referer_limited = 1;
+            $ticketType->save();
+            $warning = 'Attenzione: Il tipo principale è stato impostato come "Limitato ai referenti IT", perchè uno dei tipi associati è sia obbligatorio che limitato ai referenti IT.';
+        }
+
         $slaveTypes = $ticketType->slaveTypes()->get();
 
         return response([
             'slaveTypes' => $slaveTypes,
+            'warning' => $warning,
         ], 200);
     }
 

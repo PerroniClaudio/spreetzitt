@@ -353,23 +353,23 @@ class UserController extends Controller
         if ($user['is_admin'] == 1) {
             $ticketTypes = collect();
             foreach ($user->groups as $group) {
-                $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with('category')->get());
+                $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with(['category', 'slaveTypes'])->get());
             }
         } else {
             $selectedCompany = $user->selectedCompany();
-            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with('category')->get() : collect();
+            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with(['category', 'slaveTypes'])->get() : collect();
 
             $customGroups = $user->customUserGroups()->get();
             foreach ($customGroups as $customGroup) {
-                $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with('category')->get());
+                $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with(['category', 'slaveTypes'])->get());
             }
 
             // Gli utenti normali non devono vedere i ticket master (operazioni strutturate), mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
-            if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
-                $ticketTypes = $ticketTypes->filter(function ($ticketType) {
-                    return ! $ticketType->is_master;
-                });
-            }
+            // if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
+            //     $ticketTypes = $ticketTypes->filter(function ($ticketType) {
+            //         return ! $ticketType->is_master;
+            //     });
+            // }
         }
 
         return response([
