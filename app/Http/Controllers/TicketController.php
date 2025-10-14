@@ -353,8 +353,16 @@ class TicketController extends Controller
                 ]),
             ]);
 
+            $additionalInformationsForSlaveTickets = array_filter([
+                'office' => $request['messageData']['office'] ?? null,
+                'referer' => $request['referer'] ?? null,
+                'referer_it' => $request['referer_it'] ?? null,
+            ], function ($value) {
+                return $value !== null;
+            });
+
             foreach ($slaveTicketsRequest as $slaveTicketToStore) {
-                $this->storeSlaveTickets($slaveTicketToStore, $ticket);
+                $this->storeSlaveTickets($slaveTicketToStore, $ticket, $additionalInformationsForSlaveTickets);
             }
 
             DB::commit();
@@ -380,7 +388,7 @@ class TicketController extends Controller
         }
     }
 
-    private function storeSlaveTickets($slaveTicketToStore, $masterTicket)
+    private function storeSlaveTickets($slaveTicketToStore, $masterTicket, $additionalInformationsForSlaveTickets)
     {
         try {
             $user = $masterTicket->user;
@@ -418,8 +426,8 @@ class TicketController extends Controller
                 'source' => $user['is_admin'] == 1 ? ($masterTicket->source ?? null) : 'platform',
                 'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
                 'is_billable' => $ticketType['expected_is_billable'],
-                'referer_it_id' => $masterTicket->referer_it ?? null,
-                'referer_id' => $masterTicket->referer ?? null,
+                'referer_it_id' => $masterTicket->referer_it_id ?? null,
+                'referer_id' => $masterTicket->referer_id ?? null,
                 'master_id' => $masterTicket->id,
             ]);
 
@@ -534,6 +542,7 @@ class TicketController extends Controller
             //     ]);
             // }
 
+            $slaveTicketToStore['messageData'] = array_merge($slaveTicketToStore['messageData'], $additionalInformationsForSlaveTickets);
             TicketMessage::create([
                 'ticket_id' => $newSlaveTicket->id,
                 'user_id' => $user->id,
