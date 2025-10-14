@@ -561,8 +561,8 @@ class TicketController extends Controller
             $hardwareFields = $ticketType->typeHardwareFormField();
             $addedHardware = [];
             foreach ($hardwareFields as $field) {
-                if (isset($request['messageData'][$field->field_label])) {
-                    $hardwareIds = $request['messageData'][$field->field_label];
+                if (isset($slaveTicketToStore['messageData'][$field->field_label])) {
+                    $hardwareIds = $slaveTicketToStore['messageData'][$field->field_label];
                     foreach ($hardwareIds as $id) {
                         $hardware = Hardware::find($id);
                         if (!$hardware) {
