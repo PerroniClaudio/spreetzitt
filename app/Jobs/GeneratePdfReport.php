@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Mail\AvailableReportNotification;
 use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketReportPdfExport;
@@ -15,6 +16,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class GeneratePdfReport implements ShouldQueue
@@ -1609,6 +1612,13 @@ class GeneratePdfReport implements ShouldQueue
                 'error_message' => null,
                 'is_failed' => false,
             ]);
+
+            if ($report->send_email) {
+                $admins = $company->users()->where('is_company_admin', true)->get();
+                foreach ($admins as $admin) {
+                    Mail::to($admin)->send(new AvailableReportNotification($report));
+                }
+            }
         } catch (Exception $e) {
             $shortenedMessage = $e->getMessage();
             if (strlen($shortenedMessage) > 500) {

@@ -20,6 +20,7 @@ class TicketReportPdfExport extends Model {
         'error_message',
         'is_approved_billing',
         'approved_billing_identification',
+        'send_email',
     ];
 
     // Crea l'identificativo del report PDF da utilizzare come riferimento in fattura.

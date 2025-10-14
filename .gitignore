@@ -63,6 +63,7 @@ Makefile
 Makefile_no_ubuntu
 docker-php
 temp env
+opencode.json
 
 # Container logs
 *.log

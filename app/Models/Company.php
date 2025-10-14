@@ -41,6 +41,8 @@ class Company extends Model
         'logo_url',
         'reading_delay_start',
         'reading_delay_notice',
+        'privacy_policy_path',
+        'cookie_policy_path',
     ];
 
     public function users()
@@ -103,6 +105,24 @@ class Company extends Model
     {
         if ($this->logo_url) {
             return FileUploadController::generateSignedUrlForFile($this->logo_url, 70);
+        }
+
+        return '';
+    }
+
+    public function temporaryPrivacyPolicyUrl()
+    {
+        if ($this->privacy_policy_path) {
+            return FileUploadController::generateSignedUrlForFile($this->privacy_policy_path, 70);
+        }
+
+        return '';
+    }
+
+    public function temporaryCookiePolicyUrl()
+    {
+        if ($this->cookie_policy_path) {
+            return FileUploadController::generateSignedUrlForFile($this->cookie_policy_path, 70);
         }
 
         return '';

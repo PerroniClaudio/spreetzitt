@@ -17,7 +17,15 @@ class DashboardController extends Controller {
     public function index() {
         //
         $user = auth()->user();
-        $dashboard = Dashboard::where('user_id', $user->id)->first();
+        
+        // Verifica che l'utente sia un admin
+        if (!$user->is_admin) {
+            return response()->json(['error' => 'Questa dashboard è riservata agli amministratori'], 403);
+        }
+        
+        $dashboard = Dashboard::where('user_id', $user->id)
+            ->where('type', 'admin')
+            ->first();
 
         if (!$dashboard) {
             // Ottieni la configurazione predefinita in base al tenant
@@ -25,14 +33,15 @@ class DashboardController extends Controller {
 
             $dashboard = Dashboard::create([
                 'user_id' => $user->id,
-                'configuration' => json_encode($defaultConfig),
-                'enabled_widgets' => json_encode([]),
-                'settings' => json_encode([]),
+                'type' => 'admin',
+                'configuration' => $defaultConfig,
+                'enabled_widgets' => [],
+                'settings' => [],
             ]);
         }
 
         // Ottieni la configurazione delle card
-        $cardConfig = json_decode($dashboard->configuration, true);
+        $cardConfig = $dashboard->configuration;
         
         // Aggiungi i dati statistici per ogni card
         $cardConfig = $this->enrichCardsWithData($cardConfig);
@@ -211,21 +220,29 @@ class DashboardController extends Controller {
      */
     public function updateCardConfig(Request $request) {
         $user = auth()->user();
-        $dashboard = Dashboard::where('user_id', $user->id)->first();
+        
+        // Verifica che l'utente sia un admin
+        if (!$user->is_admin) {
+            return response()->json(['error' => 'Questa dashboard è riservata agli amministratori'], 403);
+        }
+        
+        $dashboard = Dashboard::where('user_id', $user->id)
+            ->where('type', 'admin')
+            ->first();
         
         if (!$dashboard) {
             return response()->json(['error' => 'Dashboard non trovata'], 404);
         }
         
-        $dashboard->configuration = json_encode([
+        $dashboard->configuration = [
             'leftCards' => $request->leftCards,
             'rightCards' => $request->rightCards
-        ]);
+        ];
         
         $dashboard->save();
         
         // Restituisci la configurazione aggiornata con i dati statistici
-        $cardConfig = json_decode($dashboard->configuration, true);
+        $cardConfig = $dashboard->configuration;
         $cardConfig = $this->enrichCardsWithData($cardConfig);
         
         return response()->json($cardConfig);
@@ -401,5 +418,457 @@ class DashboardController extends Controller {
                 'opened_by' => $ticket->user ? trim(($ticket->user->name ?? '') . ' ' . ($ticket->user->surname ?? '')) : null,
             ];
         })->values()->toArray();
+    }
+
+    /**
+     * Display a listing of the resource for standard users.
+     */
+    public function userIndex() {
+        $user = auth()->user();
+        
+        // Verifica che l'utente sia un utente standard (non admin)
+        if ($user->is_admin) {
+            return response()->json(['error' => 'Questa dashboard è riservata agli utenti standard'], 403);
+        }
+        
+        $dashboard = Dashboard::where('user_id', $user->id)
+            ->where('type', 'user')
+            ->first();
+
+        if (!$dashboard) {
+            // Ottieni la configurazione predefinita per gli utenti standard
+            $defaultConfig = $this->getDefaultConfigForUser();
+
+            $dashboard = Dashboard::create([
+                'user_id' => $user->id,
+                'type' => 'user',
+                'configuration' => $defaultConfig,
+                'enabled_widgets' => [],
+                'settings' => [],
+               
+            ]);
+        }
+
+        // Ottieni la configurazione delle card
+        $cardConfig = $dashboard->configuration;
+        
+        
+        // Aggiungi i dati statistici per ogni card
+        $cardConfig = $this->enrichUserCardsWithData($cardConfig);
+
+
+        return response()->json($cardConfig);
+    }
+    
+    /**
+     * Ottiene la configurazione predefinita delle card per gli utenti standard
+     */
+    private function getDefaultConfigForUser() {
+        $tenant = $this->getCurrentTenant();
+        $user = auth()->user();
+        
+        $rightCards = [
+            [
+                'id' => 'user-ticket-redirect',
+                'type' => 'user-tickets-redirect',
+                'color' => 'primary',
+                'content' => 'Gestione ticket',
+                'icon' => 'mdi-view-list',
+                'description' => 'Visualizza tutti i tuoi ticket'
+            ]
+        ];
+        
+        // Se il tenant è spreetzit, mostriamo la card hardware-stats
+        if ($tenant === 'spreetzit') {
+            $rightCards[] = [
+                'id' => 'user-hardware-stats',
+                'type' => 'user-hardware-stats',
+                'color' => 'secondary',
+                'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
+                'icon' => 'mdi-laptop',
+                'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato'
+            ];
+        } else {
+            // Per gli altri tenant, mostriamo la card new-ticket standard
+            $rightCards[] = [
+                'id' => 'user-new-ticket',
+                'type' => 'user-new-ticket',
+                'color' => 'secondary',
+                'content' => 'Nuovo ticket',
+                'icon' => 'mdi-plus-circle',
+                'description' => 'Crea una nuova richiesta di assistenza'
+            ];
+        }
+        
+        return [
+            'leftCards' => [
+                [
+                    'id' => 'user-ticket-aperti',
+                    'type' => 'user-open-tickets',
+                    'color' => 'primary',
+                    'content' => 'I miei ticket aperti',
+                    'icon' => 'mdi-ticket-outline',
+                    'description' => 'Visualizza i tuoi ticket aperti'
+                ],
+                [
+                    'id' => 'user-ticket-recenti',
+                    'type' => 'user-recent-tickets',
+                    'color' => 'secondary',
+                    'content' => 'I miei ticket recenti',
+                    'icon' => 'mdi-history',
+                    'description' => 'Attività recenti'
+                ]
+            ],
+            'rightCards' => $rightCards
+        ];
+    }
+
+    /**
+     * Aggiunge i dati statistici alle card per gli utenti standard
+     */
+    private function enrichUserCardsWithData($cardConfig) {
+        // Ottieni i dati statistici per l'utente
+        $stats = $this->getUserStats();
+        
+        // Arricchisci le card di sinistra
+        if (isset($cardConfig['leftCards'])) {
+            foreach ($cardConfig['leftCards'] as &$card) {
+                $card = $this->addUserStatsToCard($card, $stats);
+            }
+        }
+        
+        // Arricchisci le card di destra
+        if (isset($cardConfig['rightCards'])) {
+            foreach ($cardConfig['rightCards'] as &$card) {
+                $card = $this->addUserStatsToCard($card, $stats);
+            }
+        }
+        
+        return $cardConfig;
+    }
+
+    /**
+     * Ottiene le statistiche per la dashboard dell'utente standard
+     */
+    private function getUserStats() {
+        $user = auth()->user();
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+        
+        // Conta i ticket aperti dell'utente
+        $openTicketsCount = Ticket::where('user_id', $user->id)
+            ->where('stage_id', '!=', $closedStageId)
+            ->count();
+        
+        // Conta i ticket chiusi recenti (ultimo mese)
+        $recentClosedCount = Ticket::where('user_id', $user->id)
+            ->where('stage_id', $closedStageId)
+            ->where('updated_at', '>=', now()->subMonth())
+            ->count();
+            
+        // Conta i ticket totali
+        $totalTicketsCount = Ticket::where('user_id', $user->id)->count();
+        
+        // Trova il tipo di ticket più utilizzato
+        $mostUsedTicketType = Ticket::where('user_id', $user->id)
+            ->select('type_id', DB::raw('count(*) as total'))
+            ->groupBy('type_id')
+            ->orderByDesc('total')
+            ->first();
+            
+        $mostUsedTicketTypeName = null;
+        if ($mostUsedTicketType) {
+            $ticketType = TicketType::find($mostUsedTicketType->type_id);
+            $mostUsedTicketTypeName = $ticketType ? $ticketType->name : null;
+        }
+        
+        return [
+            'open_tickets_count' => $openTicketsCount,
+            'recent_closed_count' => $recentClosedCount,
+            'total_tickets_count' => $totalTicketsCount,
+            'most_used_ticket_type' => $mostUsedTicketTypeName
+        ];
+    }
+
+    /**
+     * Aggiunge i dati statistici a una singola card per gli utenti standard
+     */
+    private function addUserStatsToCard($card, $stats) {
+        switch ($card['type']) {
+            case 'user-open-tickets':
+                $card['value'] = $stats['open_tickets_count'];
+                $card['data'] = $this->getUserOpenTicketsData();
+                break;
+            case 'user-tickets-redirect':
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => '/support/user/tickets',
+                    'label' => 'Visualizza ticket'
+                ];
+                $card['data'] = $this->getUserTicketsStats();
+                break;
+            case 'user-new-ticket':
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => '/support/user/newticket',
+                    'label' => 'Apri nuovo ticket'
+                ];
+                $card['data'] = $this->getUserFrequentTicketTypes();
+                break;
+            case 'user-hardware-stats':
+                $user = auth()->user();
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => $user->is_company_admin ? '/support/user/hardware' : '/support/user/profile',
+                    'label' => $user->is_company_admin ? 'Gestione hardware' : 'Visualizza hardware'
+                ];
+                $card['data'] = $this->getUserHardwareStats();
+                break;
+            case 'user-recent-tickets':
+                $card['data'] = $this->getUserRecentTicketsData();
+                break;
+        }
+        return $card;
+    }
+
+    /**
+     * Ottiene i dati per la card "Ticket recenti" dell'utente
+     */
+    private function getUserRecentTicketsData() {
+        $user = auth()->user();
+        
+        $tickets = Ticket::with(['ticketType:id,name', 'handler:id,name,surname', 'stage'])
+            ->where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->take(5)
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'created_at']);
+
+        return $tickets->map(function ($ticket) {
+            return [
+                'id' => $ticket->id,
+                'stage' => $ticket->stage,
+                'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
+                'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '') . ' ' . ($ticket->handler->surname ?? '')) : null,
+                'created_at' => $ticket->created_at->format('d/m/Y H:i'),
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * Aggiorna la configurazione delle card per gli utenti standard
+     */
+    public function updateUserCardConfig(Request $request) {
+        $user = auth()->user();
+        
+        // Verifica che l'utente sia un utente standard (non admin)
+        if ($user->is_admin) {
+            return response()->json(['error' => 'Questa dashboard è riservata agli utenti standard'], 403);
+        }
+        
+        $dashboard = Dashboard::where('user_id', $user->id)
+            ->where('type', 'user')
+            ->first();
+        
+        if (!$dashboard) {
+            return response()->json(['error' => 'Dashboard non trovata'], 404);
+        }
+        
+        $dashboard->configuration = [
+            'leftCards' => $request->leftCards,
+            'rightCards' => $request->rightCards
+        ];
+        
+        $dashboard->save();
+        
+        // Restituisci la configurazione aggiornata con i dati statistici
+        $cardConfig = $dashboard->configuration;
+        $cardConfig = $this->enrichUserCardsWithData($cardConfig);
+        
+        return response()->json($cardConfig);
+    }
+
+    /**
+     * Ottiene i dati per la card "Ticket aperti" dell'utente
+     */
+    private function getUserOpenTicketsData() {
+        $user = auth()->user();
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+        
+        $tickets = Ticket::with(['ticketType:id,name', 'stage', 'handler:id,name,surname'])
+            ->where('user_id', $user->id)
+            ->where('stage_id', '!=', $closedStageId)
+            ->orderBy('created_at', 'desc')
+            ->take(5)
+            ->get(['id', 'stage_id', 'type_id', 'admin_user_id', 'created_at']);
+
+        return $tickets->map(function ($ticket) {
+            return [
+                'id' => $ticket->id,
+                'stage' => $ticket->stage,
+                'type' => $ticket->ticketType ? $ticket->ticketType->name : null,
+                'admin' => $ticket->handler ? trim(($ticket->handler->name ?? '') . ' ' . ($ticket->handler->surname ?? '')) : null,
+                'created_at' => $ticket->created_at->format('d/m/Y H:i'),
+            ];
+        })->values()->toArray();
+    }
+    
+    /**
+     * Ottiene le statistiche dei ticket per l'utente
+     */
+    private function getUserTicketsStats() {
+        $user = auth()->user();
+        $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
+        
+        // Ticket aperti
+        $openTickets = Ticket::where('user_id', $user->id)
+            ->where('stage_id', '!=', $closedStageId)
+            ->count();
+        
+        // Ticket chiusi nell'ultimo mese
+        $closedLastMonth = Ticket::where('user_id', $user->id)
+            ->where('stage_id', $closedStageId)
+            ->where('updated_at', '>=', now()->subMonth())
+            ->count();
+            
+        // Ticket totali
+        $totalTickets = Ticket::where('user_id', $user->id)->count();
+        
+        return [
+            'open' => $openTickets,
+            'closed_last_month' => $closedLastMonth,
+            'total' => $totalTickets,
+        ];
+    }
+    
+    /**
+     * Ottiene i tipi di ticket più frequenti per l'utente
+     */
+    private function getUserFrequentTicketTypes() {
+        $user = auth()->user();
+        
+        // Trova i tipi di ticket più utilizzati da questo utente
+        $frequentTypes = Ticket::where('user_id', $user->id)
+            ->select('type_id', DB::raw('count(*) as total'))
+            ->groupBy('type_id')
+            ->orderByDesc('total')
+            ->take(3)
+            ->get();
+            
+        $result = [];
+        
+        foreach ($frequentTypes as $item) {
+            $ticketType = TicketType::find($item->type_id);
+            
+            if ($ticketType) {
+                $result[] = [
+                    'id' => $ticketType->id,
+                    'name' => $ticketType->name,
+                    'count' => $item->total,
+                    'url' => "/support/newticket?type={$ticketType->id}"
+                ];
+            }
+        }
+        
+        return $result;
+    }
+    
+    /**
+     * Ottiene le statistiche dell'hardware per l'utente
+     */
+    private function getUserHardwareStats() {
+        $user = auth()->user();
+        $selectedCompany = $user->selectedCompany();
+        
+        if (!$selectedCompany) {
+            return [
+                'error' => 'Nessuna azienda selezionata',
+            ];
+        }
+
+        // Aggiungi sempre l'informazione is_company_admin nella risposta
+        $result = [
+            'is_company_admin' => $user->is_company_admin
+        ];
+
+        // Se l'utente è un amministratore dell'azienda, mostra statistiche aggregate
+        if ($user->is_company_admin) {
+            // Conta l'hardware totale dell'azienda
+            $totalHardware = \App\Models\Hardware::where('company_id', $selectedCompany->id)->count();
+            
+            // Conta l'hardware assegnato
+            $assignedHardware = \App\Models\Hardware::where('company_id', $selectedCompany->id)
+                ->whereHas('users')
+                ->count();
+            
+            // Calcola l'hardware in magazzino
+            $unassignedHardware = $totalHardware - $assignedHardware;
+            
+            // Statistiche per tipo di hardware
+            $hardwareByType = \App\Models\Hardware::where('company_id', $selectedCompany->id)
+                ->with('hardwareType')
+                ->get()
+                ->groupBy('hardware_type_id')
+                ->map(function($items, $key) {
+                    $type = $items->first()->hardwareType ? $items->first()->hardwareType->name : 'Non specificato';
+                    $total = $items->count();
+                    $assigned = $items->filter(function($item) {
+                        return $item->users->count() > 0;
+                    })->count();
+                    
+                    return [
+                        'type' => $type,
+                        'total' => $total,
+                        'assigned' => $assigned,
+                        'unassigned' => $total - $assigned,
+                        'percent_assigned' => $total > 0 ? round(($assigned / $total) * 100) : 0
+                    ];
+                })
+                ->sortByDesc('total')
+                ->take(5)
+                ->values()
+                ->toArray();
+            
+            $result['total'] = $totalHardware;
+            $result['assigned'] = $assignedHardware;
+            $result['unassigned'] = $unassignedHardware;
+            $result['percent_assigned'] = $totalHardware > 0 ? round(($assignedHardware / $totalHardware) * 100) : 0;
+            $result['by_type'] = $hardwareByType;
+            
+            return $result;
+        } 
+        // Altrimenti, mostra solo l'hardware assegnato all'utente
+        else {
+            $userHardware = $user->hardware()
+                ->where('company_id', $selectedCompany->id)
+                ->with(['hardwareType'])
+                ->get();
+            
+            $hardwareByType = $userHardware
+                ->groupBy(function($item) {
+                    return $item->hardwareType ? $item->hardwareType->name : 'Non specificato';
+                })
+                ->map(function($items, $key) {
+                    return [
+                        'type' => $key,
+                        'count' => $items->count(),
+                        'items' => $items->map(function($item) {
+                            return [
+                                'id' => $item->id,
+                                'make' => $item->make,
+                                'model' => $item->model,
+                                'serial_number' => $item->serial_number,
+                                'support_label' => $item->support_label,
+                                'company_asset_number' => $item->company_asset_number,
+                            ];
+                        })->values()->toArray()
+                    ];
+                })
+                ->values()
+                ->toArray();
+            
+            $result['total_assigned'] = $userHardware->count();
+            $result['by_type'] = $hardwareByType;
+            
+            return $result;
+        }
     }
 }

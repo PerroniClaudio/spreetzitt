@@ -10,13 +10,16 @@ class Dashboard extends Model {
 
     protected $fillable = [
         'user_id',
+        'type',
         'configuration',
         'enabled_widgets',
+        'settings',
     ];
 
     protected $casts = [
         'configuration' => 'array',
         'enabled_widgets' => 'array',
+        'settings' => 'array',
     ];
 
     public function user() {
