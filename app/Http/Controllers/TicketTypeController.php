@@ -8,6 +8,7 @@ use App\Models\TicketType;
 use App\Models\TypeFormFields;
 use App\Models\TicketTypeCategory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TicketTypeController extends Controller {
     /**
@@ -576,41 +577,62 @@ class TicketTypeController extends Controller {
          * Expected structure:
          * slave_types = '[{"id": 1, "is_required": true}, {"id": 2, "is_required": false}]'
          */
-        $fields = $request->validate([
-            'slave_types' => 'required|json',
-        ]);
+        DB::beginTransaction();
+        try {
 
-        $slave_types = json_decode($fields['slave_types'], true);
-
-        $pivotData = [];
-        foreach ($slave_types as $slave) {
-            $pivotData[$slave['id']] = ['is_required' => $slave['is_required']];
-        }
-        $ticketType->slaveTypes()->sync($pivotData);
-
-        // Se uno degli slave associati ha is_required=1 nella pivot e it_referer_limited=1, aggiorna il master
-        $updatedSlaves = $ticketType->slaveTypes()->get();
-        $refererLimited = false;
-        $warning = null;
-        foreach ($updatedSlaves as $slave) {
-            $pivot = $slave->pivot;
-            if ($pivot && $pivot->is_required == 1 && $slave->it_referer_limited == 1) {
-                $refererLimited = true;
-                break;
+            $fields = $request->validate([
+                'slave_types' => 'required|json',
+            ]);
+    
+            $slave_types = json_decode($fields['slave_types'], true);
+    
+            $pivotData = [];
+            foreach ($slave_types as $slave) {
+                $tempTicketType = TicketType::find($slave['id']);
+                if(!$tempTicketType) {
+                    throw new \Exception('Uno dei tipi di ticket selezionati non esiste.');
+                }
+                if($tempTicketType->is_master || $tempTicketType->is_scheduling || $tempTicketType->is_grouping) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non si può collegare. (es. è un tipo operazione strutturata, attività programmata o raggruppamento/master)');
+                }
+                if($tempTicketType->company_id != $ticketType->company_id) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non appartiene alla stessa ' . strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')) . '.');
+                }
+                $pivotData[$slave['id']] = ['is_required' => $slave['is_required']];
             }
-        }
-        if ($refererLimited && ($ticketType->it_referer_limited != 1)) {
-            $ticketType->it_referer_limited = 1;
-            $ticketType->save();
-            $warning = 'Attenzione: Il tipo principale è stato impostato come "Limitato ai referenti IT", perchè uno dei tipi associati è sia obbligatorio che limitato ai referenti IT.';
-        }
+            $ticketType->slaveTypes()->sync($pivotData);
+    
+            // Se uno degli slave associati ha is_required=1 nella pivot e it_referer_limited=1, aggiorna il master
+            $updatedSlaves = $ticketType->slaveTypes()->get();
+            $refererLimited = false;
+            $warning = null;
+            foreach ($updatedSlaves as $slave) {
+                $pivot = $slave->pivot;
+                if ($pivot && $pivot->is_required == 1 && $slave->it_referer_limited == 1) {
+                    $refererLimited = true;
+                    break;
+                }
+            }
+            if ($refererLimited && ($ticketType->it_referer_limited != 1)) {
+                $ticketType->it_referer_limited = 1;
+                $ticketType->save();
+                $warning = 'Attenzione: Il tipo principale è stato impostato come "Limitato ai referenti IT", perchè uno dei tipi associati è sia obbligatorio che limitato ai referenti IT.';
+            }
+    
+            $slaveTypes = $ticketType->slaveTypes()->get();
+    
+            DB::commit();
 
-        $slaveTypes = $ticketType->slaveTypes()->get();
-
-        return response([
-            'slaveTypes' => $slaveTypes,
-            'warning' => $warning,
-        ], 200);
+            return response([
+                'slaveTypes' => $slaveTypes,
+                'warning' => $warning,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
     }
 
     // Prende tutti i possibili tipi di ticket slave 

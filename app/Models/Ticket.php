@@ -52,6 +52,7 @@ class Ticket extends Model
         'referer_it_id',
         'assigned',
         'last_assignment_id',
+        'scheduled_duration',
     ];
 
     protected $casts = [

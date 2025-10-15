@@ -152,6 +152,12 @@ class TicketController extends Controller
                 ], 404);
             }
 
+            if($ticketType->is_scheduling == 1 && !$request->scheduledDuration){
+                return response([
+                    'message' => 'La durata pianificata è obbligatoria per questo tipo di ticket',
+                ], 400);
+            }
+
             $slaveTicketsRequest = collect();
             if ($ticketType->is_master == 1) {
 
@@ -200,6 +206,7 @@ class TicketController extends Controller
                 'is_billable' => $ticketType['expected_is_billable'],
                 'referer_it_id' => $request->referer_it ?? null,
                 'referer_id' => $request->referer ?? null,
+                'scheduled_duration' => $request->scheduledDuration ?? null,
             ]);
 
             if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
@@ -405,7 +412,13 @@ class TicketController extends Controller
                 throw new \Exception('Il tipo di ticket non appartiene alla stessa compagnia del ticket master. Master: ' . $masterTicket->company_id . ' - Collegato: ' . $ticketType->company_id);
             }
             if ($ticketType->is_master == 1) {
-                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: ' . $ticketType->id);
+                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: ' . $ticketType->name);
+            }
+            if ($ticketType->is_scheduling == 1) {
+                throw new \Exception('Non si può collegare un\'attività pianificata a un\'operazione strutturata. Tipo: ' . $ticketType->name);
+            }
+            if ($ticketType->is_grouping == 1) {
+                throw new \Exception('Non si può collegare un\'ticket di raggruppamento a un\'operazione strutturata. Tipo: ' . $ticketType->name);
             }
 
             $newSlaveTicket = Ticket::create([
