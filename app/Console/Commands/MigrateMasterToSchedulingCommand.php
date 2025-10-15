@@ -34,6 +34,8 @@ class MigrateMasterToSchedulingCommand extends Command
                 }
                 $ticket->scheduling_id = $ticket->master_id;
                 $ticket->master_id = null;
+                // Per la migrazione si è deciso di inserire il tempo di gestione effettivo come durata pianificata. poi se servono aggiustamenti si fanno dopo.
+                $ticket->scheduled_duration = $ticket->actual_processing_time;
                 $ticket->save();
                 $this->info("Aggiornato Ticket #{$ticket->id}");
             }
