@@ -1198,10 +1198,10 @@ class TicketController extends Controller
         if ($ticket->actual_processing_time != $fields['actual_processing_time']) {
             // Controlli vari sul tempo e poi aggiornamento dati e registrazione modifica.
 
-            // Il tempo deve essere maggiore di 0, un multiplo di 10 minuti e almeno uguale al tempo atteso, se impostato.
-            if ($fields['actual_processing_time'] <= 0) {
+            // Il tempo deve essere maggiore o uguale a 0 e un multiplo di 10 minuti, anche per i ticket ancora aperti.
+            if ($fields['actual_processing_time'] < 0) {
                 return response([
-                    'message' => 'Actual processing time must be greater than 0.',
+                    'message' => 'Actual processing time must be greater than or equal to 0.',
                 ], 400);
             }
             if ($fields['actual_processing_time'] % 10 != 0) {
@@ -1209,11 +1209,21 @@ class TicketController extends Controller
                     'message' => 'Actual processing time must be a multiple of 10 minutes.',
                 ], 400);
             }
-            $ticketType = $ticket->ticketType;
-            if ($ticketType->expected_processing_time && ($fields['actual_processing_time'] < $ticketType->expected_processing_time)) {
-                return response([
-                    'message' => 'Actual processing time must be greater than or equal to the expected processing time for this ticket type.',
-                ], 400);
+
+            // Se il ticket è chiuso, il tempo deve essere maggiore di 0 e almeno uguale al tempo atteso, se impostato nel tipo di ticket.
+            if ($ticket->stage_id == TicketStage::where('system_key', 'closed')->value('id')) {
+                if ($fields['actual_processing_time'] < 0) {
+                    return response([
+                        'message' => 'Actual processing time must be greater than 0 for closed tickets.',
+                    ], 400);
+                }
+
+                $ticketType = $ticket->ticketType;
+                if ($ticketType->expected_processing_time && ($fields['actual_processing_time'] < $ticketType->expected_processing_time)) {
+                    return response([
+                        'message' => 'Actual processing time for closed tickets must be greater than or equal to the expected processing time for this ticket type.',
+                    ], 400);
+                }                
             }
 
             $ticket->update([
@@ -1907,6 +1917,8 @@ class TicketController extends Controller
                 'source',
                 'parent_ticket_id',
                 'master_id',
+                'scheduling_id',
+                'grouping_id',
             ]);
             $slaveTicket->user_full_name =
                 $slaveTicket->user->is_admin == 1
@@ -1949,6 +1961,294 @@ class TicketController extends Controller
         return response([
             'slave_tickets' => $slaveTickets,
         ], 200);
+    }
+
+    public function getAvailableSchedulingTickets (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling == 1) {
+            return response([
+                'message' => 'This is a scheduling ticket. Scheduling tickets cannot be connected to other scheduling tickets.',
+            ], 400);
+        }
+
+        $schedulingTickets = Ticket::whereHas('ticketType', function ($query) {
+            $query->where('is_scheduling', true);
+        })->where('company_id', $ticket->company_id)
+        ->where('id', '!=', $ticket->id)
+        // ->with([
+        //     'referer' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email');
+        //     },
+        //     'refererIt' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email');
+        //     },
+        //     'user' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email', 'is_admin');
+        //     },
+        //     'stage' => function ($query) {
+        //         $query->select('id', 'name');
+        //     },
+        //     'ticketType' => function ($query) {
+        //         $query->select('id', 'name', 'is_scheduling');
+        //     },
+        // ])
+        ->get();
+
+        $schedulingTickets->each(function ($schedulingTicket) use ($user) {
+            $schedulingTicket->user_full_name =
+                $schedulingTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$schedulingTicket->user->id : ''))
+                : ($schedulingTicket->user->surname
+                    ? $schedulingTicket->user->surname.' '.strtoupper(substr($schedulingTicket->user->name, 0, 1)).'.'
+                    : $schedulingTicket->user->name
+                );
+            $schedulingTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $schedulingTicket->ticketType;
+            $schedulingTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $schedulingTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $schedulingTicket->adminUser;
+            if ($adminUser) {
+                $schedulingTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $schedulingTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $schedulingTicket->admin_user_full_name = null;
+                $schedulingTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $schedulingTicket->referer;
+            if ($referer) {
+                $schedulingTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $schedulingTicket->makeVisible(['referer_full_name']);
+            }
+        });
+
+        return response([
+            'available_scheduling_tickets' => $schedulingTickets,
+        ], 200);
+    }
+
+    public function connectToSchedulingTicket(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling == 1) {
+            return response([
+                'message' => 'Cannot connect a scheduling ticket to another scheduling ticket.',
+            ], 400);
+        }
+
+        $fields = $request->validate([
+            'scheduling_id' => 'required|int',
+        ]);
+
+        $schedulingTicket = Ticket::where('id', $fields['scheduling_id'])->whereHas('ticketType', function ($query) {
+            $query->where('is_scheduling', true);
+        })->first();
+
+        if (! $schedulingTicket) {
+            return response([
+                'message' => 'Scheduling ticket not found.',
+            ], 404);
+        }
+
+        if ($ticket->scheduling_id == $schedulingTicket->id) {
+            return response([
+                'message' => 'This ticket is already connected to the selected scheduling.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warning = null;
+
+            // Assegna il ticket all'attività programmata
+            $ticket->update(['scheduling_id' => $schedulingTicket->id]);
+
+            // Se il ticket è un master, assegna anche tutti i suoi slave
+            if ($ticket->ticketType->is_master == 1) {
+                $slaveTickets = $ticket->slaves;
+                $slaveCount = $slaveTickets->count();
+                
+                if ($slaveCount > 0) {
+                    foreach ($slaveTickets as $slaveTicket) {
+                        $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                    }
+                    $warning = "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati.";
+                }
+            }
+
+            // Se il ticket ha un master, rimuovi l'associazione del master all'attività programmata, perchè uno dei figli non è più associato.
+            if ($ticket->master_id != null) {
+                $masterTicket = Ticket::find($ticket->master_id);
+                if ($masterTicket && $masterTicket->scheduling_id == $schedulingTicket->id) {
+                    $masterTicket->update(['scheduling_id' => null]);
+                    $warning = "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata.";
+                }
+            }
+
+            DB::commit();
+
+            return response([
+                'ticket' => $ticket,
+                'warning' => $warning,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response([
+                'message' => 'Errore durante il collegamento all\'attività programmata: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getTicketsConnectedToScheduling(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
+
+        if ($user['is_admin'] != 1 &&
+            ! ($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $connectedTickets = $ticket->schedulingSlaves;
+
+        foreach ($connectedTickets as $connectedTicket) {
+            $connectedTicket->setVisible([
+                'id',
+                'company_id',
+                'stage_id',
+                'description',
+                'group_id',
+                'created_at',
+                'type_id',
+                'source',
+                'parent_ticket_id',
+                'master_id',
+                'scheduling_id',
+                'grouping_id',
+            ]);
+            $connectedTicket->user_full_name =
+                $connectedTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$connectedTicket->user->id : ''))
+                : ($connectedTicket->user->surname
+                    ? $connectedTicket->user->surname.' '.strtoupper(substr($connectedTicket->user->name, 0, 1)).'.'
+                    : $connectedTicket->user->name
+                );
+            $connectedTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $connectedTicket->ticketType;
+            $connectedTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $connectedTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $connectedTicket->adminUser;
+            if ($adminUser) {
+                $connectedTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $connectedTicket->admin_user_full_name = null;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $connectedTicket->referer;
+            if ($referer) {
+                $connectedTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $connectedTicket->makeVisible(['referer_full_name']);
+            }
+            $connectedTicket->ticket_type_name = $connectedTicket->ticketType ? $connectedTicket->ticketType->name : '';
+            $connectedTicket->makeVisible(['ticket_type_name']);
+        }
+
+        return response([
+            'connected_tickets' => $connectedTickets,
+        ], 200);
+    }
+
+    public function getSchedulingTicketRecapData (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling != 1) {
+            return response([
+                'message' => 'This is not a scheduling ticket.',
+            ], 400);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+        
+        // Recupera tutti i ticket collegati a questa attività programmata
+        $schedulingSlaves = $ticket->schedulingSlaves;
+        
+        // Conteggio totale
+        $totalCount = $schedulingSlaves->count();
+        
+        // Separa aperti e chiusi
+        $closedSlaves = $schedulingSlaves->where('stage_id', $closedStageId);
+        $openSlaves = $schedulingSlaves->where('stage_id', '!=', $closedStageId);
+        
+        $closedCount = $closedSlaves->count();
+        $openCount = $openSlaves->count();
+        
+        // Tempo totale dei ticket chiusi
+        $totalClosedProcessingTime = $closedSlaves->sum('actual_processing_time') ?? 0;
+        
+        // Tempo totale dei ticket ancora aperti (tempo parziale)
+        $totalOpenProcessingTime = $openSlaves->sum('actual_processing_time') ?? 0;
+        
+        $recapData = [
+            'scheduled_duration' => $ticket->scheduled_duration,
+            'total_slaves_count' => $totalCount,
+            'closed_slaves_count' => $closedCount,
+            'open_slaves_count' => $openCount,
+            'total_closed_processing_time' => $totalClosedProcessingTime,
+            'total_open_processing_time' => $totalOpenProcessingTime,
+            'total_processing_time' => $totalClosedProcessingTime + $totalOpenProcessingTime,
+            'scheduling_ticket_processing_time' => $ticket->actual_processing_time ?? 0,
+        ];
+
+        return response([
+            'recap_data' => $recapData,
+        ], 200);
+
     }
 
     public function report(Ticket $ticket, Request $request)

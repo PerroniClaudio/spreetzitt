@@ -355,6 +355,15 @@ class Ticket extends Model
         return $this->hasMany(Ticket::class, 'master_id');
     }
 
+    public function schedulingMaster()
+    {
+        return $this->belongsTo(Ticket::class, 'scheduling_id');
+    }
+    public function schedulingSlaves()
+    {
+        return $this->hasMany(Ticket::class, 'scheduling_id');
+    }
+
     public function reopenedParent()
     {
         return $this->belongsTo(Ticket::class, 'reopen_parent_id');

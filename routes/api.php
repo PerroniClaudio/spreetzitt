@@ -120,6 +120,10 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-report/batch', [App\Http\Controllers\TicketController::class, 'batchReport']);
     Route::get('/ticket-types', [App\Http\Controllers\UserController::class, 'ticketTypes']);
     Route::get('/ticket/{ticket}/slave-tickets', [App\Http\Controllers\TicketController::class, 'getSlaveTickets']);
+    Route::get('/ticket/{ticket}/available-scheduling-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableSchedulingTickets']);
+    Route::get('/ticket/{ticket}/connected-to-scheduling', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToScheduling']);
+    Route::post('/ticket/{ticket}/connect-to-scheduling', [App\Http\Controllers\TicketController::class, 'connectToSchedulingTicket']);
+    Route::get('/ticket/{ticket}/scheduling-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketRecapData']);
 
     // Assegnazione ticket
 
