@@ -1288,12 +1288,12 @@ class TicketController extends Controller
 
     public function closeTicket(Ticket $ticket, Request $request)
     {
+        // Non è prevista l'associazione del ticket a un'operazione strutturata, in nessun momento successivo all'apertura della stessa.
         $fields = $request->validate([
             'message' => 'required|string',
             'actualProcessingTime' => 'required|int',
             'workMode' => 'required|string',
             'isRejected' => 'required|boolean',
-            'masterTicketId' => 'int|nullable',
             'no_user_response' => 'boolean',
         ]);
 
@@ -1318,27 +1318,6 @@ class TicketController extends Controller
                 'message' => 'Actual processing time must be a multiple of 10 minutes.',
             ], 400);
         }
-
-        // Se viene indicato un master_id si controlla che questo ticket non sia master
-        // e che il ticket con l'id indicato esista e sia master. quindi non può essere nemmeno l'id del ticket stesso.
-        // Non è prevista l'associazione del ticket a un'operazione strutturata, in nessun momento successivo all'apertura della stessa.
-        // if ($request->masterTicketId) {
-        //     if ($ticket->ticketType->is_master) {
-        //         return response([
-        //             'message' => 'Questa è un\'operazione strutturata. Le operazioni strutturate non possono essere associate ad altre operazioni strutturate.',
-        //         ], 400);
-        //     }
-        //     $masterTicket = Ticket::where('id', $request->masterTicketId)
-        //         ->whereHas('ticketType', function ($query) {
-        //             $query->where('is_master', true);
-        //         })
-        //         ->first();
-        //     if (! $masterTicket) {
-        //         return response([
-        //             'message' => 'Ticket non trovato o non di tipo operazione strutturata.',
-        //         ], 400);
-        //     }
-        // }
 
         DB::beginTransaction();
 
@@ -1373,7 +1352,6 @@ class TicketController extends Controller
                 'actual_processing_time' => $request->actualProcessingTime,
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
-                'master_id' => $request->masterTicketId,
                 'no_user_response' => $fields['no_user_response'] ?? false,
             ]);
 
