@@ -320,6 +320,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/hardware-types/{hardwareType}', [App\Http\Controllers\HardwareTypeController::class, 'destroy']);
     Route::get('/hardware-list', [App\Http\Controllers\HardwareController::class, 'index']);
     Route::get('/company-hardware-list/{company}', [App\Http\Controllers\HardwareController::class, 'companyHardwareList']);
+    Route::get('/user-companies-hardware-list/{user}', [App\Http\Controllers\HardwareController::class, 'userCompaniesHardwareList']);
     Route::get('/form-field-hardware-list/{typeFormField}', [App\Http\Controllers\HardwareController::class, 'formFieldHardwareList']);
     Route::get('/hardware-list-full', [App\Http\Controllers\HardwareController::class, 'hardwareListWithTrashed']);
 
