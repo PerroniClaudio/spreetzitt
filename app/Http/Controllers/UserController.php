@@ -372,6 +372,10 @@ class UserController extends Controller
             // }
         }
 
+        if ($user->is_superadmin == false) {
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
+        }
+
         return response([
             'ticketTypes' => $ticketTypes->values()->all(),
         ], 200);

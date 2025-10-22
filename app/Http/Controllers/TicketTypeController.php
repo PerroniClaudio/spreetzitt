@@ -14,10 +14,13 @@ class TicketTypeController extends Controller {
     /**
      * Display a listing of the resource.
      */
-    public function index() {
+    public function index(Request $request) {
 
         // Si può decidere di non filtrarli prima, nel caso si dovessero vedere in qualche caso nel frontend.
         $ticketTypes = TicketType::where("is_deleted", false)->with('category')->get();
+        if($request->user()->is_superadmin == false){
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
+        }
         // $ticketTypes = TicketType::with('category')->get();
 
         return response([
@@ -149,9 +152,15 @@ class TicketTypeController extends Controller {
         //     ], 400);
         // }
 
-        $fillableFields = array_merge(
-            $request->only((new TicketType)->getFillable())
-        );
+        if($request->user()->is_superadmin){
+            $fillableFields = array_merge(
+                $request->only((new TicketType)->getFillable())
+            );
+        } else {        
+            $fillableFields = array_merge(
+                $request->only(array_diff((new TicketType)->getFillable(), ['hourly_cost', 'hourly_cost_expires_at']))
+            );
+        }
 
         // Se si vuole togliere it_referer_limited su un tipo master, verifica gli slave obbligatori
         if (
@@ -184,6 +193,31 @@ class TicketTypeController extends Controller {
     }
 
     /**
+     * Update hourly cost and expiration date for a ticket type.
+     */
+    public function updateHourlyCost(Request $request, TicketType $ticketType) {
+        $user = $request->user();
+        
+        if (!$user->is_superadmin) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'hourly_cost' => 'nullable|numeric|min:0|max:999999.99',
+            'hourly_cost_expires_at' => 'nullable|date|after:today',
+        ]);
+
+        $ticketType->update($validated);
+
+        $updatedTicketType = TicketType::where('id', $ticketType->id)->with('category')->first();
+
+        return response([
+            'ticketType' => $updatedTicketType,
+            'message' => 'Costo orario aggiornato con successo',
+        ], 200);
+    }
+
+    /**
      * Remove the specified resource from storage.
      */
     public function destroy(TicketType $ticketType, Request $request) {
@@ -193,6 +227,13 @@ class TicketTypeController extends Controller {
         }
 
         $ticketType = TicketType::where('id', $ticketType["id"])->first();
+
+        if($ticketType->masterTypes()->count() > 0){
+            return response([
+                'message' => 'Non è possibile eliminare questo tipo di ticket perché è collegato a uno o più operazioni strutturate. Rimuovere prima quelle associazioni.'
+            ], 400);
+        }
+
         // Modificato quando l'azienda è stata resa facoltativa. se non ha l'azienda non dovrebbe avere nemmeno ticket allegati.
         // quindi si elimina direttamente, altrimenti countRelatedTickets dà errore, perchè passa dall'azienda.
         if ($ticketType->company && $ticketType->countRelatedTickets() > 0) {

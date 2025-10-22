@@ -259,6 +259,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket-type-groups/delete', [App\Http\Controllers\TicketTypeController::class, 'deleteGroups']);
     Route::post('/ticket-type-companies', [App\Http\Controllers\TicketTypeController::class, 'updateCompanies']);
     Route::post('/ticket-type/duplicate', [App\Http\Controllers\TicketTypeController::class, 'duplicateTicketType']);
+    Route::post('/ticket-type/{ticketType}/hourly-cost', [App\Http\Controllers\TicketTypeController::class, 'updateHourlyCost']);
 
     // Custom groups
 

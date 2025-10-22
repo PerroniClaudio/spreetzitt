@@ -1291,7 +1291,6 @@ class TicketController extends Controller
         // Non è prevista l'associazione del ticket a un'operazione strutturata, in nessun momento successivo all'apertura della stessa.
         $fields = $request->validate([
             'message' => 'required|string',
-            'actualProcessingTime' => 'required|int',
             'workMode' => 'required|string',
             'isRejected' => 'required|boolean',
             'no_user_response' => 'boolean',
@@ -1307,16 +1306,35 @@ class TicketController extends Controller
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $ticketType = $ticket->ticketType;
-        if ($fields['actualProcessingTime'] <= 0 || ($fields['actualProcessingTime'] < ($ticketType->expected_processing_time ?? 0))) {
-            return response([
-                'message' => 'Actual processing time must be set and greater than or equal to the minimum processing time for this ticket type.',
-            ], 400);
-        }
+        
+        // Controlli diversi se il ticket è o meno un'operazione strutturata
+        if($ticketType->is_master == 1) {
+            // Controlla se ci sono ticket slave non ancora chiusi
+            $hasOpenSlaveTickets = $ticket->slaves()->where('stage_id', '!=', $closedTicketStageId)->exists();
+            if ($hasOpenSlaveTickets) {
+                return response([
+                    'message' => 'Non è possibile chiudere un\'operazione strutturata con ticket collegati ancora aperti.',
+                ], 400);
+            }
+            $fields['actualProcessingTime'] = null;
 
-        if ($fields['actualProcessingTime'] % 10 != 0) {
-            return response([
-                'message' => 'Actual processing time must be a multiple of 10 minutes.',
-            ], 400);
+        } else {
+            $request->validate([
+                'actualProcessingTime' => 'required|int',
+            ]);
+            $fields['actualProcessingTime'] = $request->actualProcessingTime;
+
+            if ($fields['actualProcessingTime'] <= 0 || ($fields['actualProcessingTime'] < ($ticketType->expected_processing_time ?? 0))) {
+                return response([
+                    'message' => 'Actual processing time must be set and greater than or equal to the minimum processing time for this ticket type.',
+                ], 400);
+            }
+    
+            if ($fields['actualProcessingTime'] % 10 != 0) {
+                return response([
+                    'message' => 'Actual processing time must be a multiple of 10 minutes.',
+                ], 400);
+            }
         }
 
         DB::beginTransaction();
@@ -1349,7 +1367,7 @@ class TicketController extends Controller
 
             $ticket->update([
                 'stage_id' => $closedTicketStageId,
-                'actual_processing_time' => $request->actualProcessingTime,
+                'actual_processing_time' => $fields['actualProcessingTime'],
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
                 'no_user_response' => $fields['no_user_response'] ?? false,

@@ -273,6 +273,10 @@ class CompanyController extends Controller
             $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with(['category', 'slaveTypes'])->get();
         }
 
+        if ($request->user()->is_superadmin == false) {
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
+        }
+
         return response([
             'companyTicketTypes' => $ticketTypes,
         ], 200);
