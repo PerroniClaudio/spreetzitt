@@ -663,6 +663,10 @@ class TicketController extends Controller
             'files',
         ])->first();
 
+        if($ticket->ticketType->is_master == 1){
+            $ticket->slavesActualProcessingTimesSum = $ticket->slaves()->sum('actual_processing_time');
+        }
+
         if ($ticket == null) {
             return response([
                 'message' => 'Ticket not found',
@@ -1192,6 +1196,12 @@ class TicketController extends Controller
             return response([
                 'message' => 'The user must be an admin.',
             ], 401);
+        }
+
+        if($ticket->ticketType->is_master == 1) {
+            return response([
+                'message' => 'Non è possibile modificare il tempo di lavorazione effettivo di un\'operazione strutturata. Va calcolato sommando i tempi dei ticket collegati.',
+            ], 400);
         }
 
         // Se il valore è diverso da quello già esistente, lo aggiorna
