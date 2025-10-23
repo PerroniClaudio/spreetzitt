@@ -991,12 +991,45 @@
                                             @break
 
                                             @default
-                                                @if (is_array($value))
-                                                    <span><b>{{ $key }}</b><br>
-                                                        {{ implode(', ', $value) }}</span>
+                                                @if (in_array(strtolower($key), $ticket['hardwareFields']))
+                                                    {{-- Tabella hardware --}}
+                                                    <span><b>{{ $key }}</b></span>
+                                                    <table style="width: 100%; margin-top: 0.5rem; font-size: 0.7rem; border-collapse: collapse;">
+                                                        <thead>
+                                                            <tr style="background-color: #f5f5f5;">
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @if (is_array($value))
+                                                                @foreach ($value as $hardware)
+                                                                    <tr>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            @endif
+                                                        </tbody>
+                                                    </table>
                                                     <br>
+                                                
                                                 @else
-                                                    <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @if (is_array($value))
+                                                        <span><b>{{ $key }}</b><br>
+                                                            {{ implode(', ', $value) }}</span>
+                                                        <br>
+                                                    @else
+                                                        <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @endif
                                                 @endif
                                         @endswitch
                                     </td>
@@ -1216,12 +1249,45 @@
                                             @break
 
                                             @default
-                                                @if (is_array($value))
-                                                    <span><b>{{ $key }}</b><br>
-                                                        {{ implode(', ', $value) }}</span>
+                                                @if (in_array(strtolower($key), $ticket['hardwareFields']))
+                                                    {{-- Tabella hardware --}}
+                                                    <span><b>{{ $key }}</b></span>
+                                                    <table style="width: 100%; margin-top: 0.5rem; font-size: 0.7rem; border-collapse: collapse;">
+                                                        <thead>
+                                                            <tr style="background-color: #f5f5f5;">
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
+                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            @if (is_array($value))
+                                                                @foreach ($value as $hardware)
+                                                                    <tr>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            @endif
+                                                        </tbody>
+                                                    </table>
                                                     <br>
+                                                
                                                 @else
-                                                    <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @if (is_array($value))
+                                                        <span><b>{{ $key }}</b><br>
+                                                            {{ implode(', ', $value) }}</span>
+                                                        <br>
+                                                    @else
+                                                        <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @endif
                                                 @endif
                                         @endswitch
                                     </td>

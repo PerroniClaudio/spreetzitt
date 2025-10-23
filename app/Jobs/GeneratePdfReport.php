@@ -242,15 +242,37 @@ class GeneratePdfReport implements ShouldQueue
                                 foreach ($value as $index => $hardware_id) {
                                     // Non è detto che l'hardware esista ancora. Se esiste si aggiungono gli altri valori
                                     $hardware = $ticket->hardware()->where('hardware_id', $hardware_id)->first();
+                                    // if ($hardware) {
+                                    //     $webform_data->$key[$index] = $hardware->id.' ('.$hardware->make.' '
+                                    //         .$hardware->model.' '.$hardware->serial_number
+                                    //         .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
+                                    //         .($hardware->support_label ? ' '.$hardware->support_label : '')
+                                    //         .')';
+                                    // } else {
+                                    //     $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
+                                    // }
                                     if ($hardware) {
-                                        $webform_data->$key[$index] = $hardware->id.' ('.$hardware->make.' '
-                                            .$hardware->model.' '.$hardware->serial_number
-                                            .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
-                                            .($hardware->support_label ? ' '.$hardware->support_label : '')
-                                            .')';
+                                        $webform_data->$key[$index] = [
+                                            'id' => $hardware->id,
+                                            'make' => $hardware->make,
+                                            'model' => $hardware->model,
+                                            'serial_number' => $hardware->serial_number,
+                                            'company_asset_number' => $hardware->company_asset_number,
+                                            'support_label' => $hardware->support_label,
+                                        ];
+                                        
+                                            // $hardware->id.' ('.$hardware->make.' '
+                                            // .$hardware->model.' '.$hardware->serial_number
+                                            // .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
+                                            // .($hardware->support_label ? ' '.$hardware->support_label : '')
+                                            // .')';
                                     } else {
-                                        $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
+                                        $webform_data->$key[$index] = [
+                                            'id' => $hardware_id,
+                                        ];
+                                        // $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
                                     }
+
                                 }
                             }
                         }
@@ -309,6 +331,7 @@ class GeneratePdfReport implements ShouldQueue
                     $tickets_data[] = [
                         'data' => $ticket,
                         'webform_data' => $webform_data,
+                        'hardware_fields' => $hardwareFields,
                         'status_updates' => $avanzamento,
                         'closing_message' => [
                             'message' => $closingMessage,
@@ -589,6 +612,7 @@ class GeneratePdfReport implements ShouldQueue
                     'opened_by' => $ticket['data']['user']['is_admin'] == 1 ? 'Supporto' : $ticket['data']['user']['name'].' '.$ticket['data']['user']['surname'],
                     'opened_at' => \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->format('d/m/Y H:i'),
                     'webform_data' => $ticket['webform_data'],
+                    'hardwareFields' => $ticket['hardware_fields'],
                     'status_updates' => $ticket['status_updates'],
                     'description' => $ticket['data']['description'],
                     'closing_message' => $ticket['closing_message'],
