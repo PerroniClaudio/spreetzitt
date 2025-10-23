@@ -663,10 +663,6 @@ class TicketController extends Controller
             'files',
         ])->first();
 
-        if($ticket->ticketType->is_master == 1){
-            $ticket->slavesActualProcessingTimesSum = $ticket->slaves()->sum('actual_processing_time');
-        }
-
         if ($ticket == null) {
             return response([
                 'message' => 'Ticket not found',
@@ -682,6 +678,12 @@ class TicketController extends Controller
         $this->maskSupportUserIfNeeded($user, $ticket);
         $this->markMessagesAsRead($user, $ticket);
         $this->addVirtualFields($ticket);
+
+        // Aggiungere alla fine i dati che servono solo nella risposta e non vanno salvati nel DB
+        if($ticket->ticketType->is_master == 1 && $user->is_master == 1){
+            // Usa setAttribute invece di assegnazione diretta per evitare che venga considerato "dirty"
+            $ticket->setAttribute('slavesActualProcessingTimesSum', $ticket->slaves()->sum('actual_processing_time') ?? 0);
+        }
 
         return response([
             'ticket' => $ticket,

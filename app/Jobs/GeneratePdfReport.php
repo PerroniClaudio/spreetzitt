@@ -124,6 +124,7 @@ class GeneratePdfReport implements ShouldQueue
                     }
 
                     // Se il ticket è ancora aperto bisogna scartarlo e mantenere solo il conteggio. (la query controlla se c'è una chiusura prima della fine del periodo selezionato. se non esiste salta un ciclo)
+                    // Le operazioni non hanno il tempo effettivo impostato, perchè va calcolato dai collegati.
                     if (! TicketStatusUpdate::where('ticket_id', $ticket->id)
                         ->where('type', 'closing')
                         ->where('created_at', '<=', $queryTo)
@@ -133,7 +134,7 @@ class GeneratePdfReport implements ShouldQueue
                         continue;
                     }
 
-                    if (! $ticket->actual_processing_time) {
+                    if (! $ticket->actual_processing_time && !$ticket->ticketType->is_master) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' non ha il tempo di lavoro.';
 
@@ -178,15 +179,15 @@ class GeneratePdfReport implements ShouldQueue
                             if($ticket->master_id != null) {
                                 // Ticket slave
                                 $unbillable_on_site_slave_tickets_count++;
-                                $unbillable_on_site_slave_work_time += $ticket->actual_processing_time;
+                                $unbillable_on_site_slave_work_time += $ticket->actual_processing_time ?? 0;
                             } else {
                                 // Ticket normale
                                 $unbillable_on_site_normal_tickets_count++;
-                                $unbillable_on_site_normal_work_time += $ticket->actual_processing_time;
+                                $unbillable_on_site_normal_work_time += $ticket->actual_processing_time ?? 0;
                             }
                         } elseif ($ticket->work_mode == 'remote') {
                             $unbillable_remote_tickets_count++;
-                            $unbillable_remote_work_time += $ticket->actual_processing_time;
+                            $unbillable_remote_work_time += $ticket->actual_processing_time ?? 0;
                         }
                     } elseif ($ticket->is_billable == 1) {
                         // $billable_tickets_count++;
@@ -194,10 +195,10 @@ class GeneratePdfReport implements ShouldQueue
                         if ($ticket->master_id == null) {
                             if ($ticket->work_mode == 'on_site') {
                                 $on_site_billable_tickets_count++;
-                                $on_site_billable_work_time += $ticket->actual_processing_time;
+                                $on_site_billable_work_time += $ticket->actual_processing_time ?? 0;
                             } elseif ($ticket->work_mode == 'remote') {
                                 $remote_billable_tickets_count++;
-                                $remote_billable_work_time += $ticket->actual_processing_time;
+                                $remote_billable_work_time += $ticket->actual_processing_time ?? 0;
                             }
                         }
                         // Il ticket è slave e non va sommato il suo tempo
@@ -557,12 +558,12 @@ class GeneratePdfReport implements ShouldQueue
                         $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] = 0;
                     }
                     // Incrementa il conteggio per la categoria
-                    $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'];
+                    $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'] ?? 0;
                 } else {
                     if (! isset($tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']])) {
                         $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] = 0;
                     }
-                    $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'];
+                    $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'] ?? 0;
                 }
 
                 // Gestore viene inserito nei ticket on-site (sarebbe chi è andato dal cliente)
@@ -596,13 +597,14 @@ class GeneratePdfReport implements ShouldQueue
                     'ticket_frontend_url' => env('FRONTEND_URL').'/support/user/ticket/'.$ticket['data']['id'],
                     'current_status' => $current_status,
                     'is_billable' => $ticket['data']['is_billable'],
-                    'actual_processing_time' => $ticket['data']['actual_processing_time'],
+                    'actual_processing_time' => $ticket['data']['actual_processing_time'] ?? 0,
                     'master_id' => $ticket['data']['master_id'],
                     'is_master' => $ticket['data']['ticketType']['is_master'],
                     'slave_ids' => Ticket::where('master_id', $ticket['data']['id'])->pluck('id')->toArray(),
                     'handler_full_name' => $handlerFullName,
                     'work_mode' => $ticket['data']['work_mode'],
                     'source' => $ticketSources[$ticket['data']['source']] ?? "N/A",
+                    'slaves_actual_processing_time_sum' => $ticket['data']['ticketType']['is_master'] ? Ticket::where('master_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
                 ];
 
                 if (count($ticket['data']['messages']) > 3) {
