@@ -967,62 +967,105 @@
 
                                 @php
                                     unset($ticket['webform_data']->description);
+
+                                    // Ordina i campi: prima quelli normali, poi quelli hardware
+                                    $webformFields = [];
+                                    $hardwareFields = [];
+                                    
+                                    foreach ($ticket['webform_data'] as $key => $value) {
+                                        if (in_array(strtolower($key), $ticket['hardwareFields'])) {
+                                            $hardwareFields[$key] = $value;
+                                        } else {
+                                            $webformFields[$key] = $value;
+                                        }
+                                    }
+                                    
+                                    // Unisce prima i campi normali, poi quelli hardware
+                                    $sortedWebformData = array_merge($webformFields, $hardwareFields);
+
+                                    $closedTr = false;
                                 @endphp
 
-                                @foreach ($ticket['webform_data'] as $key => $value)
-                                    @if ($loop->index % 3 == 0)
+                                @foreach ($sortedWebformData as $key => $value)
+
+                                    @if (in_array(strtolower($key), $ticket['hardwareFields']))
+
+                                        {{-- 
+                                            Se serve, chiude tr. Per capire se chiuderlo vede se l'iteration è > 1 e il resto di iteration/3 è diverso da 1, 
+                                            che se è stato chiuso nel ciclo precedente dovrebbe essere 1
+                                        --}}
+                                        @if ($loop->iteration > 1 && 
+                                                $loop->iteration % 3 != 1 && 
+                                                !$closedTr
+                                            )
+                                            {{-- Aggiunge i td per occupare gli spazi vuoti --}}
+                                            @if($loop->iteration % 3 == 2)
+                                                <td></td><td></td>
+                                            @elseif($loop->iteration % 3 == 0)
+                                                <td></td>
+                                            @endif  
+                                            </tr>
+                                        @endif
+                                        {{-- In ogni caso cambia il valore di closedTr perchè solo il primo campo hardware deve inserire il </tr> se serve --}}
+                                        @php
+                                            $closedTr = true;
+                                        @endphp
+
+                                        {{-- Tabella hardware --}}
                                         <tr>
-                                    @endif
-                                    <td>
-                                        @switch($key)
-                                            @case('description')
-                                            @break
+                                            <td colspan="3">
+                                                <span><b>{{ $key }}</b></span>
+                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (is_array($value))
+                                                            @foreach ($value as $hardware)
+                                                                <tr>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                </tr>
+                                                            @endforeach
+                                                        @endif
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    @else
 
-                                            @case('referer')
-                                                <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
-                                            @break
+                                        @if ($loop->index % 3 == 0)
+                                            <tr>
+                                        @endif
+                                        <td>
+                                            @switch($key)
+                                                @case('description')
+                                                @break
 
-                                            @case('referer_it')
-                                                <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
-                                            @break
+                                                @case('referer')
+                                                    <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
+                                                @break
 
-                                            @case('office')
-                                                <span><b>Sede</b><br> {{ $value }}</span> <br>
-                                            @break
+                                                @case('referer_it')
+                                                    <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
+                                                @break
 
-                                            @default
-                                                @if (in_array(strtolower($key), $ticket['hardwareFields']))
-                                                    {{-- Tabella hardware --}}
-                                                    <span><b>{{ $key }}</b></span>
-                                                    <table style="width: 100%; margin-top: 0.5rem; font-size: 0.7rem; border-collapse: collapse;">
-                                                        <thead>
-                                                            <tr style="background-color: #f5f5f5;">
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @if (is_array($value))
-                                                                @foreach ($value as $hardware)
-                                                                    <tr>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
-                                                                    </tr>
-                                                                @endforeach
-                                                            @endif
-                                                        </tbody>
-                                                    </table>
-                                                    <br>
-                                                
-                                                @else
+                                                @case('office')
+                                                    <span><b>Sede</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @default
                                                     @if (is_array($value))
                                                         <span><b>{{ $key }}</b><br>
                                                             {{ implode(', ', $value) }}</span>
@@ -1030,12 +1073,15 @@
                                                     @else
                                                         <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
                                                     @endif
-                                                @endif
-                                        @endswitch
-                                    </td>
-                                    @if ($loop->iteration % 3 == 0)
-                                        </tr>
+                                            @endswitch
+                                        </td>
+                                        @if ($loop->iteration % 3 == 0)
+                                            </tr>
+                                        @endif
+                                    
                                     @endif
+
+
                                 @endforeach
                                 @if ($loop->count % 3 != 0)
                                     </tr>
@@ -1225,62 +1271,105 @@
 
                                 @php
                                     unset($ticket['webform_data']->description);
+                                    
+                                    // Ordina i campi: prima quelli normali, poi quelli hardware
+                                    $webformFields = [];
+                                    $hardwareFields = [];
+                                    
+                                    foreach ($ticket['webform_data'] as $key => $value) {
+                                        if (in_array(strtolower($key), $ticket['hardwareFields'])) {
+                                            $hardwareFields[$key] = $value;
+                                        } else {
+                                            $webformFields[$key] = $value;
+                                        }
+                                    }
+                                    
+                                    // Unisce prima i campi normali, poi quelli hardware
+                                    $sortedWebformData = array_merge($webformFields, $hardwareFields);
+
+                                    $closedTr = false;
                                 @endphp
 
-                                @foreach ($ticket['webform_data'] as $key => $value)
-                                    @if ($loop->index % 3 == 0)
+                                @foreach ($sortedWebformData as $key => $value)
+                                    
+                                    @if (in_array(strtolower($key), $ticket['hardwareFields']))
+
+                                        {{-- 
+                                            Se serve, chiude tr. Per capire se chiuderlo vede se l'iteration è > 1 e il resto di iteration/3 è diverso da 1, 
+                                            che se è stato chiuso nel ciclo precedente dovrebbe essere 1
+                                        --}}
+                                        @if ($loop->iteration > 1 && 
+                                                $loop->iteration % 3 != 1 && 
+                                                !$closedTr
+                                            )
+                                            {{-- Aggiunge i td per occupare gli spazi vuoti --}}
+                                            @if($loop->iteration % 3 == 2)
+                                                <td></td><td></td>
+                                            @elseif($loop->iteration % 3 == 0)
+                                                <td></td>
+                                            @endif  
+                                            </tr>
+                                        @endif
+                                        {{-- In ogni caso cambia il valore di closedTr perchè solo il primo campo hardware deve inserire il </tr> se serve --}}
+                                        @php
+                                            $closedTr = true;
+                                        @endphp
+
+                                        {{-- Tabella hardware --}}
                                         <tr>
-                                    @endif
-                                    <td>
-                                        @switch($key)
-                                            @case('description')
-                                            @break
+                                            <td colspan="3">
+                                                <span><b>{{ $key }}</b></span>
+                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">ID</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Marca</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Modello</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Seriale</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Asset</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Etichetta</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (is_array($value))
+                                                            @foreach ($value as $hardware)
+                                                                <tr>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                </tr>
+                                                            @endforeach
+                                                        @endif
+                                                    </tbody>
+                                                </table>
+                                            </td>
+                                        </tr>
+                                    @else    
 
-                                            @case('referer')
-                                                <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
-                                            @break
+                                        @if ($loop->index % 3 == 0)
+                                            <tr>
+                                        @endif
+                                        <td>
+                                            @switch($key)
+                                                @case('description')
+                                                @break
 
-                                            @case('referer_it')
-                                                <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
-                                            @break
+                                                @case('referer')
+                                                    <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
+                                                @break
 
-                                            @case('office')
-                                                <span><b>Sede</b><br> {{ $value }}</span> <br>
-                                            @break
+                                                @case('referer_it')
+                                                    <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
+                                                @break
 
-                                            @default
-                                                @if (in_array(strtolower($key), $ticket['hardwareFields']))
-                                                    {{-- Tabella hardware --}}
-                                                    <span><b>{{ $key }}</b></span>
-                                                    <table style="width: 100%; margin-top: 0.5rem; font-size: 0.7rem; border-collapse: collapse;">
-                                                        <thead>
-                                                            <tr style="background-color: #f5f5f5;">
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
-                                                                <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            @if (is_array($value))
-                                                                @foreach ($value as $hardware)
-                                                                    <tr>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
-                                                                        <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
-                                                                    </tr>
-                                                                @endforeach
-                                                            @endif
-                                                        </tbody>
-                                                    </table>
-                                                    <br>
-                                                
-                                                @else
+                                                @case('office')
+                                                    <span><b>Sede</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @default
                                                     @if (is_array($value))
                                                         <span><b>{{ $key }}</b><br>
                                                             {{ implode(', ', $value) }}</span>
@@ -1288,12 +1377,14 @@
                                                     @else
                                                         <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
                                                     @endif
-                                                @endif
-                                        @endswitch
-                                    </td>
-                                    @if ($loop->iteration % 3 == 0)
-                                        </tr>
+                                            @endswitch
+                                        </td>
+                                        @if ($loop->iteration % 3 == 0)
+                                            </tr>
+                                        @endif
+                                        
                                     @endif
+
                                 @endforeach
                                 @if ($loop->count % 3 != 0)
                                     </tr>
