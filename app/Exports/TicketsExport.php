@@ -34,7 +34,7 @@ class TicketsExport implements FromArray, WithColumnFormatting, WithEvents {
         // $tickets = Ticket::where('company_id', $this->company->id)->whereBetween('created_at', [now()->subDays(30)->startOfMonth(), now()->subDays(30)->endOfMonth()])->get();
         $tickets = Ticket::where('company_id', $this->company_id)->whereBetween('created_at', [
             $this->start_date,
-            $this->end_date
+            $this->end_date . ' 23:59:59'
         ])->get();
 
         $ticket_data = [];
