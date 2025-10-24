@@ -363,6 +363,87 @@ class DashboardController extends Controller
         return [];
     }
 
+    
+
+    /**
+     * Recupera le news dei vendor per l'utente corrente basandosi sulle NewsSource abilitate
+     * dell'azienda selezionata. Usa il metodo bySource di NewsController per ottenere
+     * le news di ogni source.
+     *
+     * @return array
+     */
+    private function getUserVendorNewsData(): array
+    {
+        $user = auth()->user();
+
+        $selectedCompany = $user->selectedCompany();
+
+        if (! $selectedCompany) {
+            return [];
+        }
+
+        // Recupera le newsSources abilitate per l'azienda
+        $sources = $selectedCompany->newsSources()->wherePivot('enabled', 1)->get();
+
+        $allNews = [];
+
+        $newsController = new \App\Http\Controllers\NewsController();
+
+        foreach ($sources as $source) {
+            try {
+                // Il metodo bySource ritorna una JsonResponse; chiamiamo direttamente
+                // il metodo e leggiamo il contenuto della risposta.
+                $response = $newsController->bySource($source->slug);
+
+                // Se è un JsonResponse, estraiamo i dati
+                if (method_exists($response, 'getData')) {
+                    $data = $response->getData(true);
+                    if (is_array($data)) {
+                        // Se è una lista di news, aggiungiamo anche i metadati della source
+                        foreach ($data as $item) {
+                            if (is_array($item)) {
+                                $item['news_source'] = [
+                                    'id' => $source->id,
+                                    'display_name' => $source->display_name,
+                                    'slug' => $source->slug,
+                                    'url' => $source->url,
+                                    'type' => $source->type,
+                                ];
+                                $allNews[] = $item;
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignora errori per singola source e continua con le altre
+                continue;
+            }
+        }
+
+        // Ordina tutte le news per published_at desc se presente
+        usort($allNews, function ($a, $b) {
+            $at = $a['published_at'] ?? null;
+            $bt = $b['published_at'] ?? null;
+
+            if ($at === $bt) {
+                return 0;
+            }
+
+            if ($at === null) {
+                return 1;
+            }
+
+            if ($bt === null) {
+                return -1;
+            }
+
+            return strtotime($bt) <=> strtotime($at);
+        });
+
+        // Limitiamo a 10 items per default
+        return array_slice($allNews, 0, 3);
+    }
+
     /**
      * Ottiene i dati per la card "Ultime funzioni utilizzate"
      */
@@ -510,6 +591,14 @@ class DashboardController extends Controller
                 'icon' => 'mdi-laptop',
                 'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato',
             ];
+            $rightCards[] = [
+                'id' => 'user-vendor-news',
+                'type' => 'user-vendor-news',
+                'color' => 'secondary',
+                'content' => 'News dai Fornitori',
+                'icon' => 'mdi-newspaper',
+                'description' => 'News dai Fornitori',
+            ];
         } else {
             // Per gli altri tenant, mostriamo la card new-ticket standard
             $rightCards[] = [
@@ -647,6 +736,9 @@ class DashboardController extends Controller
                     'label' => $user->is_company_admin ? 'Gestione hardware' : 'Visualizza hardware',
                 ];
                 $card['data'] = $this->getUserHardwareStats();
+                break;
+            case 'user-vendor-news':
+                $card['data'] = $this->getUserVendorNewsData();
                 break;
             case 'user-recent-tickets':
                 $card['data'] = $this->getUserRecentTicketsData();
