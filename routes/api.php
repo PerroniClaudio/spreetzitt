@@ -150,6 +150,11 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/companies/{company}/logo', [CompanyController::class, 'uploadLogo']);
     Route::post('/companies/{company}/update-reading-delay-warning', [CompanyController::class, 'updateDelayWarning']);
 
+    Route::get('/companies/{company}/news-sources', [CompanyController::class, 'getNewsSources']);
+    Route::get('/companies/{company}/available-news-sources', [CompanyController::class, 'availableNewsSources']);
+    Route::post('/companies/news-sources', [CompanyController::class, 'addNewsSources']);
+    Route::delete('/companies/{company}/news-sources/{news_source}', [CompanyController::class, 'removeNewsSources']);
+
     // Company Documents Routes
     Route::post('/companies/privacy-policy', [CompanyController::class, 'uploadPrivacyPolicy']);
     Route::post('/companies/cookie-policy', [CompanyController::class, 'uploadCookiePolicy']);

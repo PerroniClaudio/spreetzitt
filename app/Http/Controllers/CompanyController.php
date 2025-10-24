@@ -7,6 +7,7 @@ use App\Http\Requests\CompanyDocumentUploadRequest;
 use App\Models\Brand;
 use App\Models\Company;
 use App\Models\CustomUserGroup;
+use App\Models\NewsSource;
 use App\Models\Supplier;
 use App\Models\TicketType;
 use App\Models\User;
@@ -461,6 +462,70 @@ class CompanyController extends Controller
         ]);
 
         return response(['weeklyTime' => $weeklyTime], 200);
+    }
+
+    // Sorgenti news
+
+    public function getNewsSources(Company $company)
+    {
+        $newsSources = $company->newsSources()->get();
+
+        return response([
+            'newsSources' => $newsSources,
+        ], 200);
+    }
+
+    public function availableNewsSources(Company $company)
+    {
+        $allNewsSources = \App\Models\NewsSource::all();
+
+        $assignedNewsSourcesIds = $company->newsSources()->pluck('news_sources.id')->toArray();
+
+        $availableNewsSources = $allNewsSources->filter(function ($newsSource) use ($assignedNewsSourcesIds) {
+            return ! in_array($newsSource->id, $assignedNewsSourcesIds);
+        })->values();
+
+        return response([
+            'availableNewsSources' => $availableNewsSources,
+        ], 200);
+    }
+
+    public function addNewsSources(Request $request)
+    {
+        $request->validate([
+            'company_id' => 'required|int|exists:companies,id',
+            'news_source_id' => 'required|int|exists:news_sources,id',
+        ]);
+
+        $user = $request->user();
+
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $company = Company::findOrFail($request->company_id);
+        $news_source_id = $request->news_source_id;
+        $company->newsSources()->syncWithoutDetaching($news_source_id);
+
+        return response([
+            'company' => $company,
+        ], 200);
+    }
+
+    public function removeNewsSources(Company $company, NewsSource $news_source, Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user['is_admin']) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $company = Company::findOrFail($company->id);
+        $company->newsSources()->detach($news_source->id);
+
+        return response([
+            'company' => $company,
+        ], 200);
     }
 
     public function uploadLogo(Company $company, Request $request)
