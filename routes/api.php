@@ -96,6 +96,9 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/files', [App\Http\Controllers\TicketController::class, 'storeFiles']);
     Route::post('/ticket/{ticket}/priority-update', [App\Http\Controllers\TicketController::class, 'updateTicketPriority']);
     Route::post('/ticket/{ticket}/billable-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBillable']);
+    Route::post('/ticket/{ticket}/billed-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBilled']);
+    Route::post('/ticket/{ticket}/bill-details-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillDetails']);
+    Route::post('/ticket/{ticket}/billing-info-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillingInfo']);
     Route::get('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'getTicketBlame']);
     Route::post('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
     Route::post('/ticket/{ticket}/blame-update', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
@@ -109,6 +112,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/file/{id}/recover', [App\Http\Controllers\TicketController::class, 'recoverFile']);
     Route::get('/ticket-admin', [App\Http\Controllers\TicketController::class, 'adminGroupsTickets']);
     Route::get('/ticket-admin-billing', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingTickets']);
+    Route::get('/ticket-admin-billing-counters', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingCounters']);
     Route::post('/ticket/{ticket}/assign-to-admin', [App\Http\Controllers\TicketController::class, 'assignToAdminUser']);
     Route::post('/ticket/{ticket}/assign-to-group', [App\Http\Controllers\TicketController::class, 'assignToGroup']);
     Route::get('/ticket/{ticket}/closing-messages', [App\Http\Controllers\TicketController::class, 'closingMessages']);
@@ -116,6 +120,10 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-report/batch', [App\Http\Controllers\TicketController::class, 'batchReport']);
     Route::get('/ticket-types', [App\Http\Controllers\UserController::class, 'ticketTypes']);
     Route::get('/ticket/{ticket}/slave-tickets', [App\Http\Controllers\TicketController::class, 'getSlaveTickets']);
+    Route::get('/ticket/{ticket}/available-scheduling-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableSchedulingTickets']);
+    Route::get('/ticket/{ticket}/connected-to-scheduling', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToScheduling']);
+    Route::post('/ticket/{ticket}/connect-to-scheduling', [App\Http\Controllers\TicketController::class, 'connectToSchedulingTicket']);
+    Route::get('/ticket/{ticket}/scheduling-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketRecapData']);
 
     // Assegnazione ticket
 
@@ -256,6 +264,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket-type-groups/delete', [App\Http\Controllers\TicketTypeController::class, 'deleteGroups']);
     Route::post('/ticket-type-companies', [App\Http\Controllers\TicketTypeController::class, 'updateCompanies']);
     Route::post('/ticket-type/duplicate', [App\Http\Controllers\TicketTypeController::class, 'duplicateTicketType']);
+    Route::post('/ticket-type/{ticketType}/hourly-cost', [App\Http\Controllers\TicketTypeController::class, 'updateHourlyCost']);
 
     // Custom groups
 
@@ -264,6 +273,12 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-type/custom-groups', [App\Http\Controllers\TicketTypeController::class, 'removeCustomGroup']);
     Route::get('/ticket-type/{ticketType}/available-custom-groups', [App\Http\Controllers\TicketTypeController::class, 'getAvailableCustomGroups']);
     Route::post('/ticket-type/{ticketType}/custom-group-exclusive', [App\Http\Controllers\TicketTypeController::class, 'setCustomGroupExclusive']);
+    
+    // Slaves
+
+    Route::get('/ticket-type/{ticketType}/slaves', [App\Http\Controllers\TicketTypeController::class, 'getSlaveTypes']);
+    Route::post('/ticket-type/{ticketType}/slaves', [App\Http\Controllers\TicketTypeController::class, 'editSlaveTypes']);
+    Route::get('/ticket-type/{ticketType}/available-slaves', [App\Http\Controllers\TicketTypeController::class, 'getAvailableSlaveTypes']);
 
     // Ticket Report Routes
 
@@ -311,6 +326,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/hardware-types/{hardwareType}', [App\Http\Controllers\HardwareTypeController::class, 'destroy']);
     Route::get('/hardware-list', [App\Http\Controllers\HardwareController::class, 'index']);
     Route::get('/company-hardware-list/{company}', [App\Http\Controllers\HardwareController::class, 'companyHardwareList']);
+    Route::get('/user-companies-hardware-list/{user}', [App\Http\Controllers\HardwareController::class, 'userCompaniesHardwareList']);
     Route::get('/form-field-hardware-list/{typeFormField}', [App\Http\Controllers\HardwareController::class, 'formFieldHardwareList']);
     Route::get('/hardware-list-full', [App\Http\Controllers\HardwareController::class, 'hardwareListWithTrashed']);
 
@@ -399,4 +415,13 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/all-ticket-stages', [App\Http\Controllers\TicketStageController::class, 'all']);
     Route::get('/ticket-stages-options', [App\Http\Controllers\TicketStageController::class, 'options']);
 
+    Route::get('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'index']);
+    Route::get('/ticket-pro-forma-bill/list/{company}', [App\Http\Controllers\TicketProFormaBillController::class, 'companyProFormaBills']);
+    // Route::get('/ticket-pro-forma-bill/{id}', [App\Http\Controllers\TicketProFormaBillController::class, 'show']);
+    Route::post('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'store']);
+    Route::post('/ticket-pro-forma-bill/regenerate', [App\Http\Controllers\TicketProFormaBillController::class, 'regenerate']);
+    Route::patch('/ticket-pro-forma-bill', [App\Http\Controllers\TicketProFormaBillController::class, 'update']);
+    Route::delete('/ticket-pro-forma-bill/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'destroy']);
+    Route::get('/ticket-pro-forma-bill/preview/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfPreview']);
+    Route::get('/ticket-pro-forma-bill/download/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfDownload']);
 });

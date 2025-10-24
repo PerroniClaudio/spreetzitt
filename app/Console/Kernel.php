@@ -26,6 +26,12 @@ class Kernel extends ConsoleKernel
         if ($isAutoAssignEnabled) {
             $schedule->job(new \App\Jobs\AutoAssignTicket)->everyThirtyMinutes();
         }
+
+        //Send billing reminders
+        $schedule->job(new \App\Jobs\SendBillingReminders)->dailyAt('06:00');
+
+        // Check hourly cost expiration weekly (every Monday at 08:00)
+        $schedule->job(new \App\Jobs\CheckHourlyCostExpiration)->weeklyOn(1, '08:00');
     }
 
     /**

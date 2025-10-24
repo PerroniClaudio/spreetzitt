@@ -36,6 +36,9 @@ class GeneratePdfReport implements ShouldQueue
     {
         //
         $this->report = $report;
+
+        // Aumenta il limite di memoria a 512MB per questo job
+        ini_set('memory_limit', '512M');
     }
 
     /**
@@ -66,11 +69,27 @@ class GeneratePdfReport implements ShouldQueue
                             ->where('created_at', '<=', $report->start_date);
                     }
                 })
+                // Parte aggiunta per usare meno memoria (va modificato anche il resto del codice per usare questo approccio, perchè rende inutilizzabili alcuni metodi)
+                // ->select([
+                //     'id', 'company_id', 'created_at', 'description', 'stage_id', 
+                //     'actual_processing_time', 'is_billable', 'is_billing_validated',
+                //     'work_mode', 'admin_user_id', 'master_id', 'user_id', 'source',
+                //     'priority', 'is_user_error', 'is_form_correct', 'updated_at'
+                // ])
+                // ->with([
+                //     'ticketType:id,name,is_master,category_id',
+                //     'ticketType.category:id,name,is_problem,is_request',
+                //     'user:id,name,surname,is_admin',
+                //     'messages:id,ticket_id,message,created_at,user_id',
+                //     'messages.user:id,name,surname,is_admin'
+                // ])
                 ->get();
 
             if (! $tickets->isEmpty()) {
                 $tickets->load('ticketType');
             }
+
+            $ticketSources = config('app.ticket_sources');
 
             $closedStageId = TicketStage::where('system_key', 'closed')->first()?->id;
 
@@ -87,10 +106,12 @@ class GeneratePdfReport implements ShouldQueue
 
             // Conteggio ticket non fatturabili
             $unbillable_remote_tickets_count = 0;
-            $unbillable_on_site_tickets_count = 0;
+            $unbillable_on_site_normal_tickets_count = 0;
+            $unbillable_on_site_slave_tickets_count = 0;
             // Tempo di lavoro per gestire i ticket non fatturabili (in minuti)
             $unbillable_remote_work_time = 0;
-            $unbillable_on_site_work_time = 0;
+            $unbillable_on_site_normal_work_time = 0;
+            $unbillable_on_site_slave_work_time = 0;
 
             // Conteggio ticket fatturabili
             // $billable_tickets_count = 0;
@@ -119,6 +140,7 @@ class GeneratePdfReport implements ShouldQueue
                     }
 
                     // Se il ticket è ancora aperto bisogna scartarlo e mantenere solo il conteggio. (la query controlla se c'è una chiusura prima della fine del periodo selezionato. se non esiste salta un ciclo)
+                    // Le operazioni non hanno il tempo effettivo impostato, perchè va calcolato dai collegati.
                     if (! TicketStatusUpdate::where('ticket_id', $ticket->id)
                         ->where('type', 'closing')
                         ->where('created_at', '<=', $queryTo)
@@ -128,7 +150,7 @@ class GeneratePdfReport implements ShouldQueue
                         continue;
                     }
 
-                    if (! $ticket->actual_processing_time) {
+                    if (! $ticket->actual_processing_time && !$ticket->ticketType->is_master) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' non ha il tempo di lavoro.';
 
@@ -137,6 +159,12 @@ class GeneratePdfReport implements ShouldQueue
                     if ($ticket->is_billable === null) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' non ha il flag di fatturabilità.';
+
+                        continue;
+                    }
+                    if ($ticket->is_billing_validated != true) {
+                        $loadErrorsOnly = true;
+                        $errorsString .= '- #'.$ticket->id.' non ha la validazione fatturabilità.';
 
                         continue;
                     }
@@ -162,11 +190,20 @@ class GeneratePdfReport implements ShouldQueue
                     if ($ticket->is_billable == 0) {
                         // Anche qui vogliamo escludere gli slave? per ora non faccio niente, poi si vedrà
                         if ($ticket->work_mode == 'on_site') {
-                            $unbillable_on_site_tickets_count++;
-                            $unbillable_on_site_work_time += $ticket->actual_processing_time;
+                            // $unbillable_on_site_tickets_count++;
+                            // $unbillable_on_site_work_time += $ticket->actual_processing_time;
+                            if($ticket->master_id != null) {
+                                // Ticket slave
+                                $unbillable_on_site_slave_tickets_count++;
+                                $unbillable_on_site_slave_work_time += $ticket->actual_processing_time ?? 0;
+                            } else {
+                                // Ticket normale
+                                $unbillable_on_site_normal_tickets_count++;
+                                $unbillable_on_site_normal_work_time += $ticket->actual_processing_time ?? 0;
+                            }
                         } elseif ($ticket->work_mode == 'remote') {
                             $unbillable_remote_tickets_count++;
-                            $unbillable_remote_work_time += $ticket->actual_processing_time;
+                            $unbillable_remote_work_time += $ticket->actual_processing_time ?? 0;
                         }
                     } elseif ($ticket->is_billable == 1) {
                         // $billable_tickets_count++;
@@ -174,10 +211,10 @@ class GeneratePdfReport implements ShouldQueue
                         if ($ticket->master_id == null) {
                             if ($ticket->work_mode == 'on_site') {
                                 $on_site_billable_tickets_count++;
-                                $on_site_billable_work_time += $ticket->actual_processing_time;
+                                $on_site_billable_work_time += $ticket->actual_processing_time ?? 0;
                             } elseif ($ticket->work_mode == 'remote') {
                                 $remote_billable_tickets_count++;
-                                $remote_billable_work_time += $ticket->actual_processing_time;
+                                $remote_billable_work_time += $ticket->actual_processing_time ?? 0;
                             }
                         }
                         // Il ticket è slave e non va sommato il suo tempo
@@ -221,15 +258,37 @@ class GeneratePdfReport implements ShouldQueue
                                 foreach ($value as $index => $hardware_id) {
                                     // Non è detto che l'hardware esista ancora. Se esiste si aggiungono gli altri valori
                                     $hardware = $ticket->hardware()->where('hardware_id', $hardware_id)->first();
+                                    // if ($hardware) {
+                                    //     $webform_data->$key[$index] = $hardware->id.' ('.$hardware->make.' '
+                                    //         .$hardware->model.' '.$hardware->serial_number
+                                    //         .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
+                                    //         .($hardware->support_label ? ' '.$hardware->support_label : '')
+                                    //         .')';
+                                    // } else {
+                                    //     $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
+                                    // }
                                     if ($hardware) {
-                                        $webform_data->$key[$index] = $hardware->id.' ('.$hardware->make.' '
-                                            .$hardware->model.' '.$hardware->serial_number
-                                            .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
-                                            .($hardware->support_label ? ' '.$hardware->support_label : '')
-                                            .')';
+                                        $webform_data->$key[$index] = [
+                                            'id' => $hardware->id,
+                                            'make' => $hardware->make,
+                                            'model' => $hardware->model,
+                                            'serial_number' => $hardware->serial_number,
+                                            'company_asset_number' => $hardware->company_asset_number,
+                                            'support_label' => $hardware->support_label,
+                                        ];
+                                        
+                                            // $hardware->id.' ('.$hardware->make.' '
+                                            // .$hardware->model.' '.$hardware->serial_number
+                                            // .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
+                                            // .($hardware->support_label ? ' '.$hardware->support_label : '')
+                                            // .')';
                                     } else {
-                                        $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
+                                        $webform_data->$key[$index] = [
+                                            'id' => $hardware_id,
+                                        ];
+                                        // $webform_data->$key[$index] = $webform_data->$key[$index].' (assente)';
                                     }
+
                                 }
                             }
                         }
@@ -288,6 +347,7 @@ class GeneratePdfReport implements ShouldQueue
                     $tickets_data[] = [
                         'data' => $ticket,
                         'webform_data' => $webform_data,
+                        'hardware_fields' => $hardwareFields,
                         'status_updates' => $avanzamento,
                         'closing_message' => [
                             'message' => $closingMessage,
@@ -537,12 +597,12 @@ class GeneratePdfReport implements ShouldQueue
                         $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] = 0;
                     }
                     // Incrementa il conteggio per la categoria
-                    $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'];
+                    $tickets_by_billable_time['billable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'] ?? 0;
                 } else {
                     if (! isset($tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']])) {
                         $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] = 0;
                     }
-                    $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'];
+                    $tickets_by_billable_time['unbillable'][$ticket['data']['ticketType']['category']['name']] += $ticket['data']['actual_processing_time'] ?? 0;
                 }
 
                 // Gestore viene inserito nei ticket on-site (sarebbe chi è andato dal cliente)
@@ -559,10 +619,16 @@ class GeneratePdfReport implements ShouldQueue
                     'incident_request' => $ticket['data']['ticketType']['category']['is_problem'] == 1 ? 'Incident' : 'Request',
                     'category' => $ticket['data']['ticketType']['category']['name'],
                     'type' => $ticket['data']['ticketType']['name'],
-                    'opened_by_initials' => $ticket['data']['user']['is_admin'] == 1 ? 'SUP' : (strtoupper($ticket['data']['user']['name'][0]).'. '.$ticket['data']['user']['surname'] ? (strtoupper($ticket['data']['user']['surname'][0]).'.') : ''),
+                    "opened_by_initials" => $ticket['data']['user']['is_admin'] == 1
+                        ? "SUP"
+                        : (
+                            (!empty($ticket['data']['user']['name']) && is_string($ticket['data']['user']['name']) ? strtoupper($ticket['data']['user']['name'][0]) . ". " : "") .
+                              (!empty($ticket['data']['user']['surname']) && is_string($ticket['data']['user']['surname']) ? strtoupper($ticket['data']['user']['surname'][0]) . "." : "")
+                        ),
                     'opened_by' => $ticket['data']['user']['is_admin'] == 1 ? 'Supporto' : $ticket['data']['user']['name'].' '.$ticket['data']['user']['surname'],
                     'opened_at' => \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->format('d/m/Y H:i'),
                     'webform_data' => $ticket['webform_data'],
+                    'hardwareFields' => $ticket['hardware_fields'],
                     'status_updates' => $ticket['status_updates'],
                     'description' => $ticket['data']['description'],
                     'closing_message' => $ticket['closing_message'],
@@ -571,12 +637,14 @@ class GeneratePdfReport implements ShouldQueue
                     'ticket_frontend_url' => env('FRONTEND_URL').'/support/user/ticket/'.$ticket['data']['id'],
                     'current_status' => $current_status,
                     'is_billable' => $ticket['data']['is_billable'],
-                    'actual_processing_time' => $ticket['data']['actual_processing_time'],
+                    'actual_processing_time' => $ticket['data']['actual_processing_time'] ?? 0,
                     'master_id' => $ticket['data']['master_id'],
                     'is_master' => $ticket['data']['ticketType']['is_master'],
                     'slave_ids' => Ticket::where('master_id', $ticket['data']['id'])->pluck('id')->toArray(),
                     'handler_full_name' => $handlerFullName,
                     'work_mode' => $ticket['data']['work_mode'],
+                    'source' => $ticketSources[$ticket['data']['source']] ?? "N/A",
+                    'slaves_actual_processing_time_sum' => $ticket['data']['ticketType']['is_master'] ? Ticket::where('master_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
                 ];
 
                 if (count($ticket['data']['messages']) > 3) {
@@ -999,20 +1067,31 @@ class GeneratePdfReport implements ShouldQueue
 
             // 5 - Provenienza ticket
 
+            // Costruisci array [label, valore]
+            $source_data = [];
+            foreach ($ticketSources as $key => $label) {
+                $source_data[] = [
+                    'label' => $label,
+                    'value' => $ticket_by_source[$key] ?? 0
+                ];
+            }
+
+            // Ordina in base a 'value' decrescente
+            usort($source_data, function($a, $b) {
+                return $b['value'] <=> $a['value'];
+            });
+
+            // Estrai labels e data ordinati
+            $ticketSourcesLabels = array_column($source_data, 'label');
+            $ticketSourcesData = array_column($source_data, 'value');
+
             $ticket_by_source_data = [
                 'type' => 'horizontalBar',
                 'data' => [
-                    'labels' => ['Email', 'Telefono', 'Tecnico onsite', 'Piattaforma', 'Supporto', 'Automatico'],
+                    'labels' => $ticketSourcesLabels,
                     'datasets' => [[
                         'label' => 'Numero di Ticket',
-                        'data' => [
-                            $ticket_by_source['email'] ?? 0,
-                            $ticket_by_source['phone'] ?? 0,
-                            $ticket_by_source['on_site_technician'] ?? 0,
-                            $ticket_by_source['platform'] ?? 0,
-                            $ticket_by_source['internal'] ?? 0,
-                            $ticket_by_source['automatic'] ?? 0,
-                        ],
+                        'data' => $ticketSourcesData,
                         'backgroundColor' => $this->getColorShades(5, true),
                     ]],
                 ],
@@ -1522,9 +1601,11 @@ class GeneratePdfReport implements ShouldQueue
                 'closed_tickets_count' => $closed_tickets_count,
                 'still_open_tickets_count' => $still_open_tickets_count,
                 'other_tickets_count' => $other_tickets_count,
-                'unbillable_on_site_tickets_count' => $unbillable_on_site_tickets_count,
+                'unbillable_on_site_normal_tickets_count' => $unbillable_on_site_normal_tickets_count,
+                'unbillable_on_site_slave_tickets_count' => $unbillable_on_site_slave_tickets_count,
                 'unbillable_remote_tickets_count' => $unbillable_remote_tickets_count,
-                'unbillable_on_site_work_time' => $unbillable_on_site_work_time,
+                'unbillable_on_site_normal_work_time' => $unbillable_on_site_normal_work_time,
+                'unbillable_on_site_slave_work_time' => $unbillable_on_site_slave_work_time,
                 'unbillable_remote_work_time' => $unbillable_remote_work_time,
                 'remote_billable_tickets_count' => $remote_billable_tickets_count,
                 'on_site_billable_tickets_count' => $on_site_billable_tickets_count,
@@ -1586,10 +1667,13 @@ class GeneratePdfReport implements ShouldQueue
                 $shortenedMessage = substr($shortenedMessage, 0, 500).'...';
             }
 
+            $errorLine = $e->getLine();
+            $errorFile = $e->getFile();
             if ($this->attempts() >= $this->tries) {
                 $this->report->is_failed = true;
 
-                $this->report->error_message = 'Error generating the report at '.now().'. '.$shortenedMessage;
+                $this->report->error_message = 'Error generating the report at ' . now() .
+                    ' (line ' . $errorLine . ' in ' . $errorFile . '). ' . $shortenedMessage;
 
                 $this->report->save();
             } else {

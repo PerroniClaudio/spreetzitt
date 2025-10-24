@@ -29,6 +29,7 @@ class User extends Authenticatable
         'zip_code',
         'address',
         'is_admin',
+        'is_superadmin',
         'company_id',
         'is_company_admin',
         'microsoft_token',
@@ -115,6 +116,32 @@ class User extends Authenticatable
 
         return $tickets;
     }
+    
+    /**
+     * get user's tickets as referer IT (seen in the webform message)
+     */
+    public function refererItTickets()
+    {
+        $companiesIds = $this->companies()->pluck('companies.id')->all();
+        if (empty($companiesIds)) {
+            return collect(); // Return an empty collection if the user has no companies
+        }
+        $tickets = Ticket::whereIn('company_id', $companiesIds)
+            ->where('referer_it_id', $this->id)
+            ->with([
+                'user' => function ($query) {
+                    $query->select(['id', 'name', 'surname', 'is_admin', 'is_company_admin', 'is_deleted']); // Specify the columns you want to include
+                },
+                'company' => function ($query) {
+                    $query->select(['id', 'name', 'logo_url']); // Specify the columns you want to include
+                },
+                'referer' => function ($query) {
+                    $query->select(['id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted']); // Specify the columns you want to include
+                },
+            ])->get();
+
+        return $tickets;
+    }
 
     /**
      * get user's tickets merge as user and as referer (seen in the webform message)
@@ -132,7 +159,8 @@ class User extends Authenticatable
                 $query->select(['id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted']); // Specify the columns you want to include
             },
         ])->get()
-            ->merge($this->refererTickets());
+            ->merge($this->refererTickets())
+            ->merge($this->refererItTickets());
         foreach ($ticketsTemp as $ticket) {
             // Nascondere i dati utente se è stato aperto dal supporto. Essendo lato admin al momento non serve
             if ($ticket->user->is_admin) {

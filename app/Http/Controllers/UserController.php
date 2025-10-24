@@ -194,6 +194,7 @@ class UserController extends Controller
             'name' => 'required|string',
             'email' => 'required|string',
             'surname' => 'required|string',
+            'is_superadmin' => 'sometimes|boolean',
         ]);
 
         $req_user = $request->user();
@@ -211,6 +212,28 @@ class UserController extends Controller
             return response([
                 'message' => 'Unauthorized',
             ], 401);
+        }
+
+        // Per essere superadmin deve essere prima admin
+        if ($fields['is_superadmin'] == 1 && ! $user['is_admin']) {
+            return response([
+                'message' => 'A user must be an admin to be a superadmin',
+            ], 400);
+        }
+        // Solo i superadmin possono modificare lo stato di superadmin
+        if (isset($fields['is_superadmin']) && ($fields['is_superadmin'] != $user['is_superadmin']) && ($req_user['is_superadmin'] != 1)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+        // Se c'è solo un utente superadmin non si può togliere lo stato di superadmin
+        if (isset($fields['is_superadmin']) && ($fields['is_superadmin'] == 0) && ($user['is_superadmin'] == 1)) {
+            $superadminCount = User::where('is_superadmin', 1)->count();
+            if ($superadminCount <= 1) {
+                return response([
+                    'message' => 'There must be at least one superadmin',
+                ], 400);
+            }
         }
 
         $updatedFields = [];
@@ -234,6 +257,7 @@ class UserController extends Controller
             'city' => $updatedFields['city'],
             'zip_code' => $updatedFields['zip_code'],
             // 'password' => $updatedFields['password'] ?? $user->password,
+            'is_superadmin' => $updatedFields['is_superadmin'] ?? $user['is_superadmin'],
         ]);
 
         return response([
@@ -252,6 +276,21 @@ class UserController extends Controller
         if ($req_user['is_admin'] == 1 && $id) {
             // In ogni caso si disabilita l'utente, senza eliminarlo.
             $user = User::where('id', $id)->first();
+            if($user->is_superadmin == 1){
+                if($req_user->is_superadmin != 1){
+                    return response([
+                        'message' => 'Unauthorized',
+                    ], 401);
+                }
+                // Se c'è solo un utente superadmin non si può disabilitare
+                $superadminCount = User::where('is_superadmin', 1)->count();
+                if ($superadminCount <= 1) {
+                    return response([
+                        'message' => 'There must be at least one superadmin',
+                    ], 400);
+                }
+            }
+
             $disabled = $user->update([
                 'is_deleted' => true,
             ]);
@@ -284,6 +323,13 @@ class UserController extends Controller
         }
 
         $user = User::where('id', $id)->first();
+
+        if($user->is_superadmin == 1 && ($req_user->is_superadmin != 1)){
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+            
         $enabled = $user->update([
             'is_deleted' => 0,
         ]);
@@ -307,23 +353,27 @@ class UserController extends Controller
         if ($user['is_admin'] == 1) {
             $ticketTypes = collect();
             foreach ($user->groups as $group) {
-                $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with('category')->get());
+                $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with(['category', 'slaveTypes'])->get());
             }
         } else {
             $selectedCompany = $user->selectedCompany();
-            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with('category')->get() : collect();
+            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with(['category', 'slaveTypes'])->get() : collect();
 
             $customGroups = $user->customUserGroups()->get();
             foreach ($customGroups as $customGroup) {
-                $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with('category')->get());
+                $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with(['category', 'slaveTypes'])->get());
             }
 
-            // Gli utenti normali non devono vedere i ticket master, mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
-            if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
-                $ticketTypes = $ticketTypes->filter(function ($ticketType) {
-                    return ! $ticketType->is_master;
-                });
-            }
+            // Gli utenti normali non devono vedere i ticket master (operazioni strutturate), mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
+            // if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
+            //     $ticketTypes = $ticketTypes->filter(function ($ticketType) {
+            //         return ! $ticketType->is_master;
+            //     });
+            // }
+        }
+
+        if ($user->is_superadmin == false) {
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
         }
 
         return response([
@@ -434,9 +484,15 @@ class UserController extends Controller
     {
         $suppliers = Supplier::all()->toArray();
 
-        // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
-        $selectedCompany = $request->user()->selectedCompany();
-        $brands = $selectedCompany ? $selectedCompany->brands()->toArray() : [];
+        $authUser = $request->user();
+
+        if($authUser['is_admin'] == 1){
+            $brands = \App\Models\Brand::all()->toArray();
+        } else {
+            // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
+            $selectedCompany = $request->user()->selectedCompany();
+            $brands = $selectedCompany ? $selectedCompany->brands()->toArray() : [];
+        }
 
         // Filtra i brand omonimo alle aziende interne ed utilizza quello dell'azienda interna con l'id piu basso
         $sameNameSuppliers = array_filter($suppliers, function ($supplier) use ($brands) {

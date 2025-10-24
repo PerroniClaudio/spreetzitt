@@ -8,17 +8,20 @@ use App\Models\TicketType;
 use App\Models\TicketTypeCategory;
 use App\Models\TypeFormFields;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TicketTypeController extends Controller
 {
     /**
      * Display a listing of the resource.
      */
-    public function index()
-    {
+    public function index(Request $request) {
 
         // Si può decidere di non filtrarli prima, nel caso si dovessero vedere in qualche caso nel frontend.
-        $ticketTypes = TicketType::where('is_deleted', false)->with('category')->get();
+        $ticketTypes = TicketType::where("is_deleted", false)->with('category')->get();
+        if($request->user()->is_superadmin == false){
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
+        }
         // $ticketTypes = TicketType::with('category')->get();
 
         return response([
@@ -77,6 +80,9 @@ class TicketTypeController extends Controller
             'default_priority' => 'required|string',
             'default_sla_solve' => 'required|numeric',
             'default_sla_take' => 'required|numeric',
+            'is_master' => 'required|boolean',
+            'is_scheduling' => 'required|boolean',
+            'is_grouping' => 'required|boolean',
         ]);
 
         // $ticketType = TicketType::create($validated);
@@ -155,18 +161,68 @@ class TicketTypeController extends Controller
         //     ], 400);
         // }
 
-        $fillableFields = array_merge(
-            $request->only((new TicketType)->getFillable())
-        );
+        if($request->user()->is_superadmin){
+            $fillableFields = array_merge(
+                $request->only((new TicketType)->getFillable())
+            );
+        } else {        
+            $fillableFields = array_merge(
+                $request->only(array_diff((new TicketType)->getFillable(), ['hourly_cost', 'hourly_cost_expires_at']))
+            );
+        }
+
+        // Se si vuole togliere it_referer_limited su un tipo master, verifica gli slave obbligatori
+        if (
+            isset($fillableFields['it_referer_limited']) && $fillableFields['it_referer_limited'] == 0 &&
+            $ticketType->is_master == 1
+        ) {
+            $requiredSlaves = $ticketType->slaveTypes()->wherePivot('is_required', 1)->get();
+            $hasLimitedSlave = $requiredSlaves->contains(function ($slave) {
+                return $slave->it_referer_limited == 1;
+            });
+            if ($hasLimitedSlave) {
+                // Per sicurezza, nel caso non fosse già a 1 lo si corregge.
+                if($ticketType->it_referer_limited != 1) {
+                    $ticketType->it_referer_limited = 1;
+                    $ticketType->save();
+                }
+                return response([
+                    'message' => 'Non puoi disattivare la limitazione ai referenti IT: uno dei tipi slave obbligatori è limitato ai referenti IT.'
+                ], 400);
+            }
+        }
 
         $ticketType->update($fillableFields);
-
-        // $ticketType->update($validated);
 
         $tt = TicketType::where('id', $ticketType->id)->with('category')->first();
 
         return response([
             'ticketType' => $tt,
+        ], 200);
+    }
+
+    /**
+     * Update hourly cost and expiration date for a ticket type.
+     */
+    public function updateHourlyCost(Request $request, TicketType $ticketType) {
+        $user = $request->user();
+        
+        if (!$user->is_superadmin) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'hourly_cost' => 'nullable|numeric|min:0|max:999999.99',
+            'hourly_cost_expires_at' => 'nullable|date|after:today',
+        ]);
+
+        $ticketType->update($validated);
+
+        $updatedTicketType = TicketType::where('id', $ticketType->id)->with('category')->first();
+
+        return response([
+            'ticketType' => $updatedTicketType,
+            'message' => 'Costo orario aggiornato con successo',
         ], 200);
     }
 
@@ -180,7 +236,14 @@ class TicketTypeController extends Controller
             return response(['message' => 'Unauthorized'], 401);
         }
 
-        $ticketType = TicketType::where('id', $ticketType['id'])->first();
+        $ticketType = TicketType::where('id', $ticketType["id"])->first();
+
+        if($ticketType->masterTypes()->count() > 0){
+            return response([
+                'message' => 'Non è possibile eliminare questo tipo di ticket perché è collegato a uno o più operazioni strutturate. Rimuovere prima quelle associazioni.'
+            ], 400);
+        }
+
         // Modificato quando l'azienda è stata resa facoltativa. se non ha l'azienda non dovrebbe avere nemmeno ticket allegati.
         // quindi si elimina direttamente, altrimenti countRelatedTickets dà errore, perchè passa dall'azienda.
         if ($ticketType->company && $ticketType->countRelatedTickets() > 0) {
@@ -218,6 +281,7 @@ class TicketTypeController extends Controller
 
         return response([
             'webform' => $ticketType->typeFormField,
+            'slaves_with_webforms' => $ticketType->slaveTypes()->with(['category', 'typeFormField'])->get(),
         ], 200);
     }
 
@@ -568,6 +632,105 @@ class TicketTypeController extends Controller
 
         return response([
             'context' => $context,
+        ], 200);
+    }
+
+    function getSlaveTypes(TicketType $ticketType) {
+        $slaveTypes = $ticketType->slaveTypes()->with('category')->get();
+
+        return response([
+            'slaveTypes' => $slaveTypes,
+        ], 200);
+    }
+
+    function editSlaveTypes(TicketType $ticketType, Request $request) {
+        /**
+         * Expected structure:
+         * slave_types = '[{"id": 1, "is_required": true}, {"id": 2, "is_required": false}]'
+         */
+        DB::beginTransaction();
+        try {
+
+            $fields = $request->validate([
+                'slave_types' => 'required|json',
+            ]);
+    
+            $slave_types = json_decode($fields['slave_types'], true);
+    
+            $pivotData = [];
+            foreach ($slave_types as $slave) {
+                $tempTicketType = TicketType::find($slave['id']);
+                if(!$tempTicketType) {
+                    throw new \Exception('Uno dei tipi di ticket selezionati non esiste.');
+                }
+                if($tempTicketType->is_master || $tempTicketType->is_scheduling || $tempTicketType->is_grouping) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non si può collegare. (es. è un tipo operazione strutturata, attività programmata o raggruppamento/master)');
+                }
+                if($tempTicketType->company_id != $ticketType->company_id) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non appartiene alla stessa ' . strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')) . '.');
+                }
+                $pivotData[$slave['id']] = ['is_required' => $slave['is_required']];
+            }
+            $ticketType->slaveTypes()->sync($pivotData);
+    
+            // Se uno degli slave associati ha is_required=1 nella pivot e it_referer_limited=1, aggiorna il master
+            $updatedSlaves = $ticketType->slaveTypes()->get();
+            $refererLimited = false;
+            $warning = null;
+            foreach ($updatedSlaves as $slave) {
+                $pivot = $slave->pivot;
+                if ($pivot && $pivot->is_required == 1 && $slave->it_referer_limited == 1) {
+                    $refererLimited = true;
+                    break;
+                }
+            }
+            if ($refererLimited && ($ticketType->it_referer_limited != 1)) {
+                $ticketType->it_referer_limited = 1;
+                $ticketType->save();
+                $warning = 'Attenzione: Il tipo principale è stato impostato come "Limitato ai referenti IT", perchè uno dei tipi associati è sia obbligatorio che limitato ai referenti IT.';
+            }
+    
+            $slaveTypes = $ticketType->slaveTypes()->get();
+    
+            DB::commit();
+
+            return response([
+                'slaveTypes' => $slaveTypes,
+                'warning' => $warning,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response([
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+    }
+
+    // Prende tutti i possibili tipi di ticket slave 
+    // che si possono associare a questo master type (compresi quelli già associati)
+    function getAvailableSlaveTypes(TicketType $ticketType) {
+        if (!$ticketType->is_master || !$ticketType->company()) {
+            return response([
+                'availableTypes' => [],
+            ], 200);
+        }
+        $allTypes = TicketType::where([
+            ['is_deleted', false],
+            ['company_id', $ticketType->company_id],
+            ['id', '!=', $ticketType->id],
+            ['is_master', false],
+            ['is_scheduling', false],
+            ['is_grouping', false],
+        ])
+        ->with('category')
+        ->get();
+
+        // $availableSlaveTypes = $ticketType->slaveTypes()->get();
+        // $availableTypes = $allTypes->diff($availableSlaveTypes);
+
+
+        return response([
+            'availableSlaveTypes' => $allTypes,
         ], 200);
     }
 }

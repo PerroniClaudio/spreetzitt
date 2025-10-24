@@ -58,7 +58,7 @@ class CompanyController extends Controller
             }
         }
 
-        // Recupera i ticket di tipo master associati alla compagnia
+        // Recupera i ticket di tipo master (operazione strutturata) associati alla compagnia
 
         $tickets = $company->tickets()
             ->whereHas('ticketType', function ($query) {
@@ -269,9 +269,13 @@ class CompanyController extends Controller
     {
         $isMassive = $request->query('is_massive');
         if ($isMassive) {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with('category')->get();
+            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with(['category', 'slaveTypes'])->get();
         } else {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with('category')->get();
+            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with(['category', 'slaveTypes'])->get();
+        }
+
+        if ($request->user()->is_superadmin == false) {
+            $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
         }
 
         return response([
@@ -830,7 +834,7 @@ class CompanyController extends Controller
 
         // Aggiungi contatori per ogni company
         $companies->each(function ($company) use ($closedStageId) {
-            // Conta i ticket master aperti (stage_id != $closedStageId)
+            // Conta i ticket master (operazione strutturata) aperti (stage_id != $closedStageId)
             $company->open_master_tickets_count = $company->tickets()
                 ->where('stage_id', '!=', $closedStageId)
                 ->whereHas('ticketType', function ($query) {
@@ -861,7 +865,7 @@ class CompanyController extends Controller
 
         $closedStageId = \App\Models\TicketStage::where('system_key', 'closed')->value('id');
 
-        // Recupera i ticket di tipo master associati alla compagnia
+        // Recupera i ticket di tipo master (operazione strutturata) associati alla compagnia
 
         $tickets = $company->tickets()
             ->with(['ticketType:id,name', 'handler:id,name,surname', 'user:id,name,surname', 'stage'])

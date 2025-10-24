@@ -39,17 +39,25 @@ class Ticket extends Model
         'is_rejected',
         'parent_ticket_id',
         'is_billable',
+        'is_billed',
+        'bill_identification',
+        'bill_date',
+        'is_billing_validated',
         'master_id',
+        'scheduling_id',
+        'grouping_id',
         'reopen_parent_id',
         'no_user_response',
         'referer_id',
         'referer_it_id',
         'assigned',
         'last_assignment_id',
+        'scheduled_duration',
     ];
 
     protected $casts = [
         'assigned' => 'boolean',
+        'bill_date' => 'date:Y-m-d',
     ];
 
     public function toSearchableArray()
@@ -62,6 +70,20 @@ class Ticket extends Model
             'user_surname' => $this->user->surname,
             'company' => $this->company->name,
         ];
+    }
+
+    protected static function booted()
+    {
+        static::updating(function ($ticket) {
+            // Se is_billing_validated viene impostato a 1, controlla is_billable
+            if (
+                $ticket->isDirty('is_billing_validated') &&
+                $ticket->is_billing_validated == 1 &&
+                is_null($ticket->is_billable)
+            ) {
+                throw new \Exception('Non puoi validare la fatturabilità se non hai prima impostato se il ticket è fatturabile o meno (is_billable).');
+            }
+        });
     }
 
     /* get the owner */
@@ -322,7 +344,7 @@ class Ticket extends Model
     // }
 
     // Dato che c'è già parent (e child/children non c'è ma sarebbe il suo corrispettivo),
-    // per il collegamento tra ticket on site e ticket normali uso master e slave (un ticket on site può avere da 0 a n ticket normali a lui collegati e questi due vengono trattati diversamente nel report).
+    // per il collegamento tra ticket on site e ticket normali uso master (operazione strutturata) e slave (collegato ad operazione strutturata) (un ticket on site può avere da 0 a n ticket normali a lui collegati e questi due vengono trattati diversamente nel report).
     public function master()
     {
         return $this->belongsTo(Ticket::class, 'master_id');
@@ -331,6 +353,15 @@ class Ticket extends Model
     public function slaves()
     {
         return $this->hasMany(Ticket::class, 'master_id');
+    }
+
+    public function schedulingMaster()
+    {
+        return $this->belongsTo(Ticket::class, 'scheduling_id');
+    }
+    public function schedulingSlaves()
+    {
+        return $this->hasMany(Ticket::class, 'scheduling_id');
     }
 
     public function reopenedParent()

@@ -27,6 +27,8 @@ class AuthServiceProvider extends ServiceProvider
             return config('app.frontend_url')."/password-reset/$token?email={$notifiable->getEmailForPasswordReset()}";
         });
 
+        \Illuminate\Support\Facades\Gate::policy(\App\Models\TicketProFormaBill::class, \App\Policies\TicketProFormaBillPolicy::class);
+
         //
     }
 }

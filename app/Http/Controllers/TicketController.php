@@ -151,10 +151,31 @@ class TicketController extends Controller
                     'message' => 'Ticket type not found',
                 ], 404);
             }
-            if ($ticketType->is_master && ($user->is_admin != 1)) {
+
+            if($ticketType->is_scheduling == 1 && !$request->scheduledDuration){
                 return response([
-                    'message' => 'Only support admins can create master tickets.',
-                ], 401);
+                    'message' => 'La durata pianificata è obbligatoria per questo tipo di ticket',
+                ], 400);
+            }
+
+            $slaveTicketsRequest = collect();
+            if ($ticketType->is_master == 1) {
+
+                $slaveTypes = $ticketType->slaveTypes();
+                
+                $decodedSlaveTickets = $request->slaveTickets ? json_decode($request->slaveTickets, true) : [];
+                $slaveTicketsRequest = collect($decodedSlaveTickets);
+
+                if (
+                    !isset($request->slaveTickets) ||
+                    ($slaveTypes->wherePivot('is_required', 1)->pluck('ticket_types.id')->diff($slaveTicketsRequest->pluck('type_id'))->count() > 0)
+                ) {
+                    return response([
+                        'message' => 'Dati mancanti o incompleti per i ticket collegati. ' 
+                        . $slaveTypes->wherePivot('is_required', 1)->pluck('id')->diff($slaveTicketsRequest->pluck('type_id'))->count()
+                        . ' di '. $slaveTypes->wherePivot('is_required', 1)->count(),
+                    ], 400);
+                }
             }
 
             // Admin o con ticketType.company_id tra le sue aziende
@@ -185,6 +206,7 @@ class TicketController extends Controller
                 'is_billable' => $ticketType['expected_is_billable'],
                 'referer_it_id' => $request->referer_it ?? null,
                 'referer_id' => $request->referer ?? null,
+                'scheduled_duration' => $request->scheduledDuration ?? null,
             ]);
 
             if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
@@ -318,11 +340,12 @@ class TicketController extends Controller
                     $hardwareIds = $request['messageData'][$field->field_label];
                     foreach ($hardwareIds as $id) {
                         $hardware = Hardware::find($id);
-                        if ($hardware) {
-                            $ticket->hardware()->syncWithoutDetaching($id);
-                            if (! in_array($id, $addedHardware)) {
-                                $addedHardware[] = $id;
-                            }
+                        if (!$hardware) {
+                            throw new \Exception('Hardware con id '.$id.' non trovato.');
+                        }
+                        $ticket->hardware()->syncWithoutDetaching($id);
+                        if (! in_array($id, $addedHardware)) {
+                            $addedHardware[] = $id;
                         }
                     }
                 }
@@ -336,6 +359,18 @@ class TicketController extends Controller
                     'hardware_ids' => $addedHardware,
                 ]),
             ]);
+
+            $additionalInformationsForSlaveTickets = array_filter([
+                'office' => $request['messageData']['office'] ?? null,
+                'referer' => $request['referer'] ?? null,
+                'referer_it' => $request['referer_it'] ?? null,
+            ], function ($value) {
+                return $value !== null;
+            });
+
+            foreach ($slaveTicketsRequest as $slaveTicketToStore) {
+                $this->storeSlaveTickets($slaveTicketToStore, $ticket, $additionalInformationsForSlaveTickets);
+            }
 
             DB::commit();
 
@@ -358,6 +393,214 @@ class TicketController extends Controller
                 'message' => 'Errore durante la creazione del ticket: '.$e->getMessage(),
             ], 500);
         }
+    }
+
+    private function storeSlaveTickets($slaveTicketToStore, $masterTicket, $additionalInformationsForSlaveTickets)
+    {
+        try {
+            $user = $masterTicket->user;
+            $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
+
+            $ticketType = TicketType::find($slaveTicketToStore['type_id']);
+            $group = $ticketType->groups->first();
+            $groupId = $group ? $group->id : null;
+
+            if (!$ticketType) {
+                throw new \Exception('Tipo di ticket non trovato.' . $slaveTicketToStore['type_id']);
+            }
+            if ($masterTicket->company_id != $ticketType->company_id) {
+                throw new \Exception('Il tipo di ticket non appartiene alla stessa compagnia del ticket master. Master: ' . $masterTicket->company_id . ' - Collegato: ' . $ticketType->company_id);
+            }
+            if ($ticketType->is_master == 1) {
+                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: ' . $ticketType->name);
+            }
+            if ($ticketType->is_scheduling == 1) {
+                throw new \Exception('Non si può collegare un\'attività pianificata a un\'operazione strutturata. Tipo: ' . $ticketType->name);
+            }
+            if ($ticketType->is_grouping == 1) {
+                throw new \Exception('Non si può collegare un\'ticket di raggruppamento a un\'operazione strutturata. Tipo: ' . $ticketType->name);
+            }
+
+            $newSlaveTicket = Ticket::create([
+                'description' => $slaveTicketToStore['description'],
+                'type_id' => $slaveTicketToStore['type_id'],
+                'group_id' => $groupId,
+                'user_id' => $masterTicket->user_id,
+                'status' => '0', // per il momento lo lasciamo perchè non ha un valore di default. Poi questo campo verrà eliminato.
+                'stage_id' => $newTicketStageId,
+                'company_id' => $masterTicket->company_id ?? $ticketType->company_id,
+                'file' => null,
+                'duration' => 0,
+                'sla_take' => $ticketType['default_sla_take'],
+                'sla_solve' => $ticketType['default_sla_solve'],
+                'priority' => $ticketType['default_priority'],
+                'unread_mess_for_adm' => $user['is_admin'] == 1 ? 0 : 1,
+                'unread_mess_for_usr' => $user['is_admin'] == 1 ? 1 : 0,
+                'source' => $user['is_admin'] == 1 ? ($masterTicket->source ?? null) : 'platform',
+                'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
+                'is_billable' => $ticketType['expected_is_billable'],
+                'referer_it_id' => $masterTicket->referer_it_id ?? null,
+                'referer_id' => $masterTicket->referer_id ?? null,
+                'master_id' => $masterTicket->id,
+            ]);
+
+            if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
+                $domustartTicket = DomustartTicket::firstOrNew(['id' => $newSlaveTicket->id]);
+                $domustartTicket->is_visible_all_users = $masterTicket->is_visible_all_users ? 1 : 0;
+                $domustartTicket->is_visible_admin = $masterTicket->is_visible_admin ? 1 : 0;
+                $domustartTicket->save();
+            }
+
+            // Al momento il parent ticket si prende dal master ticket se serve. (non si riporta nello slave)
+            // if ($request->parent_ticket_id) {
+            //     $parentTicket = Ticket::find($request->parent_ticket_id);
+            //     if ($parentTicket) {
+            //         // Se il padre ha già un figlio non può averne un altro.
+            //         if (Ticket::where('parent_ticket_id', $parentTicket->id)->exists()) {
+            //             return response([
+            //                 'message' => 'Il ticket padre ha già un figlio. Impossibile associarne altri.',
+            //             ], 400);
+            //         }
+
+            //         $ticket->parent_ticket_id = $parentTicket->id;
+            //         $ticket->save();
+
+            //         // Salva lo stato del ticket prima di modificarlo
+            //         $parentOldStageId = $parentTicket->stage_id;
+
+            //         // Chiude il ticket padre, segnala che il ticket procede in quello nuovo
+            //         $parentTicket->stage_id = $closedTicketStageId;
+            //         $parentTicket->is_rejected = 1;
+            //         $parentTicket->is_form_correct = 0;
+
+            //         $parentTicket->save();
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $parentTicket->id,
+            //             'user_id' => $user->id,
+            //             'old_stage_id' => $parentOldStageId,
+            //             'new_stage_id' => $closedTicketStageId,
+            //             'content' => 'Ticket chiuso automaticamente in quanto è stato aperto un nuovo ticket collegato: '.$ticket->id,
+            //             'type' => 'closing',
+            //         ]);
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $ticket->id,
+            //             'user_id' => $user->id,
+            //             'content' => 'Questo ticket è stato aperto come continuazione del ticket: '.$parentTicket->id,
+            //             'type' => 'note',
+            //         ]);
+
+            //         // Invalida la cache per chi ha creato il ticket e per i referenti.
+
+            //         $parentTicket->invalidateCache();
+            //     }
+            // }
+
+            // Se è una riapertura si vede dal master ticket. non si riporta nello slave.
+            // Richiesta di riapertura ticket. Tutti possono riaprire un ticket, entro 7 giorni dalla chiusura.
+            // if ($request->reopen_parent_ticket_id) {
+            //     $reopenedTicket = Ticket::find($request->reopen_parent_ticket_id);
+            //     if ($reopenedTicket) {
+            //         if ($reopenedTicket->stage_id != $closedTicketStageId) {
+            //             return response([
+            //                 'message' => 'Il ticket non è chiuso. Impossibile riaprirlo.',
+            //             ], 400);
+            //         }
+            //         // Se il ticket con l'id da inserire in reopen_parent_id è già stato riaperto, non può essere riaperto di nuovo (si dovrebbe riaprire quello successivo).
+            //         $existingChildTicket = Ticket::where('reopen_parent_id', $reopenedTicket->id)->first();
+            //         if ($existingChildTicket) {
+            //             return response([
+            //                 'message' => 'Il ticket è già stato riaperto. Impossibile riaprirlo nuovamente. Provare col ticket '.$existingChildTicket->id,
+            //             ], 400);
+            //         }
+
+            //         // Se il ticket è stato chiuso e sono passati più di 7 giorni dalla chiusura, non può essere riaperto.
+            //         $can_reopen = false;
+            //         $closingUpdate = $reopenedTicket->statusUpdates()
+            //             ->where('type', 'closing')
+            //             ->orderBy('created_at', 'desc')
+            //             ->first();
+            //         if ($closingUpdate) {
+            //             $can_reopen = (time() - strtotime($closingUpdate->created_at)) < (7 * 24 * 60 * 60);
+            //         }
+            //         if (! $can_reopen) {
+            //             return response([
+            //                 'message' => 'Il ticket è stato chiuso da più di 7 giorni. Impossibile riaprirlo.',
+            //             ], 400);
+            //         }
+
+            //         $ticket->reopen_parent_id = $reopenedTicket->id;
+            //         $ticket->save();
+
+            //         TicketStatusUpdate::create([
+            //             'ticket_id' => $ticket->id,
+            //             'user_id' => $user->id,
+            //             'content' => 'Questo ticket è stato aperto come riapertura del ticket: '.$reopenedTicket->id,
+            //             'type' => 'note',
+            //         ]);
+
+            //         // Invalida la cache per chi ha creato il ticket e per i referenti.
+            //         // Anche se non ci sono modifiche al modello la invalidiamo perchè nella risposta potremmo inserire dati sulla riapertura.
+            //         $reopenedTicket->invalidateCache();
+            //     }
+            // }
+
+            // if ($request->file('file') != null) {
+            //     $file = $request->file('file');
+            //     $file_name = time().'_'.$file->getClientOriginalName();
+            //     $storeFile = FileUploadController::storeFile($file, 'tickets/'.$ticket->id.'/', $file_name);
+            //     $ticket->update([
+            //         'file' => $file_name,
+            //     ]);
+            // }
+
+            $slaveTicketToStore['messageData'] = array_merge($slaveTicketToStore['messageData'], $additionalInformationsForSlaveTickets);
+            TicketMessage::create([
+                'ticket_id' => $newSlaveTicket->id,
+                'user_id' => $user->id,
+                'message' => json_encode($slaveTicketToStore['messageData']),
+                // 'is_read' => 1
+            ]);
+
+            TicketMessage::create([
+                'ticket_id' => $newSlaveTicket->id,
+                'user_id' => $user->id,
+                'message' => $slaveTicketToStore['description'],
+                // 'is_read' => 0
+            ]);
+
+            // Associazioni ticket-hardware
+            $hardwareFields = $ticketType->typeHardwareFormField();
+            $addedHardware = [];
+            foreach ($hardwareFields as $field) {
+                if (isset($slaveTicketToStore['messageData'][$field->field_label])) {
+                    $hardwareIds = $slaveTicketToStore['messageData'][$field->field_label];
+                    foreach ($hardwareIds as $id) {
+                        $hardware = Hardware::find($id);
+                        if (!$hardware) {
+                            throw new \Exception('Hardware con id '.$id.' non trovato.');
+                        }
+                        $newSlaveTicket->hardware()->syncWithoutDetaching($id);
+                        if (! in_array($id, $addedHardware)) {
+                            $addedHardware[] = $id;
+                        }
+                    }
+                }
+            }
+            HardwareAuditLog::create([
+                'modified_by' => $user->id,
+                'log_subject' => 'hardware_ticket',
+                'log_type' => 'create',
+                'new_data' => json_encode([
+                    'ticket_id' => $newSlaveTicket->id,
+                    'hardware_ids' => $addedHardware,
+                ]),
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw new \Exception('Dati mancanti o non validi per i ticket collegati. ' . $e->getMessage());
+        }
+        
     }
 
     /**
@@ -435,6 +678,12 @@ class TicketController extends Controller
         $this->maskSupportUserIfNeeded($user, $ticket);
         $this->markMessagesAsRead($user, $ticket);
         $this->addVirtualFields($ticket);
+
+        // Aggiungere alla fine i dati che servono solo nella risposta e non vanno salvati nel DB
+        if($ticket->ticketType->is_master == 1 && $user->is_master == 1){
+            // Usa setAttribute invece di assegnazione diretta per evitare che venga considerato "dirty"
+            $ticket->setAttribute('slavesActualProcessingTimesSum', $ticket->slaves()->sum('actual_processing_time') ?? 0);
+        }
 
         return response([
             'ticket' => $ticket,
@@ -662,13 +911,64 @@ class TicketController extends Controller
         $ticket->is_billable = $fields['is_billable'];
         $isValueChanged = $ticket->isDirty('is_billable');
 
+        if (! $isValueChanged) {
+            return response([
+                'message' => 'Nessuna modifica apportata alla fatturabilità del ticket.',
+            ], 400);
+        }
+
+        if ($ticket->is_billing_validated == 1) {
+            // Se la fatturabilità è già stata validata, non può essere modificata.
+            return response([
+                'message' => 'La fatturabilità del ticket è già stata validata. Non può essere modificata.',
+            ], 400);
+        }
+
+        $ticket->save();
+
+        // Refresh del ticket per assicurarsi che i cast siano applicati
+        $ticket->refresh();
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $request->user()->id,
+            'content' => 'Ticket impostato come: '.($fields['is_billable'] ? 'Fatturabile' : 'Non fatturabile'),
+            'type' => 'billing',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketIsBilled(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'is_billed' => 'required|boolean',
+        ]);
+
+        if ($request->user()['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        // Verifica se il campo 'is_billed' è stato modificato
+        $ticket->is_billed = $fields['is_billed'];
+        $isValueChanged = $ticket->isDirty('is_billed');
+
         if ($isValueChanged) {
             $ticket->save();
+
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
 
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $request->user()->id,
-                'content' => 'Ticket impostato come: '.($fields['is_billable'] ? 'Fatturabile' : 'Non fatturabile'),
+                'content' => 'Ticket impostato come: '.($fields['is_billed'] ? 'Fatturato' : 'Non fatturato'),
                 'type' => 'billing',
             ]);
 
@@ -677,6 +977,142 @@ class TicketController extends Controller
 
         return response([
             'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketBillDetails(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'bill_identification' => 'nullable|string|max:255',
+            'bill_date' => 'nullable|date',
+        ]);
+
+        if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
+            return response([
+                'message' => 'The user must be superadmin.',
+            ], 401);
+        }
+
+        // Verifica se almeno uno dei campi è stato modificato
+        $ticket->bill_identification = $fields['bill_identification'];
+        $ticket->bill_date = $fields['bill_date'];
+
+        $isValueChanged = $ticket->isDirty('bill_identification') || $ticket->isDirty('bill_date');
+
+        if ($isValueChanged) {
+            $ticket->save();
+
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
+
+            $update = TicketStatusUpdate::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $request->user()->id,
+                'content' => 'Dettagli fatturazione aggiornati: '.
+                    'ID Fattura: '.($fields['bill_identification'] ?? 'N/A').', '.
+                    'Data: '.($fields['bill_date'] ? date('d/m/Y', strtotime($fields['bill_date'])) : 'N/A'),
+                'type' => 'billing',
+            ]);
+
+            dispatch(new SendUpdateEmail($update));
+        }
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketBillingInfo(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'is_billable' => 'nullable|boolean',
+            'is_billed' => 'nullable|boolean',
+            'bill_identification' => 'nullable|string|max:255',
+            'bill_date' => 'nullable|date',
+            'is_billing_validated' => 'sometimes|boolean',
+        ]);
+
+        if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
+            return response([
+                'message' => 'The user must be superadmin.',
+            ], 401);
+        }
+
+        // Validazione custom: is_billing_validated può essere impostato solo se is_billable è stato impostato (true o false, ma non null)
+        if (isset($fields['is_billing_validated'])) {
+            // Determina il valore finale di is_billable considerando che null nella richiesta significa "mantieni il valore corrente"
+            $finalIsBillable = (isset($fields['is_billable']) && ($fields['is_billable'] !== null))
+                ? $fields['is_billable']
+                : $ticket->is_billable;
+
+            if ($fields['is_billing_validated'] == 1 && ($finalIsBillable === null)) {
+                return response([
+                    'message' => 'Non è possibile validare la fatturazione se la fatturabilità del ticket non è ancora stata definita.',
+                    'error' => 'is_billing_validated can only be set to true when is_billable has been explicitly set (true or false)',
+                ], 422);
+            }
+        }
+
+        $changes = [];
+        $originalValues = [];
+
+        // Prepara i campi da aggiornare e traccia le modifiche
+        foreach ($fields as $field => $value) {
+            if ($value !== null && $value !== $ticket->$field) {
+                $originalValues[$field] = $ticket->$field;
+                $ticket->$field = $value;
+                $changes[$field] = $value;
+            }
+        }
+
+        // Se non ci sono modifiche, restituisce il ticket senza salvare
+        if (empty($changes)) {
+            return response([
+                'ticket' => $ticket,
+                'message' => 'Nessuna modifica rilevata.',
+            ], 200);
+        }
+
+        $ticket->save();
+
+        // Refresh del ticket per assicurarsi che i cast siano applicati
+        $ticket->refresh();
+
+        // Genera il messaggio di log dettagliato
+        $logMessages = [];
+
+        if (isset($changes['is_billable'])) {
+            $logMessages[] = 'Fatturabilità: '.($changes['is_billable'] ? 'Fatturabile' : 'Non fatturabile');
+        }
+
+        if (isset($changes['is_billed'])) {
+            $logMessages[] = 'Fatturazione: '.($changes['is_billed'] ? 'Fatturato' : 'Non fatturato');
+        }
+
+        if (isset($changes['bill_identification'])) {
+            $logMessages[] = 'ID Fattura: '.($changes['bill_identification'] ?? 'Rimosso');
+        }
+
+        if (isset($changes['bill_date'])) {
+            $logMessages[] = 'Data Fatturazione: '.($changes['bill_date'] ? date('d/m/Y', strtotime($changes['bill_date'])) : 'Rimossa');
+        }
+
+        if (isset($changes['is_billing_validated'])) {
+            $logMessages[] = 'Validazione: '.($changes['is_billing_validated'] ? 'Validato' : 'Non validato');
+        }
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $request->user()->id,
+            'content' => 'Informazioni fatturazione aggiornate: '.implode(', ', $logMessages),
+            'type' => 'billing',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+        return response([
+            'ticket' => $ticket,
+            'changes' => $changes,
         ], 200);
     }
 
@@ -764,14 +1200,20 @@ class TicketController extends Controller
             ], 401);
         }
 
+        if($ticket->ticketType->is_master == 1) {
+            return response([
+                'message' => 'Non è possibile modificare il tempo di lavorazione effettivo di un\'operazione strutturata. Va calcolato sommando i tempi dei ticket collegati.',
+            ], 400);
+        }
+
         // Se il valore è diverso da quello già esistente, lo aggiorna
         if ($ticket->actual_processing_time != $fields['actual_processing_time']) {
             // Controlli vari sul tempo e poi aggiornamento dati e registrazione modifica.
 
-            // Il tempo deve essere maggiore di 0, un multiplo di 10 minuti e almeno uguale al tempo atteso, se impostato.
-            if ($fields['actual_processing_time'] <= 0) {
+            // Il tempo deve essere maggiore o uguale a 0 e un multiplo di 10 minuti, anche per i ticket ancora aperti.
+            if ($fields['actual_processing_time'] < 0) {
                 return response([
-                    'message' => 'Actual processing time must be greater than 0.',
+                    'message' => 'Actual processing time must be greater than or equal to 0.',
                 ], 400);
             }
             if ($fields['actual_processing_time'] % 10 != 0) {
@@ -779,11 +1221,21 @@ class TicketController extends Controller
                     'message' => 'Actual processing time must be a multiple of 10 minutes.',
                 ], 400);
             }
-            $ticketType = $ticket->ticketType;
-            if ($ticketType->expected_processing_time && ($fields['actual_processing_time'] < $ticketType->expected_processing_time)) {
-                return response([
-                    'message' => 'Actual processing time must be greater than or equal to the expected processing time for this ticket type.',
-                ], 400);
+
+            // Se il ticket è chiuso, il tempo deve essere maggiore di 0 e almeno uguale al tempo atteso, se impostato nel tipo di ticket.
+            if ($ticket->stage_id == TicketStage::where('system_key', 'closed')->value('id')) {
+                if ($fields['actual_processing_time'] < 0) {
+                    return response([
+                        'message' => 'Actual processing time must be greater than 0 for closed tickets.',
+                    ], 400);
+                }
+
+                $ticketType = $ticket->ticketType;
+                if ($ticketType->expected_processing_time && ($fields['actual_processing_time'] < $ticketType->expected_processing_time)) {
+                    return response([
+                        'message' => 'Actual processing time for closed tickets must be greater than or equal to the expected processing time for this ticket type.',
+                    ], 400);
+                }                
             }
 
             $ticket->update([
@@ -848,12 +1300,11 @@ class TicketController extends Controller
 
     public function closeTicket(Ticket $ticket, Request $request)
     {
+        // Non è prevista l'associazione del ticket a un'operazione strutturata, in nessun momento successivo all'apertura della stessa.
         $fields = $request->validate([
             'message' => 'required|string',
-            'actualProcessingTime' => 'required|int',
             'workMode' => 'required|string',
             'isRejected' => 'required|boolean',
-            'masterTicketId' => 'int|nullable',
             'no_user_response' => 'boolean',
         ]);
 
@@ -867,34 +1318,33 @@ class TicketController extends Controller
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $ticketType = $ticket->ticketType;
-        if ($fields['actualProcessingTime'] <= 0 || ($fields['actualProcessingTime'] < ($ticketType->expected_processing_time ?? 0))) {
-            return response([
-                'message' => 'Actual processing time must be set and greater than or equal to the minimum processing time for this ticket type.',
-            ], 400);
-        }
-
-        if ($fields['actualProcessingTime'] % 10 != 0) {
-            return response([
-                'message' => 'Actual processing time must be a multiple of 10 minutes.',
-            ], 400);
-        }
-
-        // Se viene indicato un master_id si controlla che questo ticket non sia master
-        // e che il ticket con l'id indicato esista e sia master. quindi non può essere nemmeno l'id del ticket stesso.
-        if ($request->masterTicketId) {
-            if ($ticket->ticketType->is_master) {
+        
+        // Controlli diversi se il ticket è o meno un'operazione strutturata
+        if($ticketType->is_master == 1) {
+            // Controlla se ci sono ticket slave non ancora chiusi
+            $hasOpenSlaveTickets = $ticket->slaves()->where('stage_id', '!=', $closedTicketStageId)->exists();
+            if ($hasOpenSlaveTickets) {
                 return response([
-                    'message' => 'This is a master ticket. Master ticket cannot be slave.',
+                    'message' => 'Non è possibile chiudere un\'operazione strutturata con ticket collegati ancora aperti.',
                 ], 400);
             }
-            $masterTicket = Ticket::where('id', $request->masterTicketId)
-                ->whereHas('ticketType', function ($query) {
-                    $query->where('is_master', true);
-                })
-                ->first();
-            if (! $masterTicket) {
+            $fields['actualProcessingTime'] = null;
+
+        } else {
+            $request->validate([
+                'actualProcessingTime' => 'required|int',
+            ]);
+            $fields['actualProcessingTime'] = $request->actualProcessingTime;
+
+            if ($fields['actualProcessingTime'] <= 0 || ($fields['actualProcessingTime'] < ($ticketType->expected_processing_time ?? 0))) {
                 return response([
-                    'message' => 'Master ticket not found or not of master type.',
+                    'message' => 'Actual processing time must be set and greater than or equal to the minimum processing time for this ticket type.',
+                ], 400);
+            }
+    
+            if ($fields['actualProcessingTime'] % 10 != 0) {
+                return response([
+                    'message' => 'Actual processing time must be a multiple of 10 minutes.',
                 ], 400);
             }
         }
@@ -929,10 +1379,9 @@ class TicketController extends Controller
 
             $ticket->update([
                 'stage_id' => $closedTicketStageId,
-                'actual_processing_time' => $request->actualProcessingTime,
+                'actual_processing_time' => $fields['actualProcessingTime'],
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
-                'master_id' => $request->masterTicketId,
                 'no_user_response' => $fields['no_user_response'] ?? false,
             ]);
 
@@ -1311,7 +1760,7 @@ class TicketController extends Controller
     }
 
     /**
-     * Show only the tickets belonging to the authenticated admin groups.
+     * Show all tickets (if superadmin) or only the tickets belonging to the authenticated admin groups.
      */
     public function adminGroupsBillingTickets(Request $request)
     {
@@ -1320,33 +1769,109 @@ class TicketController extends Controller
 
         if ($user['is_admin'] != 1) {
             return response([
-                'message' => 'The user must be an admin.',
+                'message' => 'The user must be at least an admin.',
             ], 401);
         }
 
-        $groups = $user->groups;
-
         $withClosed = $request->query('with-closed') == 'true' ? true : false;
         $withSet = $request->query('with-set') == 'true' ? true : false;
+        $withValidated = $request->query('with-validated') == 'true' ? true : false;
+        $companyId = $request->query('company') ? intval($request->query('company')) : null;
 
-        if ($withClosed) {
-            // $tickets = Ticket::whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            if ($withSet) {
-                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->get();
-            } else {
-                $tickets = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            }
+        if ($user['is_superadmin'] == 1) {
+            $ticketsQuery = Ticket::with('stage');
         } else {
+            $groups = $user->groups;
+            $ticketsQuery = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'));
+        }
+
+        if (! $withSet) {
+            $ticketsQuery->where('is_billable', null);
+        }
+        if (! $withClosed) {
             $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
-            if ($withSet) {
-                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->get();
-            } else {
-                $tickets = Ticket::with('stage')->where('stage_id', '!=', $closedStageId)->whereIn('group_id', $groups->pluck('id'))->where('is_billable', null)->get();
-            }
+            $ticketsQuery->where('stage_id', '!=', $closedStageId);
+        }
+        if (! $withValidated) {
+            $ticketsQuery->where('is_billing_validated', false);
+        }
+        if ($companyId) {
+            $ticketsQuery->where('company_id', $companyId);
         }
 
         return response([
-            'tickets' => $tickets,
+            'tickets' => $ticketsQuery->get(),
+        ], 200);
+    }
+
+    /**
+     * Show counters of all tickets (if superadmin) or only those belonging to the authenticated admin groups.
+     */
+    public function adminGroupsBillingCounters(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be at least an admin.',
+            ], 401);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        if ($user['is_superadmin'] == 1) {
+            $counters = [
+                'billable_missing' => 0,
+                'billing_validation_missing' => 0,
+                'billed_missing' => 0,
+                'billed_bill_identification_missing' => 0,
+                'billed_bill_date_missing' => 0,
+                'open_billable_missing' => 0,
+                'open_billing_validation_missing' => 0,
+                'open_billed_missing' => 0,
+                'open_billed_bill_identification_missing' => 0,
+                'open_billed_bill_date_missing' => 0,
+            ];
+            // Singola query ottimizzata per tutti i contatori
+            $counters = DB::selectOne('
+                SELECT 
+                    COUNT(CASE WHEN is_billable IS NULL THEN 1 END) as billable_missing,
+                    COUNT(CASE WHEN is_billing_validated = 0 THEN 1 END) as billing_validation_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billed_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL THEN 1 END) as billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL THEN 1 END) as billed_bill_date_missing,
+                    COUNT(CASE WHEN is_billable IS NULL AND stage_id != ? THEN 1 END) as open_billable_missing,
+                    COUNT(CASE WHEN is_billing_validated = 0 AND stage_id != ? THEN 1 END) as open_billing_validation_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billed_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_date_missing
+                FROM tickets
+            ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
+
+            $counters = [
+                'billable_missing' => $counters->billable_missing,
+                'billing_validation_missing' => $counters->billing_validation_missing,
+                'billed_missing' => $counters->billed_missing,
+                'billed_bill_identification_missing' => $counters->billed_bill_identification_missing,
+                'billed_bill_date_missing' => $counters->billed_bill_date_missing,
+                'open_billable_missing' => $counters->open_billable_missing,
+                'open_billing_validation_missing' => $counters->open_billing_validation_missing,
+                'open_billed_missing' => $counters->open_billed_missing,
+                'open_billed_bill_identification_missing' => $counters->open_billed_bill_identification_missing,
+                'open_billed_bill_date_missing' => $counters->open_billed_bill_date_missing,
+            ];
+        } else {
+            $counters = [
+                'billable_to_set' => 0,
+            ];
+            $groups = $user->groups;
+            $counters['billable_to_set'] += Ticket::whereIn('group_id', $groups->pluck('id'))
+                ->where('is_billable', null)
+                ->count();
+        }
+
+        return response([
+            'counters' => $counters,
         ], 200);
     }
 
@@ -1372,7 +1897,7 @@ class TicketController extends Controller
     }
 
     /**
-     * Get all slave tickets of a master ticket
+     * Prende tutti i ticket associati a questa operazione strutturata.
      */
     public function getSlaveTickets(Ticket $ticket, Request $request)
     {
@@ -1400,6 +1925,8 @@ class TicketController extends Controller
                 'source',
                 'parent_ticket_id',
                 'master_id',
+                'scheduling_id',
+                'grouping_id',
             ]);
             $slaveTicket->user_full_name =
                 $slaveTicket->user->is_admin == 1
@@ -1435,11 +1962,301 @@ class TicketController extends Controller
                     : $referer->name;
                 $slaveTicket->makeVisible(['referer_full_name']);
             }
+            $slaveTicket->ticket_type_name = $slaveTicket->ticketType ? $slaveTicket->ticketType->name : '';
+            $slaveTicket->makeVisible(['ticket_type_name']);
         }
 
         return response([
             'slave_tickets' => $slaveTickets,
         ], 200);
+    }
+
+    public function getAvailableSchedulingTickets (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling == 1) {
+            return response([
+                'message' => 'This is a scheduling ticket. Scheduling tickets cannot be connected to other scheduling tickets.',
+            ], 400);
+        }
+
+        $schedulingTickets = Ticket::whereHas('ticketType', function ($query) {
+            $query->where('is_scheduling', true);
+        })->where('company_id', $ticket->company_id)
+        ->where('id', '!=', $ticket->id)
+        // ->with([
+        //     'referer' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email');
+        //     },
+        //     'refererIt' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email');
+        //     },
+        //     'user' => function ($query) {
+        //         $query->select('id', 'name', 'surname', 'email', 'is_admin');
+        //     },
+        //     'stage' => function ($query) {
+        //         $query->select('id', 'name');
+        //     },
+        //     'ticketType' => function ($query) {
+        //         $query->select('id', 'name', 'is_scheduling');
+        //     },
+        // ])
+        ->get();
+
+        $schedulingTickets->each(function ($schedulingTicket) use ($user) {
+            $schedulingTicket->user_full_name =
+                $schedulingTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$schedulingTicket->user->id : ''))
+                : ($schedulingTicket->user->surname
+                    ? $schedulingTicket->user->surname.' '.strtoupper(substr($schedulingTicket->user->name, 0, 1)).'.'
+                    : $schedulingTicket->user->name
+                );
+            $schedulingTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $schedulingTicket->ticketType;
+            $schedulingTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $schedulingTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $schedulingTicket->adminUser;
+            if ($adminUser) {
+                $schedulingTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $schedulingTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $schedulingTicket->admin_user_full_name = null;
+                $schedulingTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $schedulingTicket->referer;
+            if ($referer) {
+                $schedulingTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $schedulingTicket->makeVisible(['referer_full_name']);
+            }
+        });
+
+        return response([
+            'available_scheduling_tickets' => $schedulingTickets,
+        ], 200);
+    }
+
+    public function connectToSchedulingTicket(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling == 1) {
+            return response([
+                'message' => 'Cannot connect a scheduling ticket to another scheduling ticket.',
+            ], 400);
+        }
+
+        $fields = $request->validate([
+            'scheduling_id' => 'required|int',
+        ]);
+
+        $schedulingTicket = Ticket::where('id', $fields['scheduling_id'])->whereHas('ticketType', function ($query) {
+            $query->where('is_scheduling', true);
+        })->first();
+
+        if (! $schedulingTicket) {
+            return response([
+                'message' => 'Scheduling ticket not found.',
+            ], 404);
+        }
+
+        if ($ticket->scheduling_id == $schedulingTicket->id) {
+            return response([
+                'message' => 'This ticket is already connected to the selected scheduling.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warning = null;
+
+            // Assegna il ticket all'attività programmata
+            $ticket->update(['scheduling_id' => $schedulingTicket->id]);
+
+            // Se il ticket è un master, assegna anche tutti i suoi slave
+            if ($ticket->ticketType->is_master == 1) {
+                $slaveTickets = $ticket->slaves;
+                $slaveCount = $slaveTickets->count();
+                
+                if ($slaveCount > 0) {
+                    foreach ($slaveTickets as $slaveTicket) {
+                        $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                    }
+                    $warning = "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati.";
+                }
+            }
+
+            // Se il ticket ha un master, rimuovi l'associazione del master all'attività programmata, perchè uno dei figli non è più associato.
+            if ($ticket->master_id != null) {
+                $masterTicket = Ticket::find($ticket->master_id);
+                if ($masterTicket && $masterTicket->scheduling_id == $schedulingTicket->id) {
+                    $masterTicket->update(['scheduling_id' => null]);
+                    $warning = "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata.";
+                }
+            }
+
+            DB::commit();
+
+            return response([
+                'ticket' => $ticket,
+                'warning' => $warning,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response([
+                'message' => 'Errore durante il collegamento all\'attività programmata: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function getTicketsConnectedToScheduling(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
+
+        if ($user['is_admin'] != 1 &&
+            ! ($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $connectedTickets = $ticket->schedulingSlaves;
+
+        foreach ($connectedTickets as $connectedTicket) {
+            $connectedTicket->setVisible([
+                'id',
+                'company_id',
+                'stage_id',
+                'description',
+                'group_id',
+                'created_at',
+                'type_id',
+                'source',
+                'parent_ticket_id',
+                'master_id',
+                'scheduling_id',
+                'grouping_id',
+            ]);
+            $connectedTicket->user_full_name =
+                $connectedTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$connectedTicket->user->id : ''))
+                : ($connectedTicket->user->surname
+                    ? $connectedTicket->user->surname.' '.strtoupper(substr($connectedTicket->user->name, 0, 1)).'.'
+                    : $connectedTicket->user->name
+                );
+            $connectedTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $connectedTicket->ticketType;
+            $connectedTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $connectedTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $connectedTicket->adminUser;
+            if ($adminUser) {
+                $connectedTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $connectedTicket->admin_user_full_name = null;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $connectedTicket->referer;
+            if ($referer) {
+                $connectedTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $connectedTicket->makeVisible(['referer_full_name']);
+            }
+            $connectedTicket->ticket_type_name = $connectedTicket->ticketType ? $connectedTicket->ticketType->name : '';
+            $connectedTicket->makeVisible(['ticket_type_name']);
+        }
+
+        return response([
+            'connected_tickets' => $connectedTickets,
+        ], 200);
+    }
+
+    public function getSchedulingTicketRecapData (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_scheduling != 1) {
+            return response([
+                'message' => 'This is not a scheduling ticket.',
+            ], 400);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+        
+        // Recupera tutti i ticket collegati a questa attività programmata
+        $schedulingSlaves = $ticket->schedulingSlaves;
+        
+        // Conteggio totale
+        $totalCount = $schedulingSlaves->count();
+        
+        // Separa aperti e chiusi
+        $closedSlaves = $schedulingSlaves->where('stage_id', $closedStageId);
+        $openSlaves = $schedulingSlaves->where('stage_id', '!=', $closedStageId);
+        
+        $closedCount = $closedSlaves->count();
+        $openCount = $openSlaves->count();
+        
+        // Tempo totale dei ticket chiusi
+        $totalClosedProcessingTime = $closedSlaves->sum('actual_processing_time') ?? 0;
+        
+        // Tempo totale dei ticket ancora aperti (tempo parziale)
+        $totalOpenProcessingTime = $openSlaves->sum('actual_processing_time') ?? 0;
+        
+        $recapData = [
+            'scheduled_duration' => $ticket->scheduled_duration,
+            'total_slaves_count' => $totalCount,
+            'closed_slaves_count' => $closedCount,
+            'open_slaves_count' => $openCount,
+            'total_closed_processing_time' => $totalClosedProcessingTime,
+            'total_open_processing_time' => $totalOpenProcessingTime,
+            'total_processing_time' => $totalClosedProcessingTime + $totalOpenProcessingTime,
+            'scheduling_ticket_processing_time' => $ticket->actual_processing_time ?? 0,
+        ];
+
+        return response([
+            'recap_data' => $recapData,
+        ], 200);
+
     }
 
     public function report(Ticket $ticket, Request $request)

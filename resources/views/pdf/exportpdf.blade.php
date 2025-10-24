@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 
+@php 
+    $ticketSources = config('app.ticket_sources'); 
+@endphp
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,11 +19,11 @@
 
         <div>
             @php
-                $imgData = @file_get_contents($logo_url);
+                $imgData = !empty($logo_url) ? @file_get_contents($logo_url) : false;
             @endphp
             @if ($imgData !== false)
                 <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="iftlogo"
-                    style="width: 192px; height: 38px; position: absolute; top: 0; left: 0;">
+                    style="width: auto; height: 38px; position: absolute; top: 0; left: 0;">
             @else
                 <span>Immagine non disponibile</span>
             @endif
@@ -56,7 +60,7 @@
     <div class="card">
         <p style="margin-bottom: 0.5rem;"><b>Conteggio e fatturabilità ticket</b></p>
         <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-            In caso di ticket Master e collegati, viene conteggiato solo il tempo del ticket Master.
+            In caso di operazioni strutturate e ticket a esse collegati, viene conteggiato solo il tempo dell'operazione strutturata.
             <br>
             Per "Remoto fatturabile" si intendono ad esempio: attività di progetto, non incluse nel contratto, ecc.
         </p>
@@ -66,8 +70,8 @@
                 $on_site_billable_tickets_count + $remote_billable_tickets_count;
             $total_billable_work_time = $on_site_billable_work_time + $remote_billable_work_time;
             $total_unbillable_tickets_count =
-                $unbillable_on_site_tickets_count + $unbillable_remote_tickets_count;
-            $total_unbillable_work_time = $unbillable_on_site_work_time + $unbillable_remote_work_time;
+                $unbillable_on_site_normal_tickets_count + $unbillable_on_site_slave_tickets_count + $unbillable_remote_tickets_count;
+            $total_unbillable_work_time = $unbillable_on_site_normal_work_time + $unbillable_on_site_slave_work_time + $unbillable_remote_work_time;
         @endphp
 
         <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
@@ -75,7 +79,7 @@
             <thead>
                 <tr style="border: 1px solid #353131;">
                     <th style="border: 1px solid #353131;" class="text-small-plus  ">
-                        Descrizione delle attività
+                        Descrizione delle attività che andranno in fattura
                     </th>
                     <th style="border: 1px solid #353131; width:15%;" class="text-small-plus  ">
                         Conteggio ticket
@@ -148,7 +152,7 @@
             <thead>
                 <tr style="border: 1px solid #353131;">
                     <th style="border: 1px solid #353131;" class="text-small-plus  ">
-                        Descrizione delle attività
+                        Descrizione delle attività incluse nelle operazioni strutturate o nel contratto accordi di servizio
                     </th>
                     <th style="border: 1px solid #353131; width:15%;" class="text-small-plus  ">
                         Conteggio ticket
@@ -162,17 +166,34 @@
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività onsite incluse nel contratto quadro/accordi di servizio
+                            Attività onsite incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un'operazione strutturata)
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ $unbillable_on_site_tickets_count }}
+                            {{ $unbillable_on_site_normal_tickets_count }}
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ sprintf('%02d:%02d', intdiv($unbillable_on_site_work_time, 60), $unbillable_on_site_work_time % 60) }}
+                            {{ sprintf('%02d:%02d', intdiv($unbillable_on_site_normal_work_time, 60), $unbillable_on_site_normal_work_time % 60) }}
+                        </p>
+                    </td>
+                </tr>
+                <tr style="border: 1px solid #353131;">
+                    <td style="border: 1px solid #353131; padding-left: 0.5rem;">
+                        <p class="text-small-plus">
+                            Attività onsite non fatturabili incluse in un'operazione strutturata
+                        </p>
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        <p class="text-small-plus " style="font-weight: 600">
+                            {{ $unbillable_on_site_slave_tickets_count }}
+                        </p>
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        <p class="text-small-plus " style="font-weight: 600">
+                            {{ sprintf('%02d:%02d', intdiv($unbillable_on_site_slave_work_time, 60), $unbillable_on_site_slave_work_time % 60) }}
                         </p>
                     </td>
                 </tr>
@@ -234,7 +255,7 @@
             <tr>
                 <td>
                     @php
-                        $imgData = @file_get_contents($ticket_by_billable_time_url);
+                        $imgData = !empty($ticket_by_billable_time_url) ? @file_get_contents($ticket_by_billable_time_url) : false;
                     @endphp
                     @if ($imgData !== false)
                         <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -246,7 +267,7 @@
 
                 <td>
                     @php
-                        $imgData = @file_get_contents($ticket_by_unbillable_time_url);
+                        $imgData = !empty($ticket_by_unbillable_time_url) ? @file_get_contents($ticket_by_unbillable_time_url) : false;
                     @endphp
                     @if ($imgData !== false)
                         <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -274,7 +295,7 @@
             {{-- Tabella ticket fatturabili col dettaglio del tempo, divisi per categoria --}}
             <p style="margin-bottom: 0.5rem;"><b>Tempo di gestione ticket fatturabili per categoria</b></p>
             <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati ai master.
+                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati alle operazioni strutturate.
             </p>
     
             <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
@@ -492,7 +513,7 @@
                 <tr>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_category_url);
+                            $imgData = !empty($ticket_by_category_url) ? @file_get_contents($ticket_by_category_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -503,7 +524,7 @@
                     </td>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_source_url);
+                            $imgData = !empty($ticket_by_source_url) ? @file_get_contents($ticket_by_source_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -517,7 +538,7 @@
                 <tr>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_weekday_url);
+                            $imgData = !empty($ticket_by_weekday_url) ? @file_get_contents($ticket_by_weekday_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -530,7 +551,7 @@
                     @if ($dates_are_more_than_one_month_apart)
                         <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                             @php
-                                $imgData = @file_get_contents($ticket_per_month_url);
+                                $imgData = !empty($ticket_per_month_url) ? @file_get_contents($ticket_per_month_url) : false;
                             @endphp
                             @if ($imgData !== false)
                                 <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -554,7 +575,7 @@
                             <tr>
                                 <td>
                                     @php
-                                        $imgData = @file_get_contents($ticket_by_priority_url);
+                                        $imgData = !empty($ticket_by_priority_url) ? @file_get_contents($ticket_by_priority_url) : false;
                                     @endphp
                                     @if ($imgData !== false)
                                         <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -567,7 +588,7 @@
                             <tr>
                                 <td>
                                     @php
-                                        $imgData = @file_get_contents($tickets_by_user_url);
+                                        $imgData = !empty($tickets_by_user_url) ? @file_get_contents($tickets_by_user_url) : false;
                                     @endphp
                                     @if ($imgData !== false)
                                         <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -582,7 +603,7 @@
 
                     <td>
                         @php
-                            $imgData = @file_get_contents($tickets_sla_url);
+                            $imgData = !empty($tickets_sla_url) ? @file_get_contents($tickets_sla_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -634,7 +655,7 @@
                 <tr>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_category_incident_bar_url);
+                            $imgData = !empty($ticket_by_category_incident_bar_url) ? @file_get_contents($ticket_by_category_incident_bar_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -645,7 +666,7 @@
                     </td>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_category_request_bar_url);
+                            $imgData = !empty($ticket_by_category_request_bar_url) ? @file_get_contents($ticket_by_category_request_bar_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -659,7 +680,7 @@
                 <tr>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_type_incident_bar_url);
+                            $imgData = !empty($ticket_by_type_incident_bar_url) ? @file_get_contents($ticket_by_type_incident_bar_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -672,7 +693,7 @@
 
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($ticket_by_type_request_bar_url);
+                            $imgData = !empty($ticket_by_type_request_bar_url) ? @file_get_contents($ticket_by_type_request_bar_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -688,7 +709,7 @@
                 <tr>
                     <td style="background-color: #fff;border-radius: 8px; padding: 4px">
                         @php
-                            $imgData = @file_get_contents($wrong_type_url);
+                            $imgData = !empty($wrong_type_url) ? @file_get_contents($wrong_type_url) : false;
                         @endphp
                         @if ($imgData !== false)
                             <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
@@ -711,7 +732,7 @@
         <p style="font-size:9">
             <span>R/I indica Request/Incident ovvero Richiesta/Problema.</span>
             <br>
-            <span>M/C/S indica se è un Master, se Collegato a un master o se è Singolo.</span>
+            <span>O/C/S indica se è un'operazione strutturata, se Collegato a un'operazione strutturata o se è Singolo.</span>
             <br>
             <span>SUP indica il Supporto.</span>
             <br>
@@ -749,7 +770,7 @@
                         Aperto da
                     </th>
                     <th style="width:8%; border: 1px solid #353131;">
-                        M/C/S
+                        O/C/S
                     </th>
                     <th style="width:8%; border: 1px solid #353131;">
                         Stato attuale
@@ -782,13 +803,13 @@
                             {{ $ticket['is_billable'] ? 'Si' : 'No' }}
                         </td>
                         <td style="width:8%; border: 1px solid #353131; text-align: center;">
-                            {{ $ticket['opened_by_initials'] }}
+                            {{ $ticket['opened_by_initials'] }} {{ $ticketSources['on_site_technician'] == $ticket['source'] ? 'ONSITE' : '' }}
                         </td>
                         <td style="width:8%; border: 1px solid #353131; text-align: center;">
                             @if ($ticket['master_id'] != null)
                                 C
                             @elseif ($ticket['is_master'])
-                                M
+                                O
                             @else
                                 S
                             @endif
@@ -851,9 +872,9 @@
                                         <span class="ticket-section-title">Ticket </span>
                                         <span>{{ $ticket['master_id'] != null
                                             ? // ? 'Collegato a <a href="#ticket-'.e($ticket['master_id']).'">#'.e($ticket['master_id']).'</a>'
-                                            'Collegato'
+                                            'Collegato a operazione strutturata'
                                             : ($ticket['is_master']
-                                                ? 'Master'
+                                                ? 'Operazione strutturata'
                                                 : 'Singolo') }}</span>
                                     </p>
                                 </td>
@@ -875,6 +896,13 @@
                                     <p>
                                         <span class="ticket-section-title">Fatturabile:</span>
                                         <span>{{ $ticket['is_billable'] ? 'Si' : 'No' }}</span>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2">
+                                    <p><span class="ticket-section-title">Provenienza:</span>
+                                        <span>{{ $ticket['source'] }}</span>
                                     </p>
                                 </td>
                             </tr>
@@ -902,7 +930,7 @@
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
                                             <p>
-                                                <span class="ticket-section-title">Ticket master: </span>
+                                                <span class="ticket-section-title">Operazione strutturata: </span>
                                                 <a href="#ticket-{{ $ticket['master_id'] }}">
                                                     #{{ $ticket['master_id'] }}
                                                 </a>
@@ -939,42 +967,121 @@
 
                                 @php
                                     unset($ticket['webform_data']->description);
+
+                                    // Ordina i campi: prima quelli normali, poi quelli hardware
+                                    $webformFields = [];
+                                    $hardwareFields = [];
+                                    
+                                    foreach ($ticket['webform_data'] as $key => $value) {
+                                        if (in_array(strtolower($key), $ticket['hardwareFields'])) {
+                                            $hardwareFields[$key] = $value;
+                                        } else {
+                                            $webformFields[$key] = $value;
+                                        }
+                                    }
+                                    
+                                    // Unisce prima i campi normali, poi quelli hardware
+                                    $sortedWebformData = array_merge($webformFields, $hardwareFields);
+
+                                    $closedTr = false;
                                 @endphp
 
-                                @foreach ($ticket['webform_data'] as $key => $value)
-                                    @if ($loop->index % 3 == 0)
+                                @foreach ($sortedWebformData as $key => $value)
+
+                                    @if (in_array(strtolower($key), $ticket['hardwareFields']))
+
+                                        {{-- 
+                                            Se serve, chiude tr. Per capire se chiuderlo vede se l'iteration è > 1 e il resto di iteration/3 è diverso da 1, 
+                                            che se è stato chiuso nel ciclo precedente dovrebbe essere 1
+                                        --}}
+                                        @if ($loop->iteration > 1 && 
+                                                $loop->iteration % 3 != 1 && 
+                                                !$closedTr
+                                            )
+                                            {{-- Aggiunge i td per occupare gli spazi vuoti --}}
+                                            @if($loop->iteration % 3 == 2)
+                                                <td></td><td></td>
+                                            @elseif($loop->iteration % 3 == 0)
+                                                <td></td>
+                                            @endif  
+                                            </tr>
+                                        @endif
+                                        {{-- In ogni caso cambia il valore di closedTr perchè solo il primo campo hardware deve inserire il </tr> se serve --}}
+                                        @php
+                                            $closedTr = true;
+                                        @endphp
+
+                                        {{-- Tabella hardware --}}
                                         <tr>
-                                    @endif
-                                    <td>
-                                        @switch($key)
-                                            @case('description')
-                                            @break
-
-                                            @case('referer')
-                                                <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @case('referer_it')
-                                                <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @case('office')
-                                                <span><b>Sede</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @default
-                                                @if (is_array($value))
-                                                    <span><b>{{ $key }}</b><br>
-                                                        {{ implode(', ', $value) }}</span>
-                                                    <br>
-                                                @else
-                                                    <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
-                                                @endif
-                                        @endswitch
-                                    </td>
-                                    @if ($loop->iteration % 3 == 0)
+                                            <td colspan="3">
+                                                <span><b>{{ $key }}</b></span>
+                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Marca</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Modello</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Seriale</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Asset</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">Etichetta</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (is_array($value))
+                                                            @foreach ($value as $hardware)
+                                                                <tr>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.25rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                </tr>
+                                                            @endforeach
+                                                        @endif
+                                                    </tbody>
+                                                </table>
+                                            </td>
                                         </tr>
+                                    @else
+
+                                        @if ($loop->index % 3 == 0)
+                                            <tr>
+                                        @endif
+                                        <td>
+                                            @switch($key)
+                                                @case('description')
+                                                @break
+
+                                                @case('referer')
+                                                    <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @case('referer_it')
+                                                    <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @case('office')
+                                                    <span><b>Sede</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @default
+                                                    @if (is_array($value))
+                                                        <span><b>{{ $key }}</b><br>
+                                                            {{ implode(', ', $value) }}</span>
+                                                        <br>
+                                                    @else
+                                                        <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @endif
+                                            @endswitch
+                                        </td>
+                                        @if ($loop->iteration % 3 == 0)
+                                            </tr>
+                                        @endif
+                                    
                                     @endif
+
+
                                 @endforeach
                                 @if ($loop->count % 3 != 0)
                                     </tr>
@@ -1069,9 +1176,9 @@
                                         <span class="ticket-section-title">Ticket </span>
                                         <span>{{ $ticket['master_id'] != null
                                             ? // ? 'Collegato a <a href="#ticket-'.e($ticket['master_id']).'">#'.e($ticket['master_id']).'</a>'
-                                            'Collegato'
+                                            'Collegato a operazione strutturata'
                                             : ($ticket['is_master']
-                                                ? 'Master'
+                                                ? 'Operazione strutturata'
                                                 : 'Singolo') }}</span>
                                     </p>
                                 </td>
@@ -1093,6 +1200,13 @@
                                     <p>
                                         <span class="ticket-section-title">Fatturabile:</span>
                                         <span>{{ $ticket['is_billable'] ? 'Si' : 'No' }}</span>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="2">
+                                    <p><span class="ticket-section-title">Provenienza:</span>
+                                        <span>{{ $ticket['source'] }}</span>
                                     </p>
                                 </td>
                             </tr>
@@ -1120,7 +1234,7 @@
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
                                             <p>
-                                                <span class="ticket-section-title">Ticket master: </span>
+                                                <span class="ticket-section-title">Operazione strutturata: </span>
                                                 <a href="#ticket-{{ $ticket['master_id'] }}">
                                                     #{{ $ticket['master_id'] }}
                                                 </a>
@@ -1157,42 +1271,120 @@
 
                                 @php
                                     unset($ticket['webform_data']->description);
+                                    
+                                    // Ordina i campi: prima quelli normali, poi quelli hardware
+                                    $webformFields = [];
+                                    $hardwareFields = [];
+                                    
+                                    foreach ($ticket['webform_data'] as $key => $value) {
+                                        if (in_array(strtolower($key), $ticket['hardwareFields'])) {
+                                            $hardwareFields[$key] = $value;
+                                        } else {
+                                            $webformFields[$key] = $value;
+                                        }
+                                    }
+                                    
+                                    // Unisce prima i campi normali, poi quelli hardware
+                                    $sortedWebformData = array_merge($webformFields, $hardwareFields);
+
+                                    $closedTr = false;
                                 @endphp
 
-                                @foreach ($ticket['webform_data'] as $key => $value)
-                                    @if ($loop->index % 3 == 0)
+                                @foreach ($sortedWebformData as $key => $value)
+                                    
+                                    @if (in_array(strtolower($key), $ticket['hardwareFields']))
+
+                                        {{-- 
+                                            Se serve, chiude tr. Per capire se chiuderlo vede se l'iteration è > 1 e il resto di iteration/3 è diverso da 1, 
+                                            che se è stato chiuso nel ciclo precedente dovrebbe essere 1
+                                        --}}
+                                        @if ($loop->iteration > 1 && 
+                                                $loop->iteration % 3 != 1 && 
+                                                !$closedTr
+                                            )
+                                            {{-- Aggiunge i td per occupare gli spazi vuoti --}}
+                                            @if($loop->iteration % 3 == 2)
+                                                <td></td><td></td>
+                                            @elseif($loop->iteration % 3 == 0)
+                                                <td></td>
+                                            @endif  
+                                            </tr>
+                                        @endif
+                                        {{-- In ogni caso cambia il valore di closedTr perchè solo il primo campo hardware deve inserire il </tr> se serve --}}
+                                        @php
+                                            $closedTr = true;
+                                        @endphp
+
+                                        {{-- Tabella hardware --}}
                                         <tr>
-                                    @endif
-                                    <td>
-                                        @switch($key)
-                                            @case('description')
-                                            @break
-
-                                            @case('referer')
-                                                <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @case('referer_it')
-                                                <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @case('office')
-                                                <span><b>Sede</b><br> {{ $value }}</span> <br>
-                                            @break
-
-                                            @default
-                                                @if (is_array($value))
-                                                    <span><b>{{ $key }}</b><br>
-                                                        {{ implode(', ', $value) }}</span>
-                                                    <br>
-                                                @else
-                                                    <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
-                                                @endif
-                                        @endswitch
-                                    </td>
-                                    @if ($loop->iteration % 3 == 0)
+                                            <td colspan="3">
+                                                <span><b>{{ $key }}</b></span>
+                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">ID</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Marca</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Modello</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Seriale</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Asset</th>
+                                                            <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">Etichetta</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @if (is_array($value))
+                                                            @foreach ($value as $hardware)
+                                                                <tr>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['id'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['make'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['model'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['serial_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['company_asset_number'] ?? '' }}</td>
+                                                                    <td style="border: 1px solid #ddd; padding: 0.2rem;">{{ $hardware['support_label'] ?? '' }}</td>
+                                                                </tr>
+                                                            @endforeach
+                                                        @endif
+                                                    </tbody>
+                                                </table>
+                                            </td>
                                         </tr>
+                                    @else    
+
+                                        @if ($loop->index % 3 == 0)
+                                            <tr>
+                                        @endif
+                                        <td>
+                                            @switch($key)
+                                                @case('description')
+                                                @break
+
+                                                @case('referer')
+                                                    <span><b>Utente interessato</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @case('referer_it')
+                                                    <span><b>{{ \App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'Referente IT') }}</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @case('office')
+                                                    <span><b>Sede</b><br> {{ $value }}</span> <br>
+                                                @break
+
+                                                @default
+                                                    @if (is_array($value))
+                                                        <span><b>{{ $key }}</b><br>
+                                                            {{ implode(', ', $value) }}</span>
+                                                        <br>
+                                                    @else
+                                                        <span><b>{{ $key }}</b><br> {{ $value }}</span> <br>
+                                                    @endif
+                                            @endswitch
+                                        </td>
+                                        @if ($loop->iteration % 3 == 0)
+                                            </tr>
+                                        @endif
+                                        
                                     @endif
+
                                 @endforeach
                                 @if ($loop->count % 3 != 0)
                                     </tr>

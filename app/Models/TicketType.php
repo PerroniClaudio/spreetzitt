@@ -26,6 +26,10 @@ class TicketType extends Model
         'expected_is_billable',
         'is_custom_group_exclusive',
         'is_master',
+        'is_scheduling',
+        'is_grouping',
+        'hourly_cost',
+        'hourly_cost_expires_at',
     ];
 
     public function tickets()
@@ -85,4 +89,33 @@ class TicketType extends Model
     {
         return $this->belongsToMany(CustomUserGroup::class, 'ticket_types_custom_groups', 'ticket_type_id', 'custom_user_group_id');
     }
+
+    /**
+     * TicketType slave associati a questo tipo master (operazione strutturata).
+     * Restituisce anche il campo is_required dalla tabella pivot.
+     */
+    public function slaveTypes()
+    {
+        return $this->belongsToMany(
+            TicketType::class,
+            'ticket_type_master_slave',
+            'master_type_id', // foreign key su questa tabella
+            'slave_type_id' // foreign key sulla tabella slave
+        )->withPivot('is_required');
+    }
+
+        /**
+     * TicketType master (operazione strutturata) di cui questo tipo è uno slave.
+     */
+    public function masterTypes()
+    {
+        return $this->belongsToMany(
+            TicketType::class,
+            'ticket_type_master_slave',
+            'slave_type_id', // foreign key su questa tabella
+            'master_type_id' // foreign key sulla tabella master
+        );
+    }
+
+    
 }

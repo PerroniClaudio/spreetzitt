@@ -81,8 +81,30 @@ class HardwareController extends Controller
         ], 200);
     }
 
-    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField)
-    {
+    public function userCompaniesHardwareList(Request $request, User $user) {
+        $authUser = $request->user();
+        if (
+            !$authUser->is_admin
+        ) {
+            return response([
+                'message' => 'You are not allowed to view this hardware list',
+            ], 403);
+        }
+
+        $userCompanyIds = $user->companies()->pluck('companies.id')->toArray();
+        $hardwareList = Hardware::whereIn('company_id', $userCompanyIds)
+            ->with(['hardwareType:id,name', 'company:id,name'])
+            ->get()
+            ->map(function ($hardware) {
+            $hardware->users = $hardware->users()->pluck('user_id')->toArray();
+            return $hardware;
+            });
+        return response([
+            'hardwareList' => $hardwareList,
+        ], 200);
+    }
+
+    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField) {
         $authUser = $request->user();
 
         if (! $typeFormField) {
