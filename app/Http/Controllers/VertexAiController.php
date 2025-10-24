@@ -204,10 +204,6 @@ class VertexAiController extends Controller
             'Content-Type' => 'application/json',
         ])->timeout(500)->post($url, $payload);
 
-        Log::info('Gemini response', [
-            'status' => $response->status(),
-            'body' => $response->body(),
-        ]);
 
         if (! $response->successful()) {
             throw new Exception('Errore chiamata Gemini: '.$response->body());
@@ -228,12 +224,12 @@ class VertexAiController extends Controller
         $prompt = $this->generatePromptFromHtml($html);
 
         try {
-            Log::info('Starting Gemini request for news extraction');
+            Log::info('NEWS - Starting Gemini request for news extraction');
             $responseText = $this->excuteRequest($prompt);
 
             return ['result' => $responseText];
         } catch (Exception $e) {
-            Log::error('Errore Vertex AI: '.$e->getMessage());
+            Log::error('NEWS - Errore Vertex AI: '.$e->getMessage());
 
             return response()->json(['error' => 'Errore durante l\'estrazione delle notizie.'], 500);
         }

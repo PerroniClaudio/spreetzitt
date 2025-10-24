@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\NewsSource;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -68,7 +69,7 @@ class FetchNewsForSource implements ShouldQueue
     private function fetchVendorBlog(): void
     {
         $url = $this->source->url;
-        $html = \App\Http\Controllers\NewsController::getRenderedHtml($url);
+        $html = \App\Http\Controllers\NewsController::getRenderedHtmlWithFirecrawl($url);
         $htmlRilevante = \App\Http\Controllers\NewsController::extractRelevantHtml($html);
 
         $vertex = new \App\Http\Controllers\VertexAiController;
@@ -76,21 +77,40 @@ class FetchNewsForSource implements ShouldQueue
 
         $newsArray = json_decode($response['result'] ?? '', true);
         if (! is_array($newsArray)) {
-            Log::error('Vertex AI non ha restituito un array valido', ['response' => $response]);
+            Log::error('NEWS - Vertex AI non ha restituito un array valido', ['response' => $response, 'source_id' => $this->source->id]);
 
             return;
         }
 
+        $created = 0;
         foreach ($newsArray as $newsData) {
-            \App\Models\News::updateOrCreate([
+
+            // Validate published_at and fallback to now if invalid or missing
+            if (isset($newsData['published_at']) && ! empty($newsData['published_at'])) {
+                try {
+                    $publishedAt = Carbon::parse($newsData['published_at']);
+                } catch (\Exception $e) {
+                    $publishedAt = Carbon::now();
+                }
+            } else {
+                $publishedAt = Carbon::now();
+            }
+
+            $news = \App\Models\News::updateOrCreate([
                 'news_source_id' => $this->source->id,
                 'title' => $newsData['title'] ?? '',
             ], [
                 'url' => $newsData['url'] ?? '',
                 'description' => $newsData['description'] ?? '',
-                'published_at' => $newsData['published_at'] ?? null,
+                'published_at' => $publishedAt,
             ]);
+
+            if ($news->wasRecentlyCreated) {
+                $created++;
+            }
         }
+
+        Log::info('NEWS - Fetch news completed for source', ['source_id' => $this->source->id, 'added' => $created, 'total_found' => count($newsArray)]);
     }
 
     /**

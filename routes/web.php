@@ -27,7 +27,11 @@ Route::get('/info', function () {
     phpinfo();
 });
 
-Route::get('/test-scraper', [App\Http\Controllers\NewsController::class, 'testScraperWithFirecrawl']);
+Route::get('/test-scraper', function () {
+
+    $source = \App\Models\NewsSource::where('slug', 'fortinet-blog')->first();
+    dispatch(new \App\Jobs\FetchNewsForSource($source));
+});
 
 require __DIR__.'/auth.php';
 require __DIR__.'/webhook.php';
