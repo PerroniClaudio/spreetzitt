@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Searchable;
 
-class WikiObject extends Model {
+class WikiObject extends Model
+{
     use HasFactory, Searchable;
 
     protected $fillable = [
@@ -21,18 +22,21 @@ class WikiObject extends Model {
         'file_size',
     ];
 
-    public function toSearchableArray() {
+    public function toSearchableArray()
+    {
         return [
             'name' => $this->name,
             'uploaded_name' => $this->uploaded_name,
         ];
     }
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class);
     }
 
-    public function user() {
+    public function user()
+    {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 }

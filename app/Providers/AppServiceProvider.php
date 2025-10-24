@@ -2,28 +2,28 @@
 
 namespace App\Providers;
 
-use Illuminate\Support\Facades\Event;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\ServiceProvider;
-use Opcodes\LogViewer\Facades\LogViewer;
-
-use Laravel\Pennant\Feature;
-use App\Features\TicketFeatures;
 use App\Features\HardwareFeatures;
 use App\Features\PropertyFeatures;
+use App\Features\TicketFeatures;
+use Illuminate\Support\ServiceProvider;
+use Laravel\Pennant\Feature;
+use Opcodes\LogViewer\Facades\LogViewer;
 
-class AppServiceProvider extends ServiceProvider {
+class AppServiceProvider extends ServiceProvider
+{
     /**
      * Register any application services.
      */
-    public function register(): void {
+    public function register(): void
+    {
         //
     }
 
     /**
      * Bootstrap any application services.
      */
-    public function boot(): void {
+    public function boot(): void
+    {
         //
 
         $this->registerFeatures();
@@ -38,7 +38,8 @@ class AppServiceProvider extends ServiceProvider {
     /**
      * Configura lo scope di default per Laravel Pennant
      */
-    private function configurePennantScope(): void {
+    private function configurePennantScope(): void
+    {
         Feature::resolveScopeUsing(function () {
             // Usa il tenant corrente come scope di default
             return config('app.tenant', 'default');
@@ -48,7 +49,8 @@ class AppServiceProvider extends ServiceProvider {
     /**
      * Registra automaticamente tutte le feature flags
      */
-    private function registerFeatures(): void {
+    private function registerFeatures(): void
+    {
         $this->registerFeaturesFromClass('ticket', TicketFeatures::class);
         $this->registerFeaturesFromClass('hardware', HardwareFeatures::class);
         $this->registerFeaturesFromClass('property', PropertyFeatures::class);
@@ -60,7 +62,8 @@ class AppServiceProvider extends ServiceProvider {
     /**
      * Registra le feature flags da una classe specifica
      */
-    private function registerFeaturesFromClass(string $prefix, string $featureClass): void {
+    private function registerFeaturesFromClass(string $prefix, string $featureClass): void
+    {
         $features = $this->getFeatureMethodsFromClass($featureClass);
 
         foreach ($features as $featureName) {
@@ -73,7 +76,8 @@ class AppServiceProvider extends ServiceProvider {
     /**
      * Estrae i nomi delle feature da una classe analizzando i metodi privati
      */
-    private function getFeatureMethodsFromClass(string $featureClass): array {
+    private function getFeatureMethodsFromClass(string $featureClass): array
+    {
         // Usa il metodo statico getFeatures() se disponibile
         if (method_exists($featureClass, 'getFeatures')) {
             return $featureClass::getFeatures();

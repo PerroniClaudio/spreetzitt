@@ -2,30 +2,33 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use App\Features\TicketFeatures;
 use App\Features\HardwareFeatures;
+use App\Features\TicketFeatures;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Pennant\Feature;
+use Tests\TestCase;
 
-class FeatureFlagControllerTest extends TestCase {
+class FeatureFlagControllerTest extends TestCase
+{
     use RefreshDatabase;
 
-    protected function setUp(): void {
+    protected function setUp(): void
+    {
         parent::setUp();
 
         // Setup tenant di test
         config(['app.tenant' => 'test-tenant']);
 
         // Registra le feature per i test
-        Feature::define('ticket.list', fn() => true);
-        Feature::define('ticket.create', fn() => true);
-        Feature::define('ticket.massive_generation', fn() => false);
-        Feature::define('hardware.list', fn() => true);
-        Feature::define('hardware.massive_generation', fn() => false);
+        Feature::define('ticket.list', fn () => true);
+        Feature::define('ticket.create', fn () => true);
+        Feature::define('ticket.massive_generation', fn () => false);
+        Feature::define('hardware.list', fn () => true);
+        Feature::define('hardware.massive_generation', fn () => false);
     }
 
-    public function test_can_get_features_in_hierarchical_format() {
+    public function test_can_get_features_in_hierarchical_format()
+    {
         $response = $this->getJson('/api/features?format=hierarchical');
 
         $response->assertStatus(200)
@@ -37,7 +40,7 @@ class FeatureFlagControllerTest extends TestCase {
                 'permissions',
                 'tenant',
                 'format',
-                'last_updated'
+                'last_updated',
             ]);
 
         $features = $response->json('features');
@@ -50,7 +53,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertNotContains('massive_generation', $features['tickets']);
     }
 
-    public function test_can_get_features_in_legacy_format() {
+    public function test_can_get_features_in_legacy_format()
+    {
         $response = $this->getJson('/api/features?format=legacy');
 
         $response->assertStatus(200);
@@ -65,7 +69,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertFalse($features['hardware_massive_generation']);
     }
 
-    public function test_can_get_features_in_mixed_format() {
+    public function test_can_get_features_in_mixed_format()
+    {
         $response = $this->getJson('/api/features?format=mixed');
 
         $response->assertStatus(200);
@@ -80,7 +85,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertTrue(isset($features['ticket_types']));
     }
 
-    public function test_auto_format_detection() {
+    public function test_auto_format_detection()
+    {
         $response = $this->getJson('/api/features?format=auto');
 
         $response->assertStatus(200);
@@ -89,7 +95,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertContains($format, ['legacy', 'hierarchical', 'mixed']);
     }
 
-    public function test_can_get_scopes() {
+    public function test_can_get_scopes()
+    {
         $response = $this->getJson('/api/features/scopes');
 
         $response->assertStatus(200)
@@ -100,11 +107,11 @@ class FeatureFlagControllerTest extends TestCase {
                         'name',
                         'class',
                         'available_features',
-                        'description'
-                    ]
+                        'description',
+                    ],
                 ],
                 'static_features',
-                'special_mappings'
+                'special_mappings',
             ]);
 
         $scopes = $response->json('scopes');
@@ -112,7 +119,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertEquals(HardwareFeatures::class, $scopes['hardware']['class']);
     }
 
-    public function test_can_check_specific_feature() {
+    public function test_can_check_specific_feature()
+    {
         // Test formato legacy
         $response = $this->getJson('/api/features/check?feature=tickets_list');
 
@@ -120,7 +128,7 @@ class FeatureFlagControllerTest extends TestCase {
             ->assertJson([
                 'success' => true,
                 'feature' => 'tickets_list',
-                'enabled' => true
+                'enabled' => true,
             ]);
 
         // Test formato gerarchico
@@ -130,7 +138,7 @@ class FeatureFlagControllerTest extends TestCase {
             ->assertJson([
                 'success' => true,
                 'feature' => 'ticket.list',
-                'enabled' => true
+                'enabled' => true,
             ]);
 
         // Test feature non esistente
@@ -139,31 +147,34 @@ class FeatureFlagControllerTest extends TestCase {
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
-                'enabled' => false
+                'enabled' => false,
             ]);
     }
 
-    public function test_check_feature_requires_feature_parameter() {
+    public function test_check_feature_requires_feature_parameter()
+    {
         $response = $this->getJson('/api/features/check');
 
         $response->assertStatus(400)
             ->assertJson([
                 'success' => false,
-                'message' => 'Feature name is required'
+                'message' => 'Feature name is required',
             ]);
     }
 
-    public function test_can_flush_feature_flags() {
+    public function test_can_flush_feature_flags()
+    {
         $response = $this->postJson('/api/features/flush');
 
         $response->assertStatus(200)
             ->assertJson([
                 'success' => true,
-                'message' => 'Feature flags cache cleared successfully'
+                'message' => 'Feature flags cache cleared successfully',
             ]);
     }
 
-    public function test_debug_endpoint_requires_debug_mode() {
+    public function test_debug_endpoint_requires_debug_mode()
+    {
         // Test senza debug mode
         config(['app.debug' => false]);
 
@@ -172,11 +183,12 @@ class FeatureFlagControllerTest extends TestCase {
         $response->assertStatus(403)
             ->assertJson([
                 'success' => false,
-                'message' => 'Debug mode not enabled'
+                'message' => 'Debug mode not enabled',
             ]);
     }
 
-    public function test_debug_endpoint_works_in_debug_mode() {
+    public function test_debug_endpoint_works_in_debug_mode()
+    {
         config(['app.debug' => true]);
 
         $response = $this->getJson('/api/features/debug');
@@ -193,13 +205,14 @@ class FeatureFlagControllerTest extends TestCase {
                     'format_examples' => [
                         'legacy',
                         'hierarchical',
-                        'mixed'
-                    ]
-                ]
+                        'mixed',
+                    ],
+                ],
             ]);
     }
 
-    public function test_backward_compatibility() {
+    public function test_backward_compatibility()
+    {
         // Il vecchio endpoint dovrebbe continuare a funzionare
         $response = $this->getJson('/api/features');
 
@@ -207,7 +220,7 @@ class FeatureFlagControllerTest extends TestCase {
             ->assertJsonStructure([
                 'success',
                 'message',
-                'features'
+                'features',
             ]);
 
         // Verifica che le feature statiche siano presenti
@@ -217,7 +230,8 @@ class FeatureFlagControllerTest extends TestCase {
         $this->assertTrue($features['reports']);
     }
 
-    public function test_error_handling() {
+    public function test_error_handling()
+    {
         // Simula un errore nel sistema
         Feature::define('ticket.list', function () {
             throw new \Exception('Test error');
@@ -230,31 +244,32 @@ class FeatureFlagControllerTest extends TestCase {
                 'success',
                 'message',
                 'error',
-                'features' // Dovrebbe avere almeno le feature statiche come fallback
+                'features', // Dovrebbe avere almeno le feature statiche come fallback
             ]);
 
         $this->assertFalse($response->json('success'));
         $this->assertEquals('Error retrieving feature flags', $response->json('message'));
     }
 
-    public function test_feature_info_extraction() {
+    public function test_feature_info_extraction()
+    {
         $testCases = [
             'tickets_list' => [
                 'type' => 'legacy',
                 'scope' => 'tickets',
-                'feature' => 'list'
+                'feature' => 'list',
             ],
             'ticket.create' => [
                 'type' => 'hierarchical',
                 'scope' => 'ticket',
-                'feature' => 'create'
+                'feature' => 'create',
             ],
             'users_management' => [
-                'type' => 'static'
+                'type' => 'static',
             ],
             'ticket_types' => [
-                'type' => 'special'
-            ]
+                'type' => 'special',
+            ],
         ];
 
         foreach ($testCases as $featureName => $expectedInfo) {

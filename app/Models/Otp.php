@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Otp extends Model {
+class Otp extends Model
+{
     use HasFactory;
 
     protected $fillable = [
@@ -15,7 +16,8 @@ class Otp extends Model {
         'is_used',
     ];
 
-    public function isExpired() {
+    public function isExpired()
+    {
         return $this->expires_at < now();
     }
 }

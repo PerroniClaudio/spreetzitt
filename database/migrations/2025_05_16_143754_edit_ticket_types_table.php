@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('ticket_types', function (Blueprint $table) {
-            $table->boolean('is_master')->default(false);            
+            $table->boolean('is_master')->default(false);
         });
     }
 

@@ -1,9 +1,6 @@
 <?php
 
-use App\Mail\OtpEmail;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Mail;
-
 
 /*
 |--------------------------------------------------------------------------
@@ -22,7 +19,7 @@ Route::get('/', function () {
         'Laravel' => app()->version(),
         'timezone' => config('app.timezone'),
         'current_time' => now()->toDateTimeString(),
-        'environment' => config('app.env')
+        'environment' => config('app.env'),
     ];
 });
 
@@ -30,15 +27,14 @@ Route::get('/info', function () {
     phpinfo();
 });
 
-Route::get('/test-scraper', [App\Http\Controllers\NewsController::class, 'testScraper']);
+Route::get('/test-scraper', [App\Http\Controllers\NewsController::class, 'testScraperWithFirecrawl']);
 
-require __DIR__ . '/auth.php';
-require __DIR__ . '/webhook.php';
+require __DIR__.'/auth.php';
+require __DIR__.'/webhook.php';
 
 Route::middleware(['throttle:5,1', 'auth:sanctum'])->group(function () {
     Route::post('/two-factor-authentication-challenge', [App\Http\Controllers\UserController::class, 'twoFactorChallenge'])->name('two-factor-challenge-user');
 });
-
 
 Route::get('/test', function () {
     return response()->json(['message' => 'Test route is working']);

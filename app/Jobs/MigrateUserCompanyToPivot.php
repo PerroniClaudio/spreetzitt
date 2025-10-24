@@ -10,13 +10,15 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 
-class MigrateUserCompanyToPivot implements ShouldQueue {
+class MigrateUserCompanyToPivot implements ShouldQueue
+{
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * Execute the job.
      */
-    public function handle(): void {
+    public function handle(): void
+    {
         // Prendi tutti gli utenti che hanno un company_id valorizzato
         $users = User::whereNotNull('company_id')->get();
         foreach ($users as $user) {

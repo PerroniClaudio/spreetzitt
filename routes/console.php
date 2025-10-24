@@ -3,12 +3,6 @@
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 
-use App\Models\OldTicket;
-use App\Models\OldTicketMessage;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-
 /*
 |--------------------------------------------------------------------------
 | Console Routes

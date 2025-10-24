@@ -4,11 +4,13 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration {
+return new class extends Migration
+{
     /**
      * Run the migrations.
      */
-    public function up(): void {
+    public function up(): void
+    {
         Schema::create('wiki_objects', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -28,7 +30,8 @@ return new class extends Migration {
     /**
      * Reverse the migrations.
      */
-    public function down(): void {
+    public function down(): void
+    {
         Schema::dropIfExists('wiki_objects');
     }
 };

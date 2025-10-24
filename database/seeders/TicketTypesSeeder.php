@@ -8,14 +8,16 @@ use App\Models\TicketTypeCategory;
 use App\Models\TypeFormFields;
 use Illuminate\Database\Seeder;
 
-class TicketTypesSeeder extends Seeder {
+class TicketTypesSeeder extends Seeder
+{
     /**
      * Run the database seeds.
      */
-    public function run(): void {
+    public function run(): void
+    {
         // Controllo perchè poi ci potrà essere un seeder delle categorie che l'ha già creata.
         $isCategoryPresent = TicketTypeCategory::where('name', 'Hardware')->exists();
-        if(!$isCategoryPresent) {
+        if (! $isCategoryPresent) {
             TicketTypeCategory::create([
                 'name' => 'Hardware',
                 'is_problem' => false,
@@ -51,8 +53,8 @@ class TicketTypesSeeder extends Seeder {
 
         // Prima di assegnarli all'azienda devono essere associati a un gruppo (altrimenti non vengono visualizzati lato admin)
         // Controllo perchè poi ci potrà essere un seeder dei gruppi che l'ha già creato.
-        $isGroupPresent = Group::where('name', 'Sistemi')->exists(); 
-        if(!$isGroupPresent) {
+        $isGroupPresent = Group::where('name', 'Sistemi')->exists();
+        if (! $isGroupPresent) {
             Group::create([
                 'name' => 'Sistemi',
             ]);
@@ -63,7 +65,7 @@ class TicketTypesSeeder extends Seeder {
 
         // Va creato il form per i ticket type.
         // Penso che basti inserire l'avviso di allegare il file  (magari scaricando prima il template dal gestionale, ancora da fare)
-        
+
         TypeFormFields::create([
             'ticket_type_id' => $dissociateHardwareUserType->id,
             'field_name' => 'dispositivo',

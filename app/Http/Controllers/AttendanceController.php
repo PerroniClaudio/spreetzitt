@@ -14,11 +14,11 @@ class AttendanceController extends Controller
      */
     public function index(Request $request)
     {
-        
+
         $user = $request->user();
-    
+
         $attendances = Attendance::where('user_id', $user->id)->with(['company', 'attendanceType'])->orderBy('id', 'desc')->get();
- 
+
         return response()->json($attendances);
 
     }
@@ -29,7 +29,6 @@ class AttendanceController extends Controller
     public function create()
     {
         //
-
 
     }
 
@@ -50,9 +49,9 @@ class AttendanceController extends Controller
             'attendance_type_id' => 'required|int',
         ]);
 
-        // L'orario di fine non può essere maggiore di quello di inizio 
+        // L'orario di fine non può essere maggiore di quello di inizio
 
-        if(strtotime($fields['time_out']) < strtotime($fields['time_in'])) {
+        if (strtotime($fields['time_out']) < strtotime($fields['time_in'])) {
 
             return response([
                 'message' => 'L\'orario di fine non può essere maggiore di quello di inizio',
@@ -60,9 +59,9 @@ class AttendanceController extends Controller
 
         }
 
-        // Non è possibile creare presenze nel futuro 
+        // Non è possibile creare presenze nel futuro
 
-        if(strtotime($fields['date']) > strtotime(date('Y-m-d'))) {
+        if (strtotime($fields['date']) > strtotime(date('Y-m-d'))) {
 
             return response([
                 'message' => 'Non è possibile creare presenze nel futuro',
@@ -74,7 +73,7 @@ class AttendanceController extends Controller
 
         $difference = (strtotime($fields['time_out']) - strtotime($fields['time_in'])) / 3600;
 
-        if($difference > 4) {
+        if ($difference > 4) {
 
             return response([
                 'message' => 'Una presenza non può durare più di 4 ore',
@@ -86,7 +85,7 @@ class AttendanceController extends Controller
 
         $timeOffRequests = TimeOffRequest::where('user_id', $user->id)->where('company_id', $fields['company_id'])->where('date_from', '<=', $fields['date'])->where('date_to', '>=', $fields['date'])->get();
 
-        if(count($timeOffRequests) > 0) {
+        if (count($timeOffRequests) > 0) {
 
             return response([
                 'message' => 'Non ci devono essere richieste di ferie o permesso nella presenza',
@@ -109,13 +108,12 @@ class AttendanceController extends Controller
         ], 201);
     }
 
-
     /**
      * Display the specified resource.
      */
     public function show(Attendance $attendance)
     {
-        
+
         return response()->json($attendance);
 
     }
@@ -126,8 +124,6 @@ class AttendanceController extends Controller
     public function edit(Attendance $attendance)
     {
         //
-
-       
 
     }
 
@@ -148,9 +144,9 @@ class AttendanceController extends Controller
 
         ]);
 
-        // L'orario di fine non può essere maggiore di quello di inizio 
+        // L'orario di fine non può essere maggiore di quello di inizio
 
-        if(strtotime($fields['time_out']) < strtotime($fields['time_in'])) {
+        if (strtotime($fields['time_out']) < strtotime($fields['time_in'])) {
 
             return response([
                 'message' => 'L\'orario di fine non può essere maggiore di quello di inizio',
@@ -158,9 +154,9 @@ class AttendanceController extends Controller
 
         }
 
-        // Non è possibile creare presenze nel futuro 
+        // Non è possibile creare presenze nel futuro
 
-        if(strtotime($fields['date']) > strtotime(date('Y-m-d'))) {
+        if (strtotime($fields['date']) > strtotime(date('Y-m-d'))) {
 
             return response([
                 'message' => 'Non è possibile creare presenze nel futuro',
@@ -172,7 +168,7 @@ class AttendanceController extends Controller
 
         $difference = (strtotime($fields['time_out']) - strtotime($fields['time_in'])) / 3600;
 
-        if($difference > 4) {
+        if ($difference > 4) {
 
             return response([
                 'message' => 'Una presenza non può durare più di 4 ore',
@@ -206,8 +202,9 @@ class AttendanceController extends Controller
             'message' => 'Attendance deleted successfully',
         ], 200);
     }
-    
-    public function types() {
+
+    public function types()
+    {
 
         $types = AttendanceType::all();
 

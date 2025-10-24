@@ -20,8 +20,6 @@ class NewsSourceToken extends Model
 
     /**
      * Get the source that owns the token.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function source(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

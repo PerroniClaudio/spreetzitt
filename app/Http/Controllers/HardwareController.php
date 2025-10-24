@@ -15,23 +15,25 @@ use App\Models\HardwareAuditLog;
 use App\Models\HardwareType;
 use App\Models\TypeFormFields;
 use App\Models\User;
-use Carbon\Carbon;
-use Illuminate\Http\Request;
-use Faker\Factory as Faker;
-use Maatwebsite\Excel\Facades\Excel;
 use Barryvdh\DomPDF\Facade\Pdf;
-
+use Carbon\Carbon;
+use Faker\Factory as Faker;
+use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 use function PHPUnit\Framework\isEmpty;
 
-class HardwareController extends Controller {
+class HardwareController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         $authUser = $request->user();
         if ($authUser->is_admin) {
             $hardwareList = Hardware::with(['hardwareType', 'company'])->get();
+
             return response([
                 'hardwareList' => $hardwareList,
             ], 200);
@@ -40,6 +42,7 @@ class HardwareController extends Controller {
         if ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
             $hardwareList = $selectedCompany ? Hardware::where('company_id', $selectedCompany->id)->with(['hardwareType', 'company'])->get() : collect();
+
             return response([
                 'hardwareList' => $hardwareList,
             ], 200);
@@ -55,9 +58,10 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function companyHardwareList(Request $request, Company $company) {
+    public function companyHardwareList(Request $request, Company $company)
+    {
         $authUser = $request->user();
-        if (!$authUser->is_admin && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+        if (! $authUser->is_admin && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to view this hardware',
             ], 403);
@@ -68,24 +72,27 @@ class HardwareController extends Controller {
             ->get()
             ->map(function ($hardware) {
                 $hardware->users = $hardware->users()->pluck('user_id')->toArray();
+
                 return $hardware;
             });
+
         return response([
             'hardwareList' => $hardwareList,
         ], 200);
     }
 
-    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField) {
+    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField)
+    {
         $authUser = $request->user();
 
-        if (!$typeFormField) {
+        if (! $typeFormField) {
             return response([
                 'message' => 'Type form field not found',
             ], 404);
         }
 
         $company = $typeFormField->ticketType->company;
-        if (!$authUser->is_admin && !(!!$company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+        if (! $authUser->is_admin && ! ((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to view this hardware',
             ], 403);
@@ -103,7 +110,7 @@ class HardwareController extends Controller {
         // Aggiungi le relazioni
         $query->with(['hardwareType', 'company']);
         // Se necessario rimuove gli hardware che non hanno il tipo associato
-        if (!$typeFormField->include_no_type_hardware) {
+        if (! $typeFormField->include_no_type_hardware) {
             $query->whereNotNull('hardware_type_id');
         }
         // Se necessario limitare a determinati tipi di hardware (tenendo conto dell'hardware che non ha un tipo associato)
@@ -125,17 +132,19 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function hardwareListWithTrashed(Request $request) {
+    public function hardwareListWithTrashed(Request $request)
+    {
 
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to view this hardware',
             ], 403);
         }
 
         $hardwareList = Hardware::withTrashed()->with(['hardwareType', 'company'])->get();
+
         return response([
             'hardwareList' => $hardwareList,
         ], 200);
@@ -144,7 +153,8 @@ class HardwareController extends Controller {
     /**
      * Show the form for creating a new resource.
      */
-    public function create() {
+    public function create()
+    {
         return response([
             'message' => 'Please use /api/store to create a new hardware',
         ], 404);
@@ -153,10 +163,11 @@ class HardwareController extends Controller {
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to create hardware',
             ], 403);
@@ -164,14 +175,14 @@ class HardwareController extends Controller {
 
         $allowedStatuses = array_keys(config('app.hardware_statuses'));
         $allowedPositions = array_keys(config('app.hardware_positions'));
-        
+
         $data = $request->validate([
             'make' => 'required|string',
             'model' => 'required|string',
             'serial_number' => 'required|string',
             'is_exclusive_use' => 'required|boolean',
-            'status' => 'required|string|in:' . implode(',', $allowedStatuses),
-            'position' => 'required|string|in:' . implode(',', $allowedPositions),
+            'status' => 'required|string|in:'.implode(',', $allowedStatuses),
+            'position' => 'required|string|in:'.implode(',', $allowedPositions),
             'company_asset_number' => 'nullable|string',
             'support_label' => 'nullable|string',
             'purchase_date' => 'nullable|date',
@@ -191,14 +202,14 @@ class HardwareController extends Controller {
             'at_least_one.required' => 'Deve essere specificato almeno uno tra company_asset_number e support_label.',
         ]);
 
-        if (isset($data['company_id']) && !Company::find($data['company_id'])) {
+        if (isset($data['company_id']) && ! Company::find($data['company_id'])) {
             return response([
                 'message' => 'Company not found',
             ], 404);
         }
 
         // Aggiungere le associazioni utenti
-        if (isset($data['company_id']) && !empty($data['users'])) {
+        if (isset($data['company_id']) && ! empty($data['users'])) {
             // $isFail = User::whereIn('id', $data['users'])->where('company_id', '!=', $data['company_id'])->exists();
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
@@ -224,7 +235,7 @@ class HardwareController extends Controller {
             ]);
         }
 
-        if (!empty($data['users'])) {
+        if (! empty($data['users'])) {
             // Non so perchè ma non crea i log in automatico, quindi devo aggiungerli manualmente
             // $hardware->users()->attach($data['users']);
 
@@ -244,7 +255,8 @@ class HardwareController extends Controller {
     /**
      * Display the specified resource.
      */
-    public function show(Request $request,  $hardwareId) {
+    public function show(Request $request, $hardwareId)
+    {
         $authUser = $request->user();
         $hardware = null;
 
@@ -254,23 +266,21 @@ class HardwareController extends Controller {
             $hardware = Hardware::find($hardwareId);
         }
 
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
         }
 
         if (
-            !$authUser->is_admin
-            && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists())
-            && !(in_array($authUser->id, $hardware->users->pluck('id')->toArray()))
+            ! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists())
+            && ! (in_array($authUser->id, $hardware->users->pluck('id')->toArray()))
         ) {
             return response([
                 'message' => 'You are not allowed to view this hardware',
             ], 403);
         }
-
-
 
         if ($authUser->is_admin || $authUser->is_company_admin) {
             // $hardware->load(['company', 'hardwareType', 'users']);
@@ -284,7 +294,7 @@ class HardwareController extends Controller {
                 'hardwareType',
                 'users' => function ($query) {
                     $query->select('user_id as id', 'name', 'surname', 'email', 'is_company_admin', 'is_deleted'); // Limit user data sent to frontend
-                }
+                },
             ]);
         } else {
             $hardware->load([
@@ -294,9 +304,10 @@ class HardwareController extends Controller {
                 'hardwareType',
                 'users' => function ($query) {
                     $query->select('user_id as id', 'name', 'surname', 'email', 'is_company_admin', 'is_deleted'); // Limit user data sent to frontend
-                }
+                },
             ]);
         }
+
         return response([
             'hardware' => $hardware,
         ], 200);
@@ -305,17 +316,19 @@ class HardwareController extends Controller {
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Hardware $hardware) {
+    public function edit(Hardware $hardware)
+    {
         //
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Hardware $hardware) {
+    public function update(Request $request, Hardware $hardware)
+    {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to edit hardware',
             ], 403);
@@ -329,8 +342,8 @@ class HardwareController extends Controller {
             'model' => 'required|string',
             'serial_number' => 'required|string',
             'is_exclusive_use' => 'required|boolean',
-            'status' => 'required|string|in:' . implode(',', $allowedStatuses),
-            'position' => 'required|string|in:' . implode(',', $allowedPositions),
+            'status' => 'required|string|in:'.implode(',', $allowedStatuses),
+            'position' => 'required|string|in:'.implode(',', $allowedPositions),
             'company_asset_number' => 'nullable|string',
             'support_label' => 'nullable|string',
             'purchase_date' => 'nullable|date',
@@ -342,14 +355,14 @@ class HardwareController extends Controller {
             'users' => 'nullable|array',
         ]);
 
-        if (isset($data['company_id']) && !Company::find($data['company_id'])) {
+        if (isset($data['company_id']) && ! Company::find($data['company_id'])) {
             return response([
                 'message' => 'Company not found',
             ], 404);
         }
 
         // controllare le associazioni utenti
-        if (isset($data['company_id']) && !empty($data['users'])) {
+        if (isset($data['company_id']) && ! empty($data['users'])) {
             // $isFail = User::whereIn('id', $data['users'])->where('company_id', '!=', $data['company_id'])->exists();
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
@@ -363,7 +376,7 @@ class HardwareController extends Controller {
             }
         }
 
-        if (!$hardware->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
+        if (! $hardware->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
             return response([
                 'message' => 'Exclusive use hardware can be associated to no more than one user. Hardware not updated.',
             ], 400);
@@ -415,19 +428,20 @@ class HardwareController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($hardwareId, Request $request) {
+    public function destroy($hardwareId, Request $request)
+    {
         // Soft delete: delete(); Hard delete: forceDelete();
-        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1); 
+        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1);
 
         $user = $request->user();
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete hardware',
             ], 403);
         }
 
         $hardware = Hardware::findOrFail($hardwareId);
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
@@ -441,24 +455,26 @@ class HardwareController extends Controller {
             'old_data' => json_encode($hardware->toArray()),
             'new_data' => null,
         ]);
+
         return response([
             'message' => 'Hardware soft deleted successfully',
         ], 200);
     }
 
-    public function destroyTrashed($hardwareId, Request $request) {
+    public function destroyTrashed($hardwareId, Request $request)
+    {
         // Soft delete: delete(); Hard delete: forceDelete();
-        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1); 
+        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1);
 
         $user = $request->user();
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete hardware',
             ], 403);
         }
 
         $hardware = Hardware::withTrashed()->findOrFail($hardwareId);
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
@@ -472,24 +488,26 @@ class HardwareController extends Controller {
             'old_data' => json_encode($hardware->toArray()),
             'new_data' => null,
         ]);
+
         return response([
             'message' => 'Hardware deleted successfully',
         ], 200);
     }
 
-    public function restore($hardwareId, Request $request) {
+    public function restore($hardwareId, Request $request)
+    {
         // Soft delete: delete(); Hard delete: forceDelete();
-        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1); 
+        // Senza soft deleted ::find(1), o il metodo che si vuole; con soft deleted ::withTrashed()->find(1);
 
         $user = $request->user();
-        if (!$user->is_admin) {
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete hardware',
             ], 403);
         }
 
         $hardware = Hardware::withTrashed()->findOrFail($hardwareId);
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
@@ -503,28 +521,31 @@ class HardwareController extends Controller {
             'old_data' => null,
             'new_data' => json_encode($hardware->toArray()),
         ]);
+
         return response([
             'message' => 'Hardware restored successfully',
         ], 200);
     }
 
-    public function getHardwareTypes() {
+    public function getHardwareTypes()
+    {
         return HardwareType::all();
     }
 
     /**
      * Update the assigned users of the single hardware
      */
-    public function updateHardwareUsers(Request $request, Hardware $hardware) {
+    public function updateHardwareUsers(Request $request, Hardware $hardware)
+    {
         $hardware = Hardware::find($hardware->id);
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
         }
 
         $authUser = $request->user();
-        if (!($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists()) && !$authUser->is_admin) {
+        if (! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists()) && ! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to update hardware users',
             ], 403);
@@ -534,16 +555,15 @@ class HardwareController extends Controller {
             'users' => 'nullable|array',
         ]);
 
-
         $company = $hardware->company;
 
-        if (!isEmpty($data['users']) && !$company) {
+        if (! isEmpty($data['users']) && ! $company) {
             return response([
                 'message' => 'Hardware must be associated with a company to add users',
             ], 404);
         }
 
-        if ($company && !isEmpty($data['users'])) {
+        if ($company && ! isEmpty($data['users'])) {
             // $isFail = User::whereIn('id', $data['users'])->where('company_id', '!=', $company->id)->exists();
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
@@ -568,7 +588,7 @@ class HardwareController extends Controller {
         $usersToAdd = collect($data['users'])->diff($hardware->users->pluck('id'));
 
         // Solo l'admin può rimuovere associazioni hardware-user
-        if (!$authUser->is_admin && count($usersToRemove) > 0) {
+        if (! $authUser->is_admin && count($usersToRemove) > 0) {
             return response([
                 'message' => 'You are not allowed to remove users from hardware',
             ], 403);
@@ -606,9 +626,10 @@ class HardwareController extends Controller {
     /**
      * Update the assigned hardware of the single user
      */
-    public function updateUserHardware(Request $request, User $user) {
+    public function updateUserHardware(Request $request, User $user)
+    {
         $user = User::find($user->id);
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
@@ -616,14 +637,14 @@ class HardwareController extends Controller {
 
         $authUser = $request->user();
         if (
-            !$authUser->is_admin &&
-            !(
+            ! $authUser->is_admin &&
+            ! (
                 $authUser->is_company_admin &&
                 $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists()
             )
         ) {
             return response([
-            'message' => 'You are not allowed to update hardware users',
+                'message' => 'You are not allowed to update hardware users',
             ], 403);
         }
 
@@ -633,13 +654,13 @@ class HardwareController extends Controller {
 
         $userHasAtLeastOneCompany = $user->companies()->exists();
 
-        if (!isEmpty($data['hardware']) && !$userHasAtLeastOneCompany) {
+        if (! isEmpty($data['hardware']) && ! $userHasAtLeastOneCompany) {
             return response([
                 'message' => 'User must be associated with a company to add hardware',
             ], 404);
         }
 
-        if ($userHasAtLeastOneCompany && !isEmpty($data['hardware'])) {
+        if ($userHasAtLeastOneCompany && ! isEmpty($data['hardware'])) {
             // $isFail = Hardware::whereIn('id', $data['hardware'])->where('company_id', '!=', $company->id)->exists();
             $isFail = Hardware::whereIn('id', $data['hardware'])
                 ->whereNotIn('company_id', $user->companies()->pluck('companies.id'))
@@ -659,7 +680,7 @@ class HardwareController extends Controller {
         }
 
         // Se è admin hardware to remove va preso tutto, altrimenti dovrebbe essere filtrato con selectedCompany()
-        if($authUser->is_admin) {
+        if ($authUser->is_admin) {
             $hardwareToRemove = $user->hardware->pluck('id')->diff($data['hardware']);
         } else {
             $hardwareToRemove = $user->hardware()->where('company_id', $authUser->selectedCompany()->id)->pluck('id')->diff($data['hardware']);
@@ -668,7 +689,7 @@ class HardwareController extends Controller {
         $hardwareToAdd = collect($data['hardware'])->diff($user->hardware->pluck('id'));
 
         // Solo l'admin può rimuovere associazioni hardware-user
-        if (!$authUser->is_admin && count($hardwareToRemove) > 0) {
+        if (! $authUser->is_admin && count($hardwareToRemove) > 0) {
             return response([
                 'message' => 'You are not allowed to remove hardware from user',
             ], 403);
@@ -679,7 +700,7 @@ class HardwareController extends Controller {
                 $hwToAdd = Hardware::find($hardwareId);
                 if ($hwToAdd->is_exclusive_use && ($hwToAdd->users->count() >= 1)) {
                     return response([
-                        'message' => 'A selected hardware (' . $hwToAdd->id . ') can only be associated to one user and has already been associated.',
+                        'message' => 'A selected hardware ('.$hwToAdd->id.') can only be associated to one user and has already been associated.',
                     ], 400);
                 }
             }
@@ -701,16 +722,17 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function deleteHardwareUser($hardwareId, $userId, Request $request) {
+    public function deleteHardwareUser($hardwareId, $userId, Request $request)
+    {
         $hardware = Hardware::findOrFail($hardwareId);
         $user = User::findOrFail($userId);
 
-        if (!$hardware) {
+        if (! $hardware) {
             return response([
                 'message' => 'Hardware not found',
             ], 404);
         }
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -718,13 +740,13 @@ class HardwareController extends Controller {
 
         $authUser = $request->user();
         // Adesso può farlo solo l'admin
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete hardware-user associations.',
             ], 403);
         }
 
-        if (!$hardware->users->contains($user)) {
+        if (! $hardware->users->contains($user)) {
             return response([
                 'message' => 'User not associated with hardware',
             ], 400);
@@ -735,12 +757,13 @@ class HardwareController extends Controller {
         return response()->json(['message' => 'User detached from hardware successfully'], 200);
     }
 
-    public function userHardwareList(Request $request, User $user) {
+    public function userHardwareList(Request $request, User $user)
+    {
         $authUser = $request->user();
-        if (!$authUser->is_admin 
+        if (! $authUser->is_admin
             // && !($user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists() && $authUser->is_company_admin)
-            && !$user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists() //per ora non è limitato al company_admin
-            && !($authUser->id == $user->id)
+            && ! $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists() //per ora non è limitato al company_admin
+            && ! ($authUser->id == $user->id)
         ) {
             return response([
                 'message' => 'You are not allowed to view this user hardware',
@@ -762,7 +785,8 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function fakeHardwareField(Request $request) {
+    public function fakeHardwareField(Request $request)
+    {
 
         $faker = Faker::create();
 
@@ -782,6 +806,7 @@ class HardwareController extends Controller {
         // Genera dati fittizi per Hardware
         $fakeHardwareList = collect(range(1, 5))->map(function ($index) use ($faker, $fakeCompany, $fakeHardwareTypes) {
             $type = $fakeHardwareTypes->random();
+
             return [
                 'id' => $index,
                 'make' => $faker->word,
@@ -809,12 +834,13 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function hardwareTickets(Request $request, Hardware $hardware) {
+    public function hardwareTickets(Request $request, Hardware $hardware)
+    {
         $authUser = $request->user();
         if (
-            !$authUser->is_admin
-            && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists())
-            && !($hardware->users->contains($authUser))
+            ! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists())
+            && ! ($hardware->users->contains($authUser))
         ) {
             return response([
                 'message' => 'You are not allowed to view this hardware tickets',
@@ -829,9 +855,10 @@ class HardwareController extends Controller {
                 },
                 'user' => function ($query) {
                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                          ->with('companies:id');
-                }
+                        ->with('companies:id');
+                },
             ])->get();
+
             return response([
                 'tickets' => $tickets,
             ], 200);
@@ -846,27 +873,25 @@ class HardwareController extends Controller {
                 },
                 'user' => function ($query) {
                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                          ->with('companies:id');
+                        ->with('companies:id');
                 },
                 'referer' => function ($query) {
                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                          ->with('companies:id');
+                        ->with('companies:id');
                 },
                 'refererIt' => function ($query) {
                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                          ->with('companies:id');
+                        ->with('companies:id');
                 },
             ])->get();
-
-
 
             foreach ($tickets as $ticket) {
                 // Nascondere i dati utente se è stato aperto dal supporto
                 if ($ticket->user->is_admin) {
                     $ticket->user->id = 1;
-                    $ticket->user->name = "Supporto";
-                    $ticket->user->surname = "";
-                    $ticket->user->email = "Supporto";
+                    $ticket->user->name = 'Supporto';
+                    $ticket->user->surname = '';
+                    $ticket->user->email = 'Supporto';
                 }
             }
 
@@ -887,11 +912,11 @@ class HardwareController extends Controller {
                     },
                     'user' => function ($query) {
                         $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                          ->with('companies:id');
+                            ->with('companies:id');
                     },
                     'referer' => function ($query) {
                         $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-                              ->with('companies:id');
+                            ->with('companies:id');
                     },
                 ])->get();
 
@@ -899,9 +924,9 @@ class HardwareController extends Controller {
                 // Nascondere i dati utente se è stato aperto dal supporto
                 if ($ticket->user->is_admin) {
                     $ticket->user->id = 1;
-                    $ticket->user->name = "Supporto";
-                    $ticket->user->surname = "";
-                    $ticket->user->email = "Supporto";
+                    $ticket->user->name = 'Supporto';
+                    $ticket->user->surname = '';
+                    $ticket->user->email = 'Supporto';
                 }
             }
 
@@ -917,25 +942,32 @@ class HardwareController extends Controller {
         ], 403);
     }
 
-    public function exportTemplate() {
-        $name = 'hardware_import_template_' . time() . '.xlsx';
-        return Excel::download(new HardwareTemplateExport(), $name);
+    public function exportTemplate()
+    {
+        $name = 'hardware_import_template_'.time().'.xlsx';
+
+        return Excel::download(new HardwareTemplateExport, $name);
     }
 
-    public function exportAssignationTemplate() {
-        $name = 'hardware_assignation_template_' . time() . '.xlsx';
-        return Excel::download(new HardwareAssignationTemplateExport(), $name);
+    public function exportAssignationTemplate()
+    {
+        $name = 'hardware_assignation_template_'.time().'.xlsx';
+
+        return Excel::download(new HardwareAssignationTemplateExport, $name);
     }
 
-    public function exportDeletionTemplate() {
-        $name = 'hardware_assignation_template_' . time() . '.xlsx';
-        return Excel::download(new HardwareDeletionTemplateExport(), $name);
+    public function exportDeletionTemplate()
+    {
+        $name = 'hardware_assignation_template_'.time().'.xlsx';
+
+        return Excel::download(new HardwareDeletionTemplateExport, $name);
     }
 
-    public function importHardware(Request $request) {
+    public function importHardware(Request $request)
+    {
 
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import hardware',
             ], 403);
@@ -950,7 +982,7 @@ class HardwareController extends Controller {
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX or XLS file.',
                 ], 400);
@@ -960,21 +992,22 @@ class HardwareController extends Controller {
                 Excel::import(new HardwareImport($authUser), $file, 'xlsx');
             } catch (\Exception $e) {
                 return response([
-                    'message' => 'An error occurred while importing the file. Please check the file and try again.' . ($e->getMessage() ?? ''),
+                    'message' => 'An error occurred while importing the file. Please check the file and try again.'.($e->getMessage() ?? ''),
                     'error' => $e->getMessage(),
                 ], 400);
             }
         }
 
         return response([
-            'message' => "Success",
+            'message' => 'Success',
         ], 200);
     }
 
-    public function importHardwareAssignations(Request $request) {
+    public function importHardwareAssignations(Request $request)
+    {
 
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import hardware assignations',
             ], 403);
@@ -989,7 +1022,7 @@ class HardwareController extends Controller {
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX or XLS file.',
                 ], 400);
@@ -999,21 +1032,22 @@ class HardwareController extends Controller {
                 Excel::import(new HardwareAssignationsImport($authUser), $file, 'xlsx');
             } catch (\Exception $e) {
                 return response([
-                    'message' => 'An error occurred while importing the file. Please check the file and try again.' . ($e->getMessage() ?? ''),
+                    'message' => 'An error occurred while importing the file. Please check the file and try again.'.($e->getMessage() ?? ''),
                     'error' => $e->getMessage(),
                 ], 400);
             }
         }
 
         return response([
-            'message' => "Success",
+            'message' => 'Success',
         ], 200);
     }
 
-    public function importHardwareDeletions(Request $request) {
+    public function importHardwareDeletions(Request $request)
+    {
 
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import hardware deletions',
             ], 403);
@@ -1028,7 +1062,7 @@ class HardwareController extends Controller {
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX or XLS file.',
                 ], 400);
@@ -1038,21 +1072,22 @@ class HardwareController extends Controller {
                 Excel::import(new HardwareDeletionsImport($authUser), $file, 'xlsx');
             } catch (\Exception $e) {
                 return response([
-                    'message' => 'An error occurred while importing the file. Please check the file and try again.' . ($e->getMessage() ?? ''),
+                    'message' => 'An error occurred while importing the file. Please check the file and try again.'.($e->getMessage() ?? ''),
                     'error' => $e->getMessage(),
                 ], 400);
             }
         }
 
         return response([
-            'message' => "Success",
+            'message' => 'Success',
         ], 200);
     }
 
-    public function downloadUserAssignmentPdf(Hardware $hardware, User $user, Request $request) {
+    public function downloadUserAssignmentPdf(Hardware $hardware, User $user, Request $request)
+    {
         $authUser = $request->user();
-        if (!$authUser->is_admin 
-            && !($authUser->is_company_admin 
+        if (! $authUser->is_admin
+            && ! ($authUser->is_company_admin
                 && (isset($hardware->company_id) && $hardware->company_id == ($authUser->selectedCompany()->id ?? null))
             )
         ) {
@@ -1061,7 +1096,7 @@ class HardwareController extends Controller {
             ], 403);
         }
 
-        if (!$hardware->users->contains($user)) {
+        if (! $hardware->users->contains($user)) {
             return response([
                 'message' => 'User not associated with hardware',
             ], 400);
@@ -1075,9 +1110,9 @@ class HardwareController extends Controller {
             ?? $hardware->model
             ?? $hardware->id;
         $userFileName = $user->surname
-            ? ($user->name ? $user->surname . '_' . $user->name : $user->surname)
+            ? ($user->name ? $user->surname.'_'.$user->name : $user->surname)
             : ($user->name ?? $user->id);
-        $name = 'hardware_user_assignment_' . $hardwareFileName . '_to_' . $userFileName . '_' . time() . '.pdf';
+        $name = 'hardware_user_assignment_'.$hardwareFileName.'_to_'.$userFileName.'_'.time().'.pdf';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
 
         $hardware->load(['hardwareType', 'company']);
@@ -1092,7 +1127,7 @@ class HardwareController extends Controller {
                 $google_url = $brand->withGUrl()->logo_url;
             }
         }
-        
+
         // Fallback per sviluppo se non c'è logo
         if (app()->environment('local', 'development') && empty($google_url)) {
             $google_url = null; // In sviluppo non mostriamo logo se mancante
@@ -1110,7 +1145,7 @@ class HardwareController extends Controller {
             'dpi' => 150,
             'defaultFont' => 'sans-serif',
             'isHtml5ParserEnabled' => true,
-            'isRemoteEnabled' => true // ✅ Abilita il caricamento di immagini da URL esterni
+            'isRemoteEnabled' => true, // ✅ Abilita il caricamento di immagini da URL esterni
         ]);
 
         $pdf = Pdf::loadView('pdf.hardwareuserassignment', $data);
@@ -1119,9 +1154,10 @@ class HardwareController extends Controller {
         return $pdf->download($name);
     }
 
-    public function getHardwareLog($hardwareId, Request $request) {
+    public function getHardwareLog($hardwareId, Request $request)
+    {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to view this hardware log',
             ], 403);
@@ -1139,8 +1175,10 @@ class HardwareController extends Controller {
         ], 200);
     }
 
-    public function hardwareLogsExport($hardwareId) {
-        $name = 'hardware_' . $hardwareId . '_logs_' . time() . '.xlsx';
+    public function hardwareLogsExport($hardwareId)
+    {
+        $name = 'hardware_'.$hardwareId.'_logs_'.time().'.xlsx';
+
         return Excel::download(new HardwareLogsExport($hardwareId), $name);
     }
 }

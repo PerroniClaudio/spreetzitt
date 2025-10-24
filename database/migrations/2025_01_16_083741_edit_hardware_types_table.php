@@ -23,7 +23,7 @@ return new class extends Migration
     {
         Schema::table('hardware_types', function (Blueprint $table) {
             $table->dropUnique('hardware_types_name_unique');
-            
+
             $table->string('name')->change();
         });
     }

@@ -8,7 +8,6 @@ use App\Models\User;
 use Illuminate\Contracts\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Http\Controllers\FileUploadController;
 
 class DocumentController extends Controller
 {

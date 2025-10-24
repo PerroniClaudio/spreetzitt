@@ -7,24 +7,26 @@ use App\Models\Ticket;
 use App\Models\TicketStage;
 use App\Models\TicketStats as Stats;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 
-class TicketStats implements ShouldQueue {
+class TicketStats implements ShouldQueue
+{
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * Create a new job instance.
      */
-    public function __construct() {
+    public function __construct()
+    {
         //
     }
 
-    private function getNightHours($start, $end) {
+    private function getNightHours($start, $end)
+    {
 
         $nightHours = 0;
 
@@ -32,9 +34,9 @@ class TicketStats implements ShouldQueue {
             // Bisogna allineare i dati tra questa funzione e quella che calcola le ore di attesa, perchè questa ha 18 e l'altra 20. Poi considerare anche se devono essere settate in base alle impostazioni nell'azienda cliente o no.
             if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = 10;
-            } else if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isBefore($start->copy()->startOfDay()->addHours(8))) {
+            } elseif ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isBefore($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = $start->diffInHours($start->copy()->startOfDay()->addHours(8));
-            } else if ($start->isAfter($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
+            } elseif ($start->isAfter($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = $end->diffInHours($start->copy()->startOfDay()->addHours(18));
             }
         } else {
@@ -60,10 +62,9 @@ class TicketStats implements ShouldQueue {
             // Calcolo giorni intermedi completi (se esistono)
             $fullDaysBetween = max(0, $start->diffInDays($end) - 1);
             $fullDaysNightHours = $fullDaysBetween * 14; // 6 + 8 = 14 ore per giorno completo
-            
+
             $nightHours = $firstDayNightHours + $lastDayNightHours + $fullDaysNightHours;
         }
-
 
         return $nightHours;
     }
@@ -78,7 +79,7 @@ class TicketStats implements ShouldQueue {
     //         $orePrimoGiorno = 0;
     //         $orePrimoGiorno += $start->hour < $endHour ? ($endHour - $start->hour) : 0;
     //         $orePrimoGiorno += $start->hour <= $startHour ? (24 - $startHour) : ($startHour - $start->hour);
-            
+
     //         // Calcola ore ultimo giorno fino alla scadenza (inizia in un altro giorno)
     //         $oreUltimoGiorno = 0;
     //         $oreUltimoGiorno += $end->hour < $endHour ? $end->hour : ($endHour);
@@ -111,14 +112,14 @@ class TicketStats implements ShouldQueue {
     //     }
     // }
 
-    
     /**
      * Execute the job.
      */
-    public function handle(): void {
+    public function handle(): void
+    {
         $newTicketStageId = TicketStage::where('system_key', 'new')->first()?->id;
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->first()?->id;
-        $waitingTicketStagesIds = TicketStage::where('is_sla_pause', true)->pluck('id')->toArray(); 
+        $waitingTicketStagesIds = TicketStage::where('is_sla_pause', true)->pluck('id')->toArray();
 
         $openTicekts = Ticket::where('stage_id', '!=', $closedTicketStageId)->with('ticketType.category')->get();
 
@@ -130,7 +131,7 @@ class TicketStats implements ShouldQueue {
             'request_open' => 0,
             'request_in_progress' => 0,
             'request_waiting' => 0,
-            'request_out_of_sla' => 0
+            'request_out_of_sla' => 0,
         ];
 
         foreach ($openTicekts as $ticket) {
@@ -140,7 +141,7 @@ class TicketStats implements ShouldQueue {
                 case 1:
                     if ($ticket->stage_id == $newTicketStageId) {
                         $results['incident_open']++;
-                    } else if (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
+                    } elseif (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
                         $results['incident_waiting']++;
                     } else {
                         $results['incident_in_progress']++;
@@ -149,7 +150,7 @@ class TicketStats implements ShouldQueue {
                 case 0:
                     if ($ticket->stage_id == $newTicketStageId) {
                         $results['request_open']++;
-                    } else if (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
+                    } elseif (in_array($ticket->stage_id, $waitingTicketStagesIds)) {
                         $results['request_waiting']++;
                     } else {
                         $results['request_in_progress']++;
@@ -158,7 +159,7 @@ class TicketStats implements ShouldQueue {
             }
 
             /*
-                Per verificare se il ticket in sla bisogna utilizzare il campo sla_solve del ticketType. 
+                Per verificare se il ticket in sla bisogna utilizzare il campo sla_solve del ticketType.
 
                 Bisogna verificare che la differenza tra la data attuale e la data di creazione del ticket sia minore della data di sla_solve.
                 Calcolando questa differenza bisogna tenere conto del fatto che le ore tra mezzanotte e le 8 del mattino non vanno calcolate.
@@ -175,7 +176,7 @@ class TicketStats implements ShouldQueue {
 
             $diffInHours -= $this->getNightHours($ticketCreationDate, $now);
 
-            // ? Rimuovere sabati e domeniche 
+            // ? Rimuovere sabati e domeniche
 
             $weekendDays = 0;
 
@@ -186,8 +187,8 @@ class TicketStats implements ShouldQueue {
                 }
             }
 
-            // Quando si rifarà la funzione considerare che se vengono già tolte le ore notturne non si devono togliere 24 ore, ma meno. 
-            // In più si dovrebbe controllare se il giorno in questione è quello iniziale o finale e calcolare con più precisione in quel caso. 
+            // Quando si rifarà la funzione considerare che se vengono già tolte le ore notturne non si devono togliere 24 ore, ma meno.
+            // In più si dovrebbe controllare se il giorno in questione è quello iniziale o finale e calcolare con più precisione in quel caso.
             // Inoltre la funzione successiva non considera sabati e domeniche se non si passano parametri diversi, quindi considerare anche quello (che siano allineate. se non le considera allora va bene così, altrimenti non vanno eliminati nemmeno qui).
             // $diffInHours -= $weekendDays * 24;
             $diffInHours -= $weekendDays * 10; // nightHours conta dalle 18 alle 8, quindi 14 ore. Ne rimangono 10.
@@ -198,7 +199,6 @@ class TicketStats implements ShouldQueue {
             // Di base non le considera. Inoltre anche sabati e domeniche vanno in base ai parametri passati e di base non li considera.
             $waitingHours = $ticket->waitingHours();
             $diffInHours -= $waitingHours;
-
 
             if ($diffInHours > $sla) {
                 switch ($ticket->ticketType->category->is_problem) {
@@ -218,8 +218,8 @@ class TicketStats implements ShouldQueue {
         Company::all()->each(function ($company) use (&$companiesOpenTickets, $closedTicketStageId) {
             $companyTickets = $company->tickets->where('stage_id', '!=', $closedTicketStageId)->count();
             $companiesOpenTickets[] = [
-                "name" => $company->name,
-                "tickets" => $companyTickets
+                'name' => $company->name,
+                'tickets' => $companyTickets,
             ];
         });
 
@@ -232,7 +232,7 @@ class TicketStats implements ShouldQueue {
             'request_in_progress' => $results['request_in_progress'],
             'request_waiting' => $results['request_waiting'],
             'request_out_of_sla' => $results['request_out_of_sla'],
-            'compnanies_opened_tickets' => json_encode($companiesOpenTickets)
+            'compnanies_opened_tickets' => json_encode($companiesOpenTickets),
         ]);
 
         // Invalida la cache coi dati precedenti

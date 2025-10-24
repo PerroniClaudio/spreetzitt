@@ -50,8 +50,8 @@ return new class extends Migration
                 ->references('id')
                 ->on('companies')
                 ->onDelete('cascade'); // Esegui l'eliminazione a cascata quando l'azienda viene eliminata
-            });
-            
+        });
+
         Schema::table('tickets', function (Blueprint $table) {
             $table->unsignedBigInteger('user_id')->nullable(false)->change();
             $table->unsignedBigInteger('company_id')->nullable(false)->change();

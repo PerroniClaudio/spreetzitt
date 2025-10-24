@@ -6,7 +6,6 @@ use App\Models\Ticket;
 use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -48,26 +47,26 @@ class AutoAssignTicket implements ShouldQueue
         $unassignedTickets = Ticket::where('stage_id', $newTicketStageId)->whereNull('admin_user_id')->get();
 
         foreach ($unassignedTickets as $ticket) {
-            
-            Log::info('Detected unassigned ticket: ' . $ticket->id);
+
+            Log::info('Detected unassigned ticket: '.$ticket->id);
 
             $groups = $ticket->ticketType->groups()->get();
 
             $selectedGroup = null;
             $adminUser = null;
 
-            if($groups->count() == 0) {
+            if ($groups->count() == 0) {
                 // Invia mail di avviso che un ticket non ha un gruppo associato
                 continue;
             }
             foreach ($groups as $group) {
-                if($group->users->count() > 0) {
+                if ($group->users->count() > 0) {
                     $adminUser = $group->users->first();
                     $selectedGroup = $group;
                     break;
                 }
             }
-            if(!$adminUser){
+            if (! $adminUser) {
                 // Invia mail di avviso che un ticket non ha un utente associato
                 continue;
             }
@@ -76,14 +75,14 @@ class AutoAssignTicket implements ShouldQueue
             $ticket->update([
                 'admin_user_id' => $adminUser->id,
             ]);
-    
+
             $assignUpdate = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $adminUser->id, // Anche se non l'ha richiesto lui, ma è obbligatorio questo campo e deve essere un utente esistente
-                'content' => "Modifica automatica: Ticket assegnato all'utente " . $adminUser->name . " " . ($adminUser->surname ?? ''),
+                'content' => "Modifica automatica: Ticket assegnato all'utente ".$adminUser->name.' '.($adminUser->surname ?? ''),
                 'type' => 'assign',
             ]);
-    
+
             // Se lo stato è 'Nuovo' aggiornarlo in assegnato. Lo stato già sappiamo che è 0, quindi non serve il controllo
             $assignedStageId = TicketStage::where('system_key', 'assigned')->value('id');
             $ticket->update(['stage_id' => $assignedStageId]);
@@ -94,13 +93,13 @@ class AutoAssignTicket implements ShouldQueue
                 'user_id' => $adminUser->id,
                 'old_stage_id' => $newTicketStageId,
                 'new_stage_id' => $assignedStageId,
-                'content' => 'Modifica automatica: Stato del ticket modificato in "' . $newStageText . '"',
+                'content' => 'Modifica automatica: Stato del ticket modificato in "'.$newStageText.'"',
                 'type' => 'status',
             ]);
 
             dispatch(new SendUpdateEmail($assignUpdate, true));
             // Invia mail di avviso a tutto il gruppo che un ticket è stato assegnato automaticamente e non è detto che venga gestito da quell'utente.
-            dispatch(new SendGroupWarningEmail( "auto-assign", $selectedGroup, $ticket, $assignUpdate));
+            dispatch(new SendGroupWarningEmail('auto-assign', $selectedGroup, $ticket, $assignUpdate));
 
             // Invalida la cache per chi ha creato il ticket e per i referenti.
             $ticket->invalidateCache();

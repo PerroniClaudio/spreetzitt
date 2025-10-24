@@ -2,10 +2,11 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Jobs\MigrateUserCompanyToPivot;
+use Illuminate\Console\Command;
 
-class MigrateUserCompanyToPivotCommand extends Command {
+class MigrateUserCompanyToPivotCommand extends Command
+{
     /**
      * The name and signature of the console command.
      *
@@ -23,8 +24,9 @@ class MigrateUserCompanyToPivotCommand extends Command {
     /**
      * Execute the console command.
      */
-    public function handle() {
-        dispatch(new MigrateUserCompanyToPivot());
+    public function handle()
+    {
+        dispatch(new MigrateUserCompanyToPivot);
         $this->info('Job di migrazione lanciato!');
     }
 }

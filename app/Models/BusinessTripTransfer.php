@@ -24,13 +24,13 @@ class BusinessTripTransfer extends Model
     /**
      * Get the business trip that owns the business trip transfer.
      */
-
-    public function businessTrip() {
+    public function businessTrip()
+    {
         return $this->belongsTo(BusinessTrip::class);
     }
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class);
     }
-
 }

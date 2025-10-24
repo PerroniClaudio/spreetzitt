@@ -2,29 +2,30 @@
 
 namespace App\Mail;
 
-use App\Models\ActivationToken;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeEmail extends Mailable {
+class WelcomeEmail extends Mailable
+{
     use Queueable, SerializesModels;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(public User $user, public String $url) {
+    public function __construct(public User $user, public string $url)
+    {
         //
     }
 
     /**
      * Get the message envelope.
      */
-    public function envelope(): Envelope {
+    public function envelope(): Envelope
+    {
         return new Envelope(
             subject: 'Attivazione utenza',
         );
@@ -33,7 +34,8 @@ class WelcomeEmail extends Mailable {
     /**
      * Get the message content definition.
      */
-    public function content(): Content {
+    public function content(): Content
+    {
         return new Content(
             markdown: 'emails.welcome',
         );
@@ -44,7 +46,8 @@ class WelcomeEmail extends Mailable {
      *
      * @return array<int, \Illuminate\Mail\Mailables\Attachment>
      */
-    public function attachments(): array {
+    public function attachments(): array
+    {
         return [];
     }
 }

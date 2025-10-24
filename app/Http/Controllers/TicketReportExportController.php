@@ -316,9 +316,9 @@ class TicketReportExportController extends Controller
         foreach ($ticket->statusUpdates as $update) {
             if ($update->type == 'status') {
 
-                if(TicketStage::find($update->new_stage_id)->system_key == 'assigned'){
+                if (TicketStage::find($update->new_stage_id)->system_key == 'assigned') {
                     $avanzamento['assegnato']++;
-                } elseif(TicketStage::find($update->new_stage_id)->is_sla_pause == 1){
+                } elseif (TicketStage::find($update->new_stage_id)->is_sla_pause == 1) {
                     $avanzamento['attesa']++;
                 } else {
                     $avanzamento['in_corso']++;

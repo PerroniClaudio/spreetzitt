@@ -1,14 +1,18 @@
 <?php
+
 // Semplice script per verificare lo stato del queue worker
 
 // Verifica se il processo queue worker è in esecuzione
-function isQueueWorkerRunning() {
+function isQueueWorkerRunning()
+{
     exec("ps aux | grep 'queue:work' | grep -v grep", $output);
-    return !empty($output);
+
+    return ! empty($output);
 }
 
 // Verifica se ci sono job in coda
-function getQueueStats() {
+function getQueueStats()
+{
     // Questo è un placeholder - in produzione dovresti connetterti al database
     // e contare i job nella tabella jobs
     return [

@@ -1,22 +1,19 @@
 <?php
+
 namespace App\Jobs;
 
-use Illuminate\Support\Facades\Log;
-
+use App\Models\NewsSource;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\NewsSource;
+use Illuminate\Support\Facades\Log;
 
 class FetchNewsForSource implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * @var NewsSource
-     */
     protected NewsSource $source;
 
     /**
@@ -74,12 +71,13 @@ class FetchNewsForSource implements ShouldQueue
         $html = \App\Http\Controllers\NewsController::getRenderedHtml($url);
         $htmlRilevante = \App\Http\Controllers\NewsController::extractRelevantHtml($html);
 
-        $vertex = new \App\Http\Controllers\VertexAiController();
+        $vertex = new \App\Http\Controllers\VertexAiController;
         $response = $vertex->extractNewsFromHtml($htmlRilevante);
 
         $newsArray = json_decode($response['result'] ?? '', true);
-        if (!is_array($newsArray)) {
+        if (! is_array($newsArray)) {
             Log::error('Vertex AI non ha restituito un array valido', ['response' => $response]);
+
             return;
         }
 

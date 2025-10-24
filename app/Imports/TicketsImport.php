@@ -160,7 +160,7 @@ class TicketsImport implements ToCollection
                                 'user_id' => $user->id,
                                 'old_stage_id' => $oldStageId,
                                 'new_stage_id' => $selectedStage->id,
-                                'content' => 'Stato del ticket modificato in "' . $selectedStage->name . '"',
+                                'content' => 'Stato del ticket modificato in "'.$selectedStage->name.'"',
                                 'type' => 'status',
                             ]);
                         } else {
@@ -270,7 +270,7 @@ class TicketsImport implements ToCollection
                                 'user_id' => $user->id,
                                 'old_stage_id' => $oldStageId,
                                 'new_stage_id' => $selectedStage->id,
-                                'content' => 'Stato del ticket modificato in "' . $selectedStage->name . '"',
+                                'content' => 'Stato del ticket modificato in "'.$selectedStage->name.'"',
                                 'type' => 'status',
                             ]);
                         } else {

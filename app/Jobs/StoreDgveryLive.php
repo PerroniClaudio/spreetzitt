@@ -12,7 +12,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class StoreDgveryLive implements ShouldQueue {
+class StoreDgveryLive implements ShouldQueue
+{
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     private $payload;
@@ -20,7 +21,8 @@ class StoreDgveryLive implements ShouldQueue {
     /**
      * Create a new job instance.
      */
-    public function __construct($payload) {
+    public function __construct($payload)
+    {
         //
 
         $this->payload = $payload;
@@ -29,7 +31,8 @@ class StoreDgveryLive implements ShouldQueue {
     /**
      * Execute the job.
      */
-    public function handle(): void {
+    public function handle(): void
+    {
         //
 
         $payload = $this->payload;

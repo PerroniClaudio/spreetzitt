@@ -41,8 +41,6 @@ class NewsSource extends Model
 
     /**
      * Get the news for the source.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function news(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
@@ -51,11 +49,19 @@ class NewsSource extends Model
 
     /**
      * Get the tokens for the source.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function tokens(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(NewsSourceToken::class);
+    }
+
+    /**
+     * The companies that have this news source enabled/disabled.
+     */
+    public function companies(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_news_sources')
+            ->withPivot('enabled')
+            ->withTimestamps();
     }
 }

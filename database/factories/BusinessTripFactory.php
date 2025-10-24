@@ -24,7 +24,7 @@ class BusinessTripFactory extends Factory
             'date_from' => $date,
             'date_to' => $date,
             'status' => 0,
-            'expense_type' => 0
+            'expense_type' => 0,
         ];
     }
 }

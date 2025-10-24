@@ -5,18 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketType;
-use App\Models\TypeFormFields;
 use App\Models\TicketTypeCategory;
+use App\Models\TypeFormFields;
 use Illuminate\Http\Request;
 
-class TicketTypeController extends Controller {
+class TicketTypeController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index() {
+    public function index()
+    {
 
         // Si può decidere di non filtrarli prima, nel caso si dovessero vedere in qualche caso nel frontend.
-        $ticketTypes = TicketType::where("is_deleted", false)->with('category')->get();
+        $ticketTypes = TicketType::where('is_deleted', false)->with('category')->get();
         // $ticketTypes = TicketType::with('category')->get();
 
         return response([
@@ -24,10 +26,11 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function categories() {
+    public function categories()
+    {
 
         // $ticketTypeCategories = TicketTypeCategory::where("is_deleted", false)->get();
-        $ticketTypeCategories = TicketTypeCategory::where("is_deleted", false)
+        $ticketTypeCategories = TicketTypeCategory::where('is_deleted', false)
             ->orderBy('name')
             ->orderBy('is_problem', 'desc')
             ->get();
@@ -37,7 +40,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function updateCategory(Request $request, TicketTypeCategory $ticketTypeCategory) {
+    public function updateCategory(Request $request, TicketTypeCategory $ticketTypeCategory)
+    {
 
         $validated = $request->validate([
             'name' => 'required',
@@ -55,14 +59,16 @@ class TicketTypeController extends Controller {
     /**
      * Show the form for creating a new resource.
      */
-    public function create() {
+    public function create()
+    {
         //
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
 
         $validated = $request->validate([
             'name' => 'required',
@@ -70,7 +76,7 @@ class TicketTypeController extends Controller {
             // 'company_id' => 'required|numeric',
             'default_priority' => 'required|string',
             'default_sla_solve' => 'required|numeric',
-            'default_sla_take' => 'required|numeric'
+            'default_sla_take' => 'required|numeric',
         ]);
 
         // $ticketType = TicketType::create($validated);
@@ -85,7 +91,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function storeCategory(Request $request) {
+    public function storeCategory(Request $request)
+    {
 
         $validated = $request->validate([
             'name' => 'required',
@@ -103,7 +110,8 @@ class TicketTypeController extends Controller {
     /**
      * Display the specified resource.
      */
-    public function show(TicketType $ticketType) {
+    public function show(TicketType $ticketType)
+    {
 
         $ticketType = TicketType::where('id', $ticketType->id)->with('category')->first();
 
@@ -115,14 +123,16 @@ class TicketTypeController extends Controller {
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(TicketType $ticketType) {
+    public function edit(TicketType $ticketType)
+    {
         //
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, TicketType $ticketType) {
+    public function update(Request $request, TicketType $ticketType)
+    {
 
         $validated = $request->validate([
             'name' => 'required|string',
@@ -136,7 +146,7 @@ class TicketTypeController extends Controller {
         // controllo ticket della compagnia precedente. se non ce ne sono si può modificare la compagnia, altrimenti no.
         if ($ticketType['company_id'] && $ticketType['company_id'] != $request['company_id'] && $ticketType->countRelatedTickets() > 0) {
             return response([
-                'message' => 'Nessuna modifica effettuata. Non è possibile modificare ' . strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')) . ' perché ci sono ticket associati con l\'attuale ' . strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')),
+                'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché ci sono ticket associati con l\'attuale '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')),
             ], 400);
         }
         // if ($ticketType->company_id != $request['company_id'] && $ticketType->countRelatedTickets()) {
@@ -156,31 +166,33 @@ class TicketTypeController extends Controller {
         $tt = TicketType::where('id', $ticketType->id)->with('category')->first();
 
         return response([
-            'ticketType' =>  $tt,
+            'ticketType' => $tt,
         ], 200);
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(TicketType $ticketType, Request $request) {
+    public function destroy(TicketType $ticketType, Request $request)
+    {
         $user = $request->user();
-        if (!$user['is_admin']) {
+        if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
-        $ticketType = TicketType::where('id', $ticketType["id"])->first();
+        $ticketType = TicketType::where('id', $ticketType['id'])->first();
         // Modificato quando l'azienda è stata resa facoltativa. se non ha l'azienda non dovrebbe avere nemmeno ticket allegati.
         // quindi si elimina direttamente, altrimenti countRelatedTickets dà errore, perchè passa dall'azienda.
         if ($ticketType->company && $ticketType->countRelatedTickets() > 0) {
             $ticketType->update([
                 'is_deleted' => true,
             ]);
+
             return response([
                 'message' => 'Ticket type deleted successfully',
             ], 200);
         } else {
-            $deleted = TicketType::destroy($ticketType["id"]);
+            $deleted = TicketType::destroy($ticketType['id']);
             if ($deleted) {
                 return response(['message' => 'Ticket type deleted successfully'], 200);
             } else {
@@ -193,7 +205,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function getWebForm($id) {
+    public function getWebForm($id)
+    {
 
         if ($id == 0) {
             return response([
@@ -208,7 +221,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function getGroups(TicketType $ticketType) {
+    public function getGroups(TicketType $ticketType)
+    {
         $groups = $ticketType->groups()->get();
 
         return response([
@@ -224,7 +238,8 @@ class TicketTypeController extends Controller {
     //     ], 200);
     // }
 
-    public function getCompany(TicketType $ticketType) {
+    public function getCompany(TicketType $ticketType)
+    {
         $company = $ticketType->company()->get();
 
         return response([
@@ -232,7 +247,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function updateCompanies(Request $request) {
+    public function updateCompanies(Request $request)
+    {
 
         $validated = $request->validate([
             'ticket_type_id' => 'required',
@@ -292,7 +308,8 @@ class TicketTypeController extends Controller {
     //     ], 200);
     // }
 
-    public function updateGroups(Request $request) {
+    public function updateGroups(Request $request)
+    {
 
         $validated = $request->validate([
             'ticket_type_id' => 'required',
@@ -308,7 +325,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function deleteGroups(Request $request) {
+    public function deleteGroups(Request $request)
+    {
 
         $validated = $request->validate([
             'ticket_type_id' => 'required',
@@ -326,7 +344,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function createFormField(Request $request) {
+    public function createFormField(Request $request)
+    {
 
         $validated = $request->validate([
             'ticket_type_id' => 'required',
@@ -367,16 +386,17 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    public function deleteFormField($formFieldId, Request $request) {
+    public function deleteFormField($formFieldId, Request $request)
+    {
         $user = $request->user();
 
-        if (!$user['is_admin']) {
+        if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
         $formField = TypeFormFields::find($formFieldId);
 
-        if (!$formField) {
+        if (! $formField) {
             return response(['message' => 'Form field not found'], 404);
         }
 
@@ -385,27 +405,31 @@ class TicketTypeController extends Controller {
         return response(['message' => 'Form field deleted successfully'], 200);
     }
 
-
-    public function countTicketsInCompany($ticketTypeId) {
+    public function countTicketsInCompany($ticketTypeId)
+    {
         $ticketType = TicketType::where('id', $ticketTypeId)->first();
         $count = 0;
         // Non essendo più obbligatoria la compagnia, si deve controllare prima se è stata assegnata.
         if ($ticketType->company) {
             $count = $ticketType->countRelatedTickets();
         }
+
         return response([
             'count' => $count,
         ], 200);
     }
 
-    public function countTicketsInType(TicketType $ticketType) {
+    public function countTicketsInType(TicketType $ticketType)
+    {
         $tickets = $ticketType->tickets()->get();
+
         return response([
             'tickets' => $tickets,
         ], 200);
     }
 
-    public function duplicateTicketType(Request $request) {
+    public function duplicateTicketType(Request $request)
+    {
 
         $fields = $request->validate([
             'new_company_id' => 'required|numeric',
@@ -413,7 +437,7 @@ class TicketTypeController extends Controller {
         ]);
 
         $user = $request->user();
-        if (!$user['is_admin']) {
+        if (! $user['is_admin']) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -422,13 +446,13 @@ class TicketTypeController extends Controller {
         $newTicketType->company_id = $fields['new_company_id'];
         $success = $newTicketType->save();
 
-        if (!$success) {
+        if (! $success) {
             return response([
                 'message' => 'Error while duplicating ticket type',
             ], 500);
         }
 
-        $newTicketType = TicketType::where('id', $newTicketType["id"])->with("category")->first();
+        $newTicketType = TicketType::where('id', $newTicketType['id'])->with('category')->first();
 
         // Deve duplicare anche il webform e i gruppi
         TypeFormFields::where('ticket_type_id', $ticketType->id)->get()->each(function ($formField) use ($newTicketType) {
@@ -451,18 +475,21 @@ class TicketTypeController extends Controller {
         });
 
         return response([
-            'ticketType' => $newTicketType
+            'ticketType' => $newTicketType,
         ], 200);
     }
 
-    function getCustomGroups(TicketType $ticketType) {
+    public function getCustomGroups(TicketType $ticketType)
+    {
         $customGroups = $ticketType->customGroups()->get();
+
         return response([
             'customGroups' => $customGroups,
         ], 200);
     }
 
-    function getAvailableCustomGroups(TicketType $ticketType) {
+    public function getAvailableCustomGroups(TicketType $ticketType)
+    {
         $customGroups = $ticketType->customGroups()->get();
 
         $company = Company::where('id', $ticketType->company_id)->first();
@@ -476,7 +503,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    function addCustomGroup(Request $request) {
+    public function addCustomGroup(Request $request)
+    {
         $fields = $request->validate([
             'ticket_type_id' => 'required|numeric',
             'custom_user_group_ids' => 'required|json',
@@ -495,7 +523,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    function removeCustomGroup(Request $request) {
+    public function removeCustomGroup(Request $request)
+    {
         $fields = $request->validate([
             'ticket_type_id' => 'required|numeric',
             'custom_user_group_id' => 'required|numeric',
@@ -511,7 +540,8 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    function setCustomGroupExclusive(TicketType $ticketType, Request $request) {
+    public function setCustomGroupExclusive(TicketType $ticketType, Request $request)
+    {
         $fields = $request->validate([
             'is_custom_group_exclusive' => 'required|boolean',
         ]);
@@ -523,8 +553,9 @@ class TicketTypeController extends Controller {
         ], 200);
     }
 
-    function context(TicketType $ticketType) {
-       
+    public function context(TicketType $ticketType)
+    {
+
         $ticketType->load('category', 'company');
 
         $context = [

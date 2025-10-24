@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\SendUpdateEmail;
 use App\Models\TicketStatusUpdate;
 use Illuminate\Http\Request;
-use App\Jobs\SendUpdateEmail;
 
 class TicketStatusUpdateController extends Controller
 {
@@ -14,6 +14,7 @@ class TicketStatusUpdateController extends Controller
     public function index($id)
     {
         $ticketStatusUpdates = TicketStatusUpdate::where('ticket_id', $id)->with(['user'])->get();
+
         return response([
             'statusUpdates' => $ticketStatusUpdates,
         ], 200);
@@ -32,7 +33,7 @@ class TicketStatusUpdateController extends Controller
      */
     public function store($id, Request $request)
     {
-        
+
         $user = $request->user();
 
         $fields = $request->validate([

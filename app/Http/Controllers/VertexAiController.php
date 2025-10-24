@@ -24,8 +24,8 @@ class VertexAiController extends Controller
         $this->projectId = config('vertex.project_id');
         $this->location = config('vertex.location');
 
-        if (!$this->projectId || !$this->location) {
-            throw new Exception("Configurazione Vertex AI mancante. Controlla VERTEX_PROJECT_ID e VERTEX_LOCATION.");
+        if (! $this->projectId || ! $this->location) {
+            throw new Exception('Configurazione Vertex AI mancante. Controlla VERTEX_PROJECT_ID e VERTEX_LOCATION.');
         }
 
         $this->accessToken = $this->getAccessToken();
@@ -35,13 +35,13 @@ class VertexAiController extends Controller
     {
         Log::info('Tentativo di ottenere access token Vertex AI', [
             'project_id' => $this->projectId,
-            'location' => $this->location
+            'location' => $this->location,
         ]);
-        
+
         try {
             $serviceAccount = $this->getServiceAccountConfig();
-            
-            if (!$serviceAccount) {
+
+            if (! $serviceAccount) {
                 throw new Exception('Configurazione service account non trovata');
             }
 
@@ -65,33 +65,34 @@ class VertexAiController extends Controller
 
             Log::info('Risposta Google OAuth per Vertex AI', [
                 'status' => $response->status(),
-                'successful' => $response->successful()
+                'successful' => $response->successful(),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 $errorBody = $response->body();
                 Log::error('Errore OAuth response per Vertex AI', [
-                    'body' => $errorBody, 
-                    'status' => $response->status()
+                    'body' => $errorBody,
+                    'status' => $response->status(),
                 ]);
-                throw new Exception("Errore nell'ottenere l'access token: " . $errorBody);
+                throw new Exception("Errore nell'ottenere l'access token: ".$errorBody);
             }
 
             $responseData = $response->json();
-            if (!isset($responseData['access_token'])) {
+            if (! isset($responseData['access_token'])) {
                 throw new Exception('Access token non presente nella risposta OAuth');
             }
 
             Log::info('Access token Vertex AI ottenuto con successo');
+
             return $responseData['access_token'];
-            
+
         } catch (Exception $e) {
             Log::error('Errore nell\'ottenere access token Vertex AI', [
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
-            throw new Exception('Impossibile ottenere access token Vertex AI: ' . $e->getMessage());
+
+            throw new Exception('Impossibile ottenere access token Vertex AI: '.$e->getMessage());
         }
     }
 
@@ -99,10 +100,11 @@ class VertexAiController extends Controller
     {
         // Configurazione tramite singole variabili d'ambiente
         $serviceAccount = config('vertex.service_account');
-        
+
         // Verifica che i campi essenziali siano presenti
         if ($serviceAccount['client_email'] && $serviceAccount['private_key']) {
             Log::info('Service account caricato da variabili d\'ambiente');
+
             return $serviceAccount;
         }
 
@@ -110,17 +112,19 @@ class VertexAiController extends Controller
         $keyFilePath = config('vertex.key_file_path');
         if ($keyFilePath) {
             $fullPath = str_starts_with($keyFilePath, '/') ? $keyFilePath : base_path($keyFilePath);
-            
+
             if (file_exists($fullPath) && is_readable($fullPath)) {
                 $serviceAccount = json_decode(file_get_contents($fullPath), true);
                 if ($serviceAccount && isset($serviceAccount['client_email'], $serviceAccount['private_key'])) {
                     Log::info('Service account caricato da file', ['file' => $fullPath]);
+
                     return $serviceAccount;
                 }
             }
         }
 
         Log::error('Nessuna configurazione service account valida trovata');
+
         return null;
     }
 
@@ -171,7 +175,7 @@ class VertexAiController extends Controller
         '."{$htmlPulito}";
     }
 
-    private function excuteRequest(string $prompt, string $modelName = 'gemini-2.5-flash-lite'): string
+    private function excuteRequest(string $prompt, string $modelName = 'gemini-2.5-pro'): string
     {
 
         $url = "https://{$this->location}-aiplatform.googleapis.com/v1/projects/{$this->projectId}/locations/{$this->location}/publishers/google/models/{$modelName}:generateContent";
@@ -189,7 +193,7 @@ class VertexAiController extends Controller
             ],
             'generationConfig' => [
                 'temperature' => 0.1,
-                'maxOutputTokens' => 10000,
+                'maxOutputTokens' => 60000,
                 'topP' => 0.8,
                 'topK' => 40,
             ],
@@ -199,6 +203,11 @@ class VertexAiController extends Controller
             'Authorization' => 'Bearer '.$this->accessToken,
             'Content-Type' => 'application/json',
         ])->timeout(500)->post($url, $payload);
+
+        Log::info('Gemini response', [
+            'status' => $response->status(),
+            'body' => $response->body(),
+        ]);
 
         if (! $response->successful()) {
             throw new Exception('Errore chiamata Gemini: '.$response->body());
@@ -219,6 +228,7 @@ class VertexAiController extends Controller
         $prompt = $this->generatePromptFromHtml($html);
 
         try {
+            Log::info('Starting Gemini request for news extraction');
             $responseText = $this->excuteRequest($prompt);
 
             return ['result' => $responseText];
@@ -281,13 +291,13 @@ class VertexAiController extends Controller
                     'suggestion' => 'Prova a essere più specifico. Tabelle principali: users, companies, tickets, hardware, documents, properties, news, groups, offices',
                     'examples' => [
                         'Mostra tutti gli utenti della mia azienda',
-                        'Ticket aperti con priorità alta', 
+                        'Ticket aperti con priorità alta',
                         'Hardware assegnato agli utenti',
                         'Documenti caricati nell\'ultimo mese',
                         'Statistiche ticket per stato',
                         'Proprietà immobiliari per azienda',
-                        'Ultime notizie pubblicate'
-                    ]
+                        'Ultime notizie pubblicate',
+                    ],
                 ], 400);
             }
 
@@ -440,7 +450,7 @@ class VertexAiController extends Controller
             'users' => [
                 // Info di base (SAFE - no password, token, etc.)
                 'id', 'name', 'surname', 'email', 'phone', 'city', 'zip_code', 'address',
-                'is_admin', 'is_company_admin', 'is_deleted', 'company_id', 'created_at', 'updated_at'
+                'is_admin', 'is_company_admin', 'is_deleted', 'company_id', 'created_at', 'updated_at',
             ],
             'companies' => [
                 'id', 'name', 'sla', 'note', 'created_at', 'updated_at',
@@ -448,7 +458,7 @@ class VertexAiController extends Controller
                 'sla_take_low', 'sla_take_medium', 'sla_take_high', 'sla_take_critical',
                 'sla_solve_low', 'sla_solve_medium', 'sla_solve_high', 'sla_solve_critical',
                 // Data owner info
-                'data_owner_name', 'data_owner_surname', 'data_owner_email'
+                'data_owner_name', 'data_owner_surname', 'data_owner_email',
             ],
 
             // === TICKET SYSTEM ===
@@ -456,107 +466,106 @@ class VertexAiController extends Controller
                 'id', 'user_id', 'company_id', 'status', 'stage_id', 'description', 'priority',
                 'due_date', 'created_at', 'updated_at', 'type_id', 'admin_user_id', 'group_id',
                 'assigned', 'sla_take', 'sla_solve', 'is_user_error', 'actual_processing_time',
-                'is_billable', 'source', 'is_rejected', 'parent_ticket_id'
+                'is_billable', 'source', 'is_rejected', 'parent_ticket_id',
             ],
             'ticket_types' => [
                 'id', 'name', 'ticket_type_category_id', 'company_id', 'default_priority',
                 'default_sla_solve', 'default_sla_take', 'is_deleted', 'description',
-                'expected_processing_time', 'expected_is_billable', 'created_at', 'updated_at'
+                'expected_processing_time', 'expected_is_billable', 'created_at', 'updated_at',
             ],
             'ticket_type_categories' => [
-                'id', 'name', 'is_problem', 'is_request', 'is_deleted', 'created_at', 'updated_at'
+                'id', 'name', 'is_problem', 'is_request', 'is_deleted', 'created_at', 'updated_at',
             ],
             'ticket_stages' => [
                 'id', 'name', 'description', 'admin_color', 'user_color', 'order',
-                'is_sla_pause', 'is_system', 'system_key', 'created_at', 'updated_at'
+                'is_sla_pause', 'is_system', 'system_key', 'created_at', 'updated_at',
             ],
             'ticket_messages' => [
-                'id', 'ticket_id', 'user_id', 'message', 'created_at', 'updated_at'
+                'id', 'ticket_id', 'user_id', 'message', 'created_at', 'updated_at',
             ],
             'ticket_files' => [
                 'id', 'ticket_id', 'filename', 'extension', 'mime_type', 'size',
-                'is_deleted', 'created_at', 'updated_at'
+                'is_deleted', 'created_at', 'updated_at',
             ],
             'ticket_status_updates' => [
                 'id', 'ticket_id', 'user_id', 'content', 'old_stage_id', 'new_stage_id',
-                'type', 'show_to_user', 'created_at', 'updated_at'
+                'type', 'show_to_user', 'created_at', 'updated_at',
             ],
-
 
             // === HARDWARE MANAGEMENT ===
             'hardware' => [
                 'id', 'make', 'model', 'serial_number', 'company_asset_number', 'support_label',
                 'purchase_date', 'company_id', 'hardware_type_id', 'ownership_type',
-                'status', 'position', 'is_exclusive_use', 'created_at', 'updated_at'
+                'status', 'position', 'is_exclusive_use', 'created_at', 'updated_at',
             ],
             'hardware_types' => [
-                'id', 'name', 'created_at', 'updated_at'
+                'id', 'name', 'created_at', 'updated_at',
             ],
             'hardware_user' => [
                 'id', 'hardware_id', 'user_id', 'created_by', 'responsible_user_id',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at',
             ],
 
             // === GROUPS & ORGANIZATION ===
             'groups' => [
-                'id', 'name', 'parent_id', 'email', 'created_at', 'updated_at'
+                'id', 'name', 'parent_id', 'email', 'created_at', 'updated_at',
             ],
             'custom_user_groups' => [
-                'id', 'name', 'company_id', 'created_by', 'created_at', 'updated_at'
+                'id', 'name', 'company_id', 'created_by', 'created_at', 'updated_at',
             ],
 
             // === DOCUMENTS & FILES ===
             'documents' => [
                 'id', 'name', 'uploaded_name', 'type', 'mime_type', 'company_id',
-                'uploaded_by', 'file_size', 'created_at', 'updated_at'
+                'uploaded_by', 'file_size', 'created_at', 'updated_at',
             ],
 
             // === PROPERTIES ===
             'properties' => [
                 'id', 'section', 'sheet', 'parcel', 'users_number', 'energy_class',
                 'square_meters', 'thousandths', 'activity_type', 'in_use_by',
-                'company_id', 'created_at', 'updated_at'
+                'company_id', 'created_at', 'updated_at',
             ],
 
             // === SUPPLIER & BRANDS ===
             'suppliers' => [
-                'id', 'name', 'logo_url', 'created_at', 'updated_at'
+                'id', 'name', 'logo_url', 'created_at', 'updated_at',
             ],
             'brands' => [
-                'id', 'name', 'logo_url', 'description', 'supplier_id', 'created_at', 'updated_at'
+                'id', 'name', 'logo_url', 'description', 'supplier_id', 'created_at', 'updated_at',
             ],
 
             // === NEWS SYSTEM ===
             'news' => [
                 'id', 'news_source_id', 'title', 'url', 'description', 'published_at',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at',
             ],
             'news_sources' => [
                 'id', 'display_name', 'slug', 'type', 'url', 'description',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at',
             ],
 
             // === OFFICES ===
             'offices' => [
                 'id', 'name', 'address', 'number', 'zip_code', 'city', 'province',
-                'is_legal', 'is_operative', 'company_id', 'created_at', 'updated_at'
+                'is_legal', 'is_operative', 'company_id', 'created_at', 'updated_at',
             ],
 
             // === STATS & REPORTING ===
             'ticket_stats' => [
                 'id', 'incident_open', 'incident_in_progress', 'incident_waiting', 'incident_out_of_sla',
                 'request_open', 'request_in_progress', 'request_waiting', 'request_out_of_sla',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at',
             ],
 
             // === AUDIT & LOGS ===
             'vertex_ai_query_logs' => [
                 'id', 'user_id', 'user_email', 'user_prompt', 'result_count',
-                'was_successful', 'execution_time', 'created_at', 'updated_at'
+                'was_successful', 'execution_time', 'created_at', 'updated_at',
             ],
             'failed_login_attempts' => [
                 'id', 'email', 'user_id', 'ip_address', 'attempt_type',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at',
             ],
         ];
     }
@@ -606,7 +615,7 @@ class VertexAiController extends Controller
     {
         // Log della risposta per debug
         Log::debug('Risposta AI ricevuta', ['response' => $response]);
-        
+
         // Rimuove eventuali wrapper di codice
         $response = trim($response);
         $response = preg_replace('/^```sql\s*\n?/i', '', $response);
@@ -617,12 +626,14 @@ class VertexAiController extends Controller
         // Verifica se la risposta è "IMPOSSIBLE"
         if (strtoupper($response) === 'IMPOSSIBLE') {
             Log::warning('AI ha risposto IMPOSSIBLE per il prompt');
+
             return null;
         }
 
         // Verifica che sia una query SELECT valida (più flessibile con whitespace e newline)
         if (! preg_match('/^\s*SELECT\s+.*?\s+FROM\s+/ims', $response)) {
             Log::warning('Risposta AI non contiene query SQL valida', ['response' => $response]);
+
             return null;
         }
 
@@ -633,11 +644,12 @@ class VertexAiController extends Controller
         $sqlQuery = trim($queries[0]);
 
         // Aggiunge LIMIT se non presente
-        if (!preg_match('/\bLIMIT\s+\d+/i', $sqlQuery)) {
+        if (! preg_match('/\bLIMIT\s+\d+/i', $sqlQuery)) {
             $sqlQuery .= ' LIMIT 1000';
         }
 
         Log::debug('Query SQL estratta con successo', ['query' => $sqlQuery]);
+
         return $sqlQuery;
     }
 
@@ -663,9 +675,9 @@ class VertexAiController extends Controller
             'microsoft_token', 'oauth_token', 'google_token', 'facebook_token',
             'secret_key', 'private_key', 'secret', 'key',
             '2fa_secret', 'backup_codes', 'two_factor', 'otp',
-            'client_secret', 'auth_secret'
+            'client_secret', 'auth_secret',
         ];
-        
+
         foreach ($sensitiveColumns as $column) {
             if (preg_match('/\b'.$column.'\b/i', $sqlQuery)) {
                 throw new Exception("Colonna sensibile '$column' non permessa nelle query");

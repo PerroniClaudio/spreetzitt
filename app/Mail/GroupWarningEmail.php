@@ -14,13 +14,19 @@ class GroupWarningEmail extends Mailable
     use Queueable, SerializesModels;
 
     public $stages;
+
     public $updateTypes;
+
     public $previewText; // Testo visualizzato nella preview dell'email
+
     public $envelopSubject; // Oggetto dell'email
+
     public $category;
+
     public $company;
+
     public $ticketType;
-    
+
     /**
      * Create a new message instance.
      */
@@ -33,7 +39,7 @@ class GroupWarningEmail extends Mailable
                 'name' => $stage->name,
                 'admin_color' => $stage->admin_color,
                 'user_color' => $stage->user_color,
-                'is_sla_pause' => $stage->is_sla_pause
+                'is_sla_pause' => $stage->is_sla_pause,
             ]];
         })->toArray();
 
@@ -42,12 +48,12 @@ class GroupWarningEmail extends Mailable
         // $this->previewText = $this->company->name . ' - ' . $this->updateTypes[$this->update->type] . " - " . $this->update->content;
         $this->previewText = '';
 
-        switch ($type){
+        switch ($type) {
             case 'auto-assign':
-                if(!$ticket){
+                if (! $ticket) {
                     throw new \Exception('Per questo tipo serve anche il ticket.');
                 }
-                if(!$update){
+                if (! $update) {
                     throw new \Exception('Per questo tipo serve anche l\'update.');
                 }
                 $this->company = $ticket->company;
@@ -56,8 +62,8 @@ class GroupWarningEmail extends Mailable
                 $ticketTypeName = $ticket->ticketType->name;
                 $requestProblem = $this->category->is_problem ? 'Incident' : 'Request';
                 // Questi due possono essere diversi tra loro ma per ora li lascio così
-                $this->previewText = 'Warning! ' . $requestProblem . ' n° ' . $ticket->id . ' assegnato/a automaticamente - ' . $ticketTypeName;
-                $this->envelopSubject = 'Warning! ' . $requestProblem . ' n° ' . $ticket->id . ' assegnato/a automaticamente - ' . $ticketTypeName;
+                $this->previewText = 'Warning! '.$requestProblem.' n° '.$ticket->id.' assegnato/a automaticamente - '.$ticketTypeName;
+                $this->envelopSubject = 'Warning! '.$requestProblem.' n° '.$ticket->id.' assegnato/a automaticamente - '.$ticketTypeName;
                 break;
             default:
                 $this->previewText = 'Warning! Non specificato';

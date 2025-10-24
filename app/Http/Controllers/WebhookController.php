@@ -8,13 +8,16 @@ use App\Jobs\UpdateDgveryLive;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
-class WebhookController extends Controller {
-    public function handle(Request $request) {
+class WebhookController extends Controller
+{
+    public function handle(Request $request)
+    {
 
         Log::info('webhook received', $request->all());
 
         if ($request->header('X-NinjaRMM-Event') !== null) {
             $this->ninjaRmm($request->all());
+
             return response()->json(['success' => true]);
         }
 
@@ -38,17 +41,17 @@ class WebhookController extends Controller {
                 break;
             default:
                 // Handle other events
-                $message = "No...";
+                $message = 'No...';
                 break;
         }
-
 
         // Perform actions based on the webhook data
 
         return response()->json(['success' => true]);
     }
 
-    private function ninjaRmm($data) {
+    private function ninjaRmm($data)
+    {
         // Process NinjaRMM webhook payload
 
         Log::info('NinjaRMM webhook received', $data);

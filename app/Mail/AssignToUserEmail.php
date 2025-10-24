@@ -3,9 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Ticket;
-use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -18,7 +16,7 @@ class AssignToUserEmail extends Mailable
     public $stages;
 
     public $previewText;
-    
+
     /**
      * Create a new message instance.
      */
@@ -30,7 +28,7 @@ class AssignToUserEmail extends Mailable
                 'name' => $stage->name,
                 'admin_color' => $stage->admin_color,
                 'user_color' => $stage->user_color,
-                'is_sla_pause' => $stage->is_sla_pause
+                'is_sla_pause' => $stage->is_sla_pause,
             ]];
         })->toArray();
         $this->previewText = $this->ticket->description;
@@ -42,7 +40,7 @@ class AssignToUserEmail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Assegnazione ticket ' . $this->ticket->id . ' - ' . $this->ticketType->name,
+            subject: 'Assegnazione ticket '.$this->ticket->id.' - '.$this->ticketType->name,
         );
     }
 

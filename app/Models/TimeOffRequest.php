@@ -16,14 +16,16 @@ class TimeOffRequest extends Model
         'date_from',
         'date_to',
         'status',
-        'batch_id'
+        'batch_id',
     ];
 
-    public function type() { 
+    public function type()
+    {
         return $this->belongsTo(TimeOffType::class, 'time_off_type_id');
     }
 
-    public function user() {
+    public function user()
+    {
         return $this->belongsTo(User::class, 'user_id');
     }
 }

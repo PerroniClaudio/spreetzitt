@@ -17,22 +17,22 @@ class TimeOffRequestController extends Controller
         //
 
         $requests = TimeOffRequest::with(['type', 'user'])->where('status', '<>', '4')->orderBy('id', 'asc')->get();
-        
+
         $formattedRequests = [];
         $currentRequest = null;
 
-        foreach( $requests as $key => $req ) {
+        foreach ($requests as $key => $req) {
 
-            if($req->time_off_type_id == 11) {
+            if ($req->time_off_type_id == 11) {
 
-                if($currentRequest) {
+                if ($currentRequest) {
                     $currentRequest['date_to'] = $req->date_to;
-                    if(isset($requests[$key + 1])) {
+                    if (isset($requests[$key + 1])) {
                         $nextBatchId = $requests[$key + 1]['batch_id'];
                         $currentBatchId = $req->batch_id;
 
-                        if($nextBatchId != $currentBatchId) {
-                            
+                        if ($nextBatchId != $currentBatchId) {
+
                             $formattedRequests[] = $currentRequest;
                             $currentRequest = null;
                         }
@@ -52,7 +52,7 @@ class TimeOffRequestController extends Controller
 
         return response([
             'requests' => $formattedRequests,
-           
+
         ]);
 
     }
@@ -84,7 +84,7 @@ class TimeOffRequestController extends Controller
 
         // L'orario di fine non può essere maggiore di quello di inizio
 
-        if(strtotime($fields['date_to']) < strtotime($fields['date_from'])) {
+        if (strtotime($fields['date_to']) < strtotime($fields['date_from'])) {
 
             return response([
                 'message' => 'La data di fine non può essere maggiore di quella di inizio',
@@ -97,15 +97,16 @@ class TimeOffRequestController extends Controller
         $request = TimeOffRequest::create($fields);
 
         return response([
-            'request' => $request
+            'request' => $request,
         ]);
     }
 
-    public function storeBatch(Request $request) {
+    public function storeBatch(Request $request)
+    {
 
         $user = $request->user();
 
-        // Controlla una per una che siano valide 
+        // Controlla una per una che siano valide
 
         $requests = json_decode($request->requests);
 
@@ -113,7 +114,7 @@ class TimeOffRequestController extends Controller
 
         DB::beginTransaction();
 
-        foreach( $requests as $time_off_request ) {
+        foreach ($requests as $time_off_request) {
 
             $fields = [
                 'date_from' => $time_off_request->date_from,
@@ -134,6 +135,7 @@ class TimeOffRequestController extends Controller
 
             if ($existingRequest) {
                 DB::rollBack();
+
                 return response([
                     'message' => 'Hai già una richiesta di permesso in questo periodo',
                 ], 400);
@@ -146,7 +148,7 @@ class TimeOffRequestController extends Controller
         DB::commit();
 
         return response([
-            'message' => 'Richieste di permesso create con successo'
+            'message' => 'Richieste di permesso create con successo',
         ], 201);
 
     }
@@ -172,7 +174,6 @@ class TimeOffRequestController extends Controller
     {
         //
 
-         
     }
 
     /**
@@ -192,19 +193,19 @@ class TimeOffRequestController extends Controller
         $timeOffRequest->update($fields);
 
         return response([
-            'message' => 'Richiesta di permesso aggiornata con successo'
+            'message' => 'Richiesta di permesso aggiornata con successo',
         ], 201);
     }
 
-    public function updateBatch(Request $request) {
+    public function updateBatch(Request $request)
+    {
 
         $user = $request->user();
         $requests = json_decode($request->requests);
 
         DB::beginTransaction();
 
-
-        foreach( $requests as $time_off_request ) {
+        foreach ($requests as $time_off_request) {
 
             $fields = [
                 'date_from' => $time_off_request->date_from,
@@ -222,10 +223,11 @@ class TimeOffRequestController extends Controller
 
             if ($existingRequest) {
                 DB::rollBack();
+
                 return response([
                     'message' => 'Hai già una richiesta di permesso in questo periodo',
                     'matching' => $existingRequest,
-                    'id' => $time_off_request->id
+                    'id' => $time_off_request->id,
                 ], 400);
             }
 
@@ -236,7 +238,7 @@ class TimeOffRequestController extends Controller
         DB::commit();
 
         return response([
-            'message' => 'Richieste di permesso modificate con successo'
+            'message' => 'Richieste di permesso modificate con successo',
         ], 200);
 
     }
@@ -249,21 +251,22 @@ class TimeOffRequestController extends Controller
         //
 
         $timeOffRequest->update([
-            'status' => '4'
+            'status' => '4',
         ]);
 
         return response([
-            'message' => 'Richiesta di permesso cancellata con successo'
+            'message' => 'Richiesta di permesso cancellata con successo',
         ], 200);
 
     }
 
-    public function types() {
+    public function types()
+    {
 
         $types = TimeOffType::all();
 
         return response([
-            'types' => $types
+            'types' => $types,
         ]);
 
     }

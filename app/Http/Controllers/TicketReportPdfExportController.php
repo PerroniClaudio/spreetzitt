@@ -7,7 +7,6 @@ use App\Models\Company;
 use App\Models\TicketReportPdfExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Http\Controllers\FileUploadController;
 
 class TicketReportPdfExportController extends Controller
 {
@@ -310,10 +309,10 @@ class TicketReportPdfExportController extends Controller
             // Cancello il file dal bucket
             if ($ticketReportPdfExport->is_generated) {
                 $filePath = $ticketReportPdfExport->file_path;
-                    $disk = FileUploadController::getStorageDisk();
-                    if (Storage::disk($disk)->exists($filePath)) {
-                        Storage::disk($disk)->delete($filePath);
-                    }
+                $disk = FileUploadController::getStorageDisk();
+                if (Storage::disk($disk)->exists($filePath)) {
+                    Storage::disk($disk)->delete($filePath);
+                }
             }
 
             // Imposta come non generato e cancella il messaggio di errore

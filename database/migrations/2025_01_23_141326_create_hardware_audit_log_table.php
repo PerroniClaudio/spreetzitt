@@ -13,7 +13,7 @@ return new class extends Migration
     {
         // Rivediamo l'HardwareAuditLog
         // id, modified_by, hardware_id, user_id, old_data (json con contenuto in base alla modifica), new_data (json con contenuto in base alla modifica), edit_sujbect (hardware, hardware_user, hardware_company), edit_type (create, delete, update), created_at, updated_at
-        // 
+        //
         Schema::create('hardware_audit_log', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('modified_by')->nullable();

@@ -30,7 +30,8 @@ class TypeFormFields extends Model
         'property_types_list',
     ];
 
-    public function ticketType() {
+    public function ticketType()
+    {
         return $this->belongsTo(TicketType::class);
     }
 
@@ -42,9 +43,10 @@ class TypeFormFields extends Model
     // Property types are stored as comma-separated values since they are fixed (1-5)
     public function getPropertyTypesAttribute()
     {
-        if (!$this->property_types_list) {
+        if (! $this->property_types_list) {
             return [];
         }
+
         return explode(',', $this->property_types_list);
     }
 
@@ -56,5 +58,4 @@ class TypeFormFields extends Model
             $this->attributes['property_types_list'] = $value;
         }
     }
-
 }

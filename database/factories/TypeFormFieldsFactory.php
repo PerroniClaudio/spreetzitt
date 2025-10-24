@@ -19,23 +19,23 @@ class TypeFormFieldsFactory extends Factory
         return [
             'field_name' => fake()->word(),
             'field_type' => fake()->randomElement([
-                "text",
-                "textarea",
-                "email",
-                "number",
-                "date",
-                "tel",
-                "url"
+                'text',
+                'textarea',
+                'email',
+                'number',
+                'date',
+                'tel',
+                'url',
             ]),
             'field_label' => fake()->word(),
             'required' => fake()->boolean(),
             'description' => fake()->sentence(),
             'placeholder' => fake()->word(),
             'default_value' => fake()->word(),
-            'validation' => "required",
+            'validation' => 'required',
             'validation_message' => fake()->sentence(),
             'help_text' => fake()->sentence(),
-            'order' => 0
+            'order' => 0,
         ];
     }
 }

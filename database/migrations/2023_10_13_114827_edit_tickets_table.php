@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         //
-        Schema::table('tickets', function(Blueprint $table) {
+        Schema::table('tickets', function (Blueprint $table) {
 
             $table->unsignedBigInteger('type_id');
 
@@ -30,7 +30,7 @@ return new class extends Migration
     {
         //
 
-        Schema::table('tickets', function(Blueprint $table) {
+        Schema::table('tickets', function (Blueprint $table) {
 
             $table->dropForeign(['type_id']);
             $table->dropColumn('type_id');

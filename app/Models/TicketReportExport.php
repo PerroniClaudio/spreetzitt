@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketReportExport extends Model {
-
+class TicketReportExport extends Model
+{
     protected $fillable = [
         'file_name',
         'file_path',
@@ -17,7 +17,7 @@ class TicketReportExport extends Model {
         'is_generated',
         'is_user_generated',
         'is_failed',
-        'error_message'
+        'error_message',
     ];
 
     use HasFactory;

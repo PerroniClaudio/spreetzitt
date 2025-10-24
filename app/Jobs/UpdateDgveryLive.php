@@ -9,14 +9,17 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
-class UpdateDgveryLive implements ShouldQueue {
+class UpdateDgveryLive implements ShouldQueue
+{
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
     private $payload;
 
     /**
      * Create a new job instance.
      */
-    public function __construct($payload) {
+    public function __construct($payload)
+    {
         //
         $this->payload = $payload;
     }
@@ -24,12 +27,13 @@ class UpdateDgveryLive implements ShouldQueue {
     /**
      * Execute the job.
      */
-    public function handle(): void {
+    public function handle(): void
+    {
         //
 
         $payload = $this->payload;
 
-        $message = TicketMessage::where("message", "\"identificativo_livesp\":\"{$payload['live_id']}\"")->first();
+        $message = TicketMessage::where('message', "\"identificativo_livesp\":\"{$payload['live_id']}\"")->first();
 
         $newMessage = TicketMessage::create([
             'ticket_id' => $message->ticket_id,

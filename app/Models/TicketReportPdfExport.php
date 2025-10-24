@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketReportPdfExport extends Model {
-
+class TicketReportPdfExport extends Model
+{
     protected $fillable = [
         'file_name',
         'file_path',
@@ -24,9 +24,10 @@ class TicketReportPdfExport extends Model {
     ];
 
     // Crea l'identificativo del report PDF da utilizzare come riferimento in fattura.
-    public function generatePdfIdentificationString(){
+    public function generatePdfIdentificationString()
+    {
         $company = Company::find($this->company_id);
-        if (!$company) {
+        if (! $company) {
             return response([
                 'message' => 'Company not found',
             ], 404);
@@ -39,12 +40,13 @@ class TicketReportPdfExport extends Model {
             strtoupper(substr($company->name, 0, 3)),
             $company->id
         );
-        $identificationString = $identificationStringStart . $hexTime;
+        $identificationString = $identificationStringStart.$hexTime;
         while (self::where('approved_billing_identification', $identificationString)->exists()) {
             $time++;
             $hexTime = strtoupper(dechex($time));
-            $identificationString = $identificationStringStart . $hexTime;
+            $identificationString = $identificationStringStart.$hexTime;
         }
+
         return $identificationString;
     }
 

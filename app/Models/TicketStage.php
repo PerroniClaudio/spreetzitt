@@ -26,7 +26,8 @@ class TicketStage extends Model
         'order' => 'integer',
     ];
 
-    public function tickets(){
+    public function tickets()
+    {
         return $this->hasMany(Ticket::class, 'stage_id');
     }
 
@@ -76,9 +77,9 @@ class TicketStage extends Model
     public function delete()
     {
         if ($this->is_system) {
-            throw new \Exception('Cannot delete system ticket stage: ' . $this->name);
+            throw new \Exception('Cannot delete system ticket stage: '.$this->name);
         }
-        
+
         return parent::delete();
     }
 }

@@ -138,7 +138,7 @@ class BrandController extends Controller
 
         foreach ($brands as $brand) {
             if ($disk === 'public' || $disk === 'local') {
-                $brand->logo_url = config('app.url') . '/api/brand/' . $brand->id . '/logo';
+                $brand->logo_url = config('app.url').'/api/brand/'.$brand->id.'/logo';
             } else {
                 $brand->logo_url = FileUploadController::generateSignedUrlForFile($brand->logo_url, 70);
             }

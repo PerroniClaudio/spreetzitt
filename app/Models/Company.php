@@ -137,4 +137,16 @@ class Company extends Model
     {
         return $this->hasMany(Property::class);
     }
+
+    /**
+     * The news sources available to the company.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function newsSources()
+    {
+        return $this->belongsToMany(NewsSource::class, 'company_news_sources')
+            ->withPivot('enabled')
+            ->withTimestamps();
+    }
 }
