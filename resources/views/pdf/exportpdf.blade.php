@@ -23,7 +23,7 @@
             @endphp
             @if ($imgData !== false)
                 <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="iftlogo"
-                    style="width: 192px; height: 38px; position: absolute; top: 0; left: 0;">
+                    style="width: auto; height: 38px; position: absolute; top: 0; left: 0;">
             @else
                 <span>Immagine non disponibile</span>
             @endif
