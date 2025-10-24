@@ -37,6 +37,9 @@ class GeneratePdfReport implements ShouldQueue
     {
         //
         $this->report = $report;
+
+        // Aumenta il limite di memoria a 512MB per questo job
+        ini_set('memory_limit', '512M');
     }
 
     /**
@@ -67,6 +70,20 @@ class GeneratePdfReport implements ShouldQueue
                             ->where('created_at', '<=', $report->start_date);
                     }
                 })
+                // Parte aggiunta per usare meno memoria (va modificato anche il resto del codice per usare questo approccio, perchè rende inutilizzabili alcuni metodi)
+                // ->select([
+                //     'id', 'company_id', 'created_at', 'description', 'stage_id', 
+                //     'actual_processing_time', 'is_billable', 'is_billing_validated',
+                //     'work_mode', 'admin_user_id', 'master_id', 'user_id', 'source',
+                //     'priority', 'is_user_error', 'is_form_correct', 'updated_at'
+                // ])
+                // ->with([
+                //     'ticketType:id,name,is_master,category_id',
+                //     'ticketType.category:id,name,is_problem,is_request',
+                //     'user:id,name,surname,is_admin',
+                //     'messages:id,ticket_id,message,created_at,user_id',
+                //     'messages.user:id,name,surname,is_admin'
+                // ])
                 ->get();
 
             if (! $tickets->isEmpty()) {
