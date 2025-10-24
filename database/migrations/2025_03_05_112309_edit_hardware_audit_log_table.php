@@ -29,7 +29,7 @@ return new class extends Migration
                 // Rimuovi i valori non validi prima di aggiungere il vincolo
                 DB::statement('UPDATE hardware_audit_log SET modified_by = NULL WHERE modified_by NOT IN (SELECT id FROM users)');
                 DB::statement('UPDATE hardware_audit_log SET hardware_id = NULL WHERE hardware_id NOT IN (SELECT id FROM hardware)');
-                
+
                 $table->foreign('modified_by')->references('id')->on('users')->onDelete('set null');
                 $table->foreign('hardware_id')->references('id')->on('hardware')->onDelete('set null');
             }

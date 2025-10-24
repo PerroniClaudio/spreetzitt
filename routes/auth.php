@@ -13,7 +13,7 @@ Route::post('/register', [RegisteredUserController::class, 'store'])
     ->middleware('guest')
     ->name('register');
 
-Route::post('/user/activate', [UserController::class, "activateUser"])
+Route::post('/user/activate', [UserController::class, 'activateUser'])
     ->middleware('guest')
     ->name('user.activate');
 

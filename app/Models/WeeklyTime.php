@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class WeeklyTime extends Model {
+class WeeklyTime extends Model
+{
     use HasFactory;
 
     protected $fillable = [
@@ -15,7 +16,8 @@ class WeeklyTime extends Model {
         'end_time',
     ];
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class);
     }
 }

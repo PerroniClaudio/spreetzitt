@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Imports;
 
 use App\Models\Company;
@@ -7,10 +8,10 @@ use App\Models\HardwareAuditLog;
 use App\Models\HardwareType;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
-use Illuminate\Support\Collection;
 
 class HardwareImport implements ToCollection
 {
@@ -38,10 +39,7 @@ class HardwareImport implements ToCollection
     {
         $this->authUser = $authUser;
     }
-    
-    /**
-     * @param Collection $rows
-     */
+
     public function collection(Collection $rows)
     {
         DB::beginTransaction();
@@ -71,21 +69,21 @@ class HardwareImport implements ToCollection
                 $isPresent = Hardware::where('serial_number', $row[2])->first();
 
                 if ($isPresent) {
-                    throw new \Exception('Hardware con seriale ' . $row[2] . ' già presente. ID: ' . $isPresent->id);
+                    throw new \Exception('Hardware con seriale '.$row[2].' già presente. ID: '.$isPresent->id);
                     // continue;
                 }
 
-                if(!empty($row[3])){
+                if (! empty($row[3])) {
                     $hardwareType = HardwareType::whereRaw('LOWER(name) = ?', [strtolower($row[3])])->first();
-                    if(!$hardwareType) {
-                        throw new \Exception('Tipo hardware non trovato per l\'hardware con seriale ' . $row[2]);
+                    if (! $hardwareType) {
+                        throw new \Exception('Tipo hardware non trovato per l\'hardware con seriale '.$row[2]);
                     }
                 }
-                
-                if(!empty($row[11])){
+
+                if (! empty($row[11])) {
                     $isCompanyPresent = Company::find($row[11]);
-                    if(!$isCompanyPresent) {
-                        throw new \Exception('ID Azienda errato per l\'hardware con seriale ' . $row[2]);
+                    if (! $isCompanyPresent) {
+                        throw new \Exception('ID Azienda errato per l\'hardware con seriale '.$row[2]);
                     }
                 }
 
@@ -97,20 +95,20 @@ class HardwareImport implements ToCollection
                 $hardwareOwnershipTypes = config('app.hardware_ownership_types');
                 $lowerOwnershipTypes = array_map('strtolower', $hardwareOwnershipTypes);
                 $ownershipType = array_search(strtolower($row[5]), $lowerOwnershipTypes);
-                if(!empty($row[5])){
-                    if(!(in_array(strtolower($row[5]), $lowerOwnershipTypes))
+                if (! empty($row[5])) {
+                    if (! (in_array(strtolower($row[5]), $lowerOwnershipTypes))
                     ) {
-                        throw new \Exception('1 - Tipo di proprietà non valido per l\'hardware con seriale ' . $row[2] . 'valore: ' . $row[5] . ' - Possibili valori: ' . implode(', ', $lowerOwnershipTypes));
+                        throw new \Exception('1 - Tipo di proprietà non valido per l\'hardware con seriale '.$row[2].'valore: '.$row[5].' - Possibili valori: '.implode(', ', $lowerOwnershipTypes));
                     }
-                    if(!$ownershipType
+                    if (! $ownershipType
                     ) {
-                        throw new \Exception('2 - Tipo di proprietà non valido per l\'hardware con seriale ' . $row[2]);
+                        throw new \Exception('2 - Tipo di proprietà non valido per l\'hardware con seriale '.$row[2]);
                     }
                 }
 
                 // Gestione della data di acquisto
                 $purchaseDate = null;
-                if (!empty($row[4])) {
+                if (! empty($row[4])) {
                     try {
                         if (is_numeric($row[4])) {
                             // Converti il numero seriale di Excel in una data
@@ -119,7 +117,7 @@ class HardwareImport implements ToCollection
                             $purchaseDate = Carbon::createFromFormat('d/m/Y', $row[4]);
                         }
                     } catch (\Exception $e) {
-                        throw new \Exception('Formato data non valido per l\'hardware con seriale ' . $row[2] . '. Valore: ' . $row[4]);
+                        throw new \Exception('Formato data non valido per l\'hardware con seriale '.$row[2].'. Valore: '.$row[4]);
                     }
                 }
 
@@ -136,7 +134,6 @@ class HardwareImport implements ToCollection
                 if ($statusKey === false) {
                     $statusKey = 'new'; // fallback
                 }
-
 
                 // Il controllo che ci sia almeno uno tra cespite aziendale e identificativo è fatto nel boot del modello, nel metodo creating.
                 $hardware = Hardware::create([
@@ -156,7 +153,7 @@ class HardwareImport implements ToCollection
                     'position' => $positionKey,
                 ]);
 
-                if(isset($hardware->company_id)){
+                if (isset($hardware->company_id)) {
                     HardwareAuditLog::create([
                         'modified_by' => $this->authUser->id,
                         'hardware_id' => $hardware->id,
@@ -165,10 +162,10 @@ class HardwareImport implements ToCollection
                         'new_data' => json_encode(['company_id' => $hardware->company_id]),
                     ]);
                 }
-                
-                if($row[12] != null) {
-                    if($row[11] == null) {
-                        throw new \Exception('ID Azienda mancante per l\'hardware con seriale ' . $row[2]);
+
+                if ($row[12] != null) {
+                    if ($row[11] == null) {
+                        throw new \Exception('ID Azienda mancante per l\'hardware con seriale '.$row[2]);
                     }
                     $userIds = explode(',', $row[12]);
                     $usersCount = count($userIds);
@@ -178,20 +175,20 @@ class HardwareImport implements ToCollection
                             return $user->hasCompany($row[11]);
                         })
                         ->count() == $usersCount;
-                    if(!$isCorrect) {
-                        throw new \Exception('ID utenti errati per l\'hardware con seriale ' . $row[2]);
+                    if (! $isCorrect) {
+                        throw new \Exception('ID utenti errati per l\'hardware con seriale '.$row[2]);
                     }
                     $users = explode(',', $row[12]);
-                    if($hardware->is_exclusive_use && count($users) > 1) {
-                        throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per l\'hardware con seriale ' . $row[2]);
+                    if ($hardware->is_exclusive_use && count($users) > 1) {
+                        throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per l\'hardware con seriale '.$row[2]);
                     }
                     $responsibleUser = User::find($row[13]);
-                    if(!$responsibleUser){
+                    if (! $responsibleUser) {
                         $responsibleUser = User::find($this->authUser->id);
                     }
                     // Non usiamo il sync perchè non eseguirebbe la funzione di boot del modello personalizzato HardwareUser
                     foreach ($users as $user) {
-                        $hardware->users()->attach($user, ['created_by' => $this->authUser->id ?? null, "responsible_user_id" => $responsibleUser->id ?? $this->authUser->id ?? null]);
+                        $hardware->users()->attach($user, ['created_by' => $this->authUser->id ?? null, 'responsible_user_id' => $responsibleUser->id ?? $this->authUser->id ?? null]);
                     }
                 }
             }
@@ -199,7 +196,7 @@ class HardwareImport implements ToCollection
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Errore durante l\'importazione dell\'hardware: ' . $e->getMessage());
+            Log::error('Errore durante l\'importazione dell\'hardware: '.$e->getMessage());
             throw $e;
         }
     }

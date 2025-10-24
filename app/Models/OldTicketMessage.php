@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Searchable;
 
-class OldTicketMessage extends Model {
+class OldTicketMessage extends Model
+{
     use HasFactory, Searchable;
 
     protected $fillable = [
@@ -17,7 +18,8 @@ class OldTicketMessage extends Model {
         'is_admin',
     ];
 
-    public function ticket() {
+    public function ticket()
+    {
         return $this->belongsTo(OldTicket::class, 'old_ticket_id', 'old_ticket_id');
     }
 }

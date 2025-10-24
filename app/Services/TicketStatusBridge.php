@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Bridge per la migrazione dal vecchio sistema di status numerici
  * al nuovo sistema con TicketStage.
- * 
+ *
  * Questo helper gestisce la conversione bidirezionale tra:
  * - Status numerici (indici array da config/app.php)
  * - TicketStage objects/IDs
@@ -21,7 +21,7 @@ class TicketStatusBridge
      */
     private static array $legacyToNewMapping = [
         0 => 'Nuovo',                    // Index 0 -> "Nuovo"
-        1 => 'Assegnato',               // Index 1 -> "Assegnato" 
+        1 => 'Assegnato',               // Index 1 -> "Assegnato"
         2 => 'In corso',                // Index 2 -> "In corso"
         3 => 'In attesa',               // Index 3 -> "In attesa"
         4 => 'Risolto',                 // Index 4 -> "Risolto"
@@ -33,6 +33,7 @@ class TicketStatusBridge
      * Cache key per evitare query ripetute
      */
     private const CACHE_KEY = 'ticket_stages_mapping';
+
     private const CACHE_TTL = 3600; // 1 ora
 
     /**
@@ -41,8 +42,8 @@ class TicketStatusBridge
     public static function getStageFromLegacyStatus(int $legacyStatus): ?TicketStage
     {
         $stageName = self::$legacyToNewMapping[$legacyStatus] ?? null;
-        
-        if (!$stageName) {
+
+        if (! $stageName) {
             return null;
         }
 
@@ -55,6 +56,7 @@ class TicketStatusBridge
     public static function getStageIdFromLegacyStatus(int $legacyStatus): ?int
     {
         $stage = self::getStageFromLegacyStatus($legacyStatus);
+
         return $stage?->id;
     }
 
@@ -64,6 +66,7 @@ class TicketStatusBridge
     public static function getLegacyStatusFromStage(TicketStage $stage): ?int
     {
         $stageName = $stage->name;
+
         return self::getLegacyStatusFromStageName($stageName);
     }
 
@@ -81,13 +84,13 @@ class TicketStatusBridge
     public static function getLegacyStatusFromStageId(int $stageId): ?int
     {
         $stageMapping = self::getStageMapping();
-        
+
         foreach ($stageMapping as $stageName => $stage) {
             if ($stage->id === $stageId) {
                 return self::getLegacyStatusFromStageName($stageName);
             }
         }
-        
+
         return null;
     }
 
@@ -106,14 +109,14 @@ class TicketStatusBridge
     {
         $mappings = [];
         $stageMapping = self::getStageMapping();
-        
+
         foreach (self::$legacyToNewMapping as $legacyStatus => $stageName) {
             $stage = $stageMapping[$stageName] ?? null;
             if ($stage) {
                 $mappings[$legacyStatus] = $stage->id;
             }
         }
-        
+
         return $mappings;
     }
 
@@ -142,7 +145,7 @@ class TicketStatusBridge
             'mapping_complete' => empty($unmappedStatuses),
             'legacy_statuses' => $legacyStatuses,
             'mapped_list' => $mappedStatuses,
-            'unmapped_list' => $unmappedStatuses
+            'unmapped_list' => $unmappedStatuses,
         ];
     }
 

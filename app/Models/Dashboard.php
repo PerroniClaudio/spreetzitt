@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Dashboard extends Model {
+class Dashboard extends Model
+{
     use HasFactory;
 
     protected $fillable = [
@@ -22,7 +23,8 @@ class Dashboard extends Model {
         'settings' => 'array',
     ];
 
-    public function user() {
+    public function user()
+    {
         return $this->belongsTo(User::class);
     }
 }

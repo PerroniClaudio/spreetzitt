@@ -16,11 +16,11 @@ return new class extends Migration
         Schema::table('tickets', function (Blueprint $table) {
             // TEMPORANEO: nullable per permettere migrazione dati esistenti
             $table->foreignId('stage_id')
-                  ->nullable()
-                  ->after('status')
-                  ->constrained('ticket_stages')
-                  ->onDelete('set null') // TEMPORANEO: safety net durante transizione
-                  ->comment('TEMP: Reference to ticket_stages. Will become NOT NULL after data migration.');
+                ->nullable()
+                ->after('status')
+                ->constrained('ticket_stages')
+                ->onDelete('set null') // TEMPORANEO: safety net durante transizione
+                ->comment('TEMP: Reference to ticket_stages. Will become NOT NULL after data migration.');
         });
     }
 

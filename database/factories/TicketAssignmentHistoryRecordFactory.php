@@ -2,10 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Models\Group;
 use App\Models\Ticket;
 use App\Models\TicketAssignmentHistoryRecord;
 use App\Models\User;
-use App\Models\Group;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class TicketAssignmentHistoryRecordFactory extends Factory

@@ -8,7 +8,6 @@ use App\Models\TicketType;
 use App\Models\TicketTypeCategory;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -20,11 +19,17 @@ class NewMessageEmail extends Mailable
 
     // "support", $this->ticket, $this->message
     public $previewText;
+
     public $ticketType;
+
     public $category;
+
     public $company;
+
     public $opener;
+
     public $refererIT;
+
     public $referer;
 
     /**
@@ -40,10 +45,10 @@ class NewMessageEmail extends Mailable
         $this->referer = $this->ticket->referer;
         $this->category = TicketTypeCategory::find($this->ticketType->ticket_type_category_id);
         $this->company = Company::find($ticket->company_id);
-        if($mailType != "admin" && $mailType != "support"){
-            $this->previewText =  ($sender->is_admin ? "Dal Supporto" : ('Da ' . $sender->name . ' ' . $sender->surname ?? '')) . ' - ' . $this->message;
+        if ($mailType != 'admin' && $mailType != 'support') {
+            $this->previewText = ($sender->is_admin ? 'Dal Supporto' : ('Da '.$sender->name.' '.$sender->surname ?? '')).' - '.$this->message;
         } else {
-            $this->previewText =  ($sender->is_admin ? "Da Supporto a " . $this->company->name : ('Da ' . $this->company->name . ', ' . $sender->name . ' ' . $sender->surname ?? '')) . ' - ' . $this->message;
+            $this->previewText = ($sender->is_admin ? 'Da Supporto a '.$this->company->name : ('Da '.$this->company->name.', '.$sender->name.' '.$sender->surname ?? '')).' - '.$this->message;
         }
     }
 
@@ -53,7 +58,7 @@ class NewMessageEmail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Nuovo messaggio ' . ($this->category->is_problem ? 'Incident' : 'Request') . ' n° ' . $this->ticket->id . ' - ' . $this->ticketType->name,
+            subject: 'Nuovo messaggio '.($this->category->is_problem ? 'Incident' : 'Request').' n° '.$this->ticket->id.' - '.$this->ticketType->name,
         );
     }
 

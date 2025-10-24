@@ -22,7 +22,7 @@ return new class extends Migration
             $table->unsignedBigInteger('company_id')->nullable();
             $table->unsignedBigInteger('hardware_type_id')->nullable();
             $table->timestamps();
-            
+
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('set null');
             $table->foreign('hardware_type_id')->references('id')->on('hardware_types')->onDelete('set null');
         });

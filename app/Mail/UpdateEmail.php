@@ -4,7 +4,6 @@ namespace App\Mail;
 
 use App\Models\Ticket;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -16,11 +15,11 @@ class UpdateEmail extends Mailable
 
     public $stages;
     // public $stages = [
-    //   "Nuovo", 
-    //   "Assegnato", 
-    //   "In corso", 
-    //   "In attesa", 
-    //   "Risolto", 
+    //   "Nuovo",
+    //   "Assegnato",
+    //   "In corso",
+    //   "In attesa",
+    //   "Risolto",
     //   "Chiuso",
     //   "Attesa feedback cliente"
     // ];
@@ -28,17 +27,17 @@ class UpdateEmail extends Mailable
     public $updateTypes;
     // public $updateTypes = config('app.update_types');
     // public $updateTypes = [
-    //   "assign" => "Assegnazione", 
-    //   "status" => "Stato", 
-    //   "sla" => "SLA", 
-    //   "closing" => "Chiusura", 
-    //   "note" => "Nota", 
-    //   "blame" => "Colpa", 
+    //   "assign" => "Assegnazione",
+    //   "status" => "Stato",
+    //   "sla" => "SLA",
+    //   "closing" => "Chiusura",
+    //   "note" => "Nota",
+    //   "blame" => "Colpa",
     //   "group_assign" => "Assegnazione gruppo"
     // ];
 
     public $previewText; // Testo visualizzato nella preview dell'email
-    
+
     /**
      * Create a new message instance.
      */
@@ -51,11 +50,11 @@ class UpdateEmail extends Mailable
                 'name' => $stage->name,
                 'admin_color' => $stage->admin_color,
                 'user_color' => $stage->user_color,
-                'is_sla_pause' => $stage->is_sla_pause
+                'is_sla_pause' => $stage->is_sla_pause,
             ]];
         })->toArray();
 
-        $this->previewText = $this->company->name . ' - ' . $this->updateTypes[$this->update->type] . " - " . $this->update->content;
+        $this->previewText = $this->company->name.' - '.$this->updateTypes[$this->update->type].' - '.$this->update->content;
     }
 
     /**
@@ -64,7 +63,7 @@ class UpdateEmail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Update ' . ($this->category->is_problem ? 'Incident' : 'Request') . ' n° ' . $this->ticket->id . ' - ' . $this->ticketType->name,
+            subject: 'Update '.($this->category->is_problem ? 'Incident' : 'Request').' n° '.$this->ticket->id.' - '.$this->ticketType->name,
         );
     }
 

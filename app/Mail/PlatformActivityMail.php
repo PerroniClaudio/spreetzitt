@@ -2,9 +2,7 @@
 
 namespace App\Mail;
 
-use App\Models\Ticket;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -26,7 +24,7 @@ class PlatformActivityMail extends Mailable
                 'name' => $stage->name,
                 'admin_color' => $stage->admin_color,
                 'user_color' => $stage->user_color,
-                'is_sla_pause' => $stage->is_sla_pause
+                'is_sla_pause' => $stage->is_sla_pause,
             ]];
         })->toArray();
     }

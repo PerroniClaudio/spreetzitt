@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketStats extends Model {
+class TicketStats extends Model
+{
     use HasFactory;
 
     protected $fillable = [
@@ -17,6 +18,6 @@ class TicketStats extends Model {
         'request_in_progress',
         'request_waiting',
         'request_out_of_sla',
-        'compnanies_opened_tickets'
+        'compnanies_opened_tickets',
     ];
 }

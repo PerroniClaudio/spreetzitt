@@ -7,7 +7,6 @@ use App\Models\Company;
 use App\Models\TicketReportPdfExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use App\Http\Controllers\FileUploadController;
 
 class TicketReportPdfExportController extends Controller
 {

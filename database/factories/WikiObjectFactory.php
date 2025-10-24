@@ -8,17 +8,18 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\WikiObject>
  */
-class WikiObjectFactory extends Factory {
+class WikiObjectFactory extends Factory
+{
     /**
      * Define the model's default state.
      *
      * @return array<string, mixed>
      */
-    public function definition(): array {
+    public function definition(): array
+    {
 
-        $type = "file";
+        $type = 'file';
         $file_name = $this->faker->word;
-
 
         return [
             //
@@ -30,7 +31,7 @@ class WikiObjectFactory extends Factory {
             'is_public' => $this->faker->boolean,
             'uploaded_by' => User::inRandomOrder()->first(),
             'file_size' => $type == 'file' ? $this->faker->randomNumber() : null,
-            'company_id' => null
+            'company_id' => null,
         ];
     }
 }

@@ -10,10 +10,11 @@ class TimeOffType extends Model
     use HasFactory;
 
     protected $fillable = [
-        'name'
+        'name',
     ];
 
-    public function timeOffRequest() {
+    public function timeOffRequest()
+    {
         return $this->hasMany(TimeOffRequest::class, 'time_off_type_id');
     }
 }

@@ -47,9 +47,9 @@ class MigrateTicketStatusUpdateValues extends Command
     public function handle(): int
     {
         $this->info('🚀 Starting TicketStatusUpdate Migration...');
-        
+
         // Verifica prerequisiti
-        if (!$this->verifyPrerequisites()) {
+        if (! $this->verifyPrerequisites()) {
             return self::FAILURE;
         }
 
@@ -62,8 +62,9 @@ class MigrateTicketStatusUpdateValues extends Command
         $this->displayInitialStats($stats);
 
         // Conferma utente (se non in dry-run o force)
-        if (!$isDryRun && !$force && !$this->confirm('Proceed with migration?')) {
+        if (! $isDryRun && ! $force && ! $this->confirm('Proceed with migration?')) {
             $this->info('Migration cancelled.');
+
             return self::SUCCESS;
         }
 
@@ -84,27 +85,31 @@ class MigrateTicketStatusUpdateValues extends Command
         $this->info('🔍 Verifying prerequisites...');
 
         // Verifica esistenza colonne stage_id
-        if (!$this->columnExists('ticket_status_updates', 'old_stage_id')) {
+        if (! $this->columnExists('ticket_status_updates', 'old_stage_id')) {
             $this->error('❌ Column `old_stage_id` not found in ticket_status_updates table. Run migration first.');
+
             return false;
         }
 
-        if (!$this->columnExists('ticket_status_updates', 'new_stage_id')) {
+        if (! $this->columnExists('ticket_status_updates', 'new_stage_id')) {
             $this->error('❌ Column `new_stage_id` not found in ticket_status_updates table. Run migration first.');
+
             return false;
         }
 
         // Verifica mapping completo
         $bridgeStats = TicketStatusBridge::getMigrationStats();
-        if (!$bridgeStats['mapping_complete']) {
+        if (! $bridgeStats['mapping_complete']) {
             $this->error('❌ Incomplete status mapping. Check TicketStatusBridge configuration.');
-            $this->line('Missing mappings: ' . $bridgeStats['unmapped_statuses']);
+            $this->line('Missing mappings: '.$bridgeStats['unmapped_statuses']);
             $this->newLine();
             $this->warn('💡 If stages are missing, run: php artisan db:seed --class=TicketStageSeeder');
+
             return false;
         }
 
         $this->info('✅ All prerequisites satisfied.');
+
         return true;
     }
 
@@ -114,7 +119,7 @@ class MigrateTicketStatusUpdateValues extends Command
     private function getInitialStats(): array
     {
         $targetTypes = ['status', 'closing'];
-        
+
         return [
             'total_status_updates' => TicketStatusUpdate::whereIn('type', $targetTypes)->count(),
             'already_migrated' => TicketStatusUpdate::whereIn('type', $targetTypes)
@@ -123,7 +128,7 @@ class MigrateTicketStatusUpdateValues extends Command
                 ->whereNull('new_stage_id')->count(),
             'bridge_stats' => TicketStatusBridge::getMigrationStats(),
             'affected_tickets' => TicketStatusUpdate::whereIn('type', $targetTypes)
-                ->distinct('ticket_id')->count('ticket_id')
+                ->distinct('ticket_id')->count('ticket_id'),
         ];
     }
 
@@ -157,13 +162,14 @@ class MigrateTicketStatusUpdateValues extends Command
         $ticketIds = TicketStatusUpdate::whereIn('type', ['status', 'closing'])
             ->where(function ($query) {
                 $query->whereNull('old_stage_id')
-                      ->orWhereNull('new_stage_id');
+                    ->orWhereNull('new_stage_id');
             })
             ->distinct('ticket_id')
             ->pluck('ticket_id');
 
         if ($ticketIds->isEmpty()) {
             $this->info('✅ No ticket status updates need migration.');
+
             return ['success' => true, 'processed' => 0, 'updated' => 0, 'errors' => [], 'warnings' => []];
         }
 
@@ -174,12 +180,12 @@ class MigrateTicketStatusUpdateValues extends Command
         foreach ($ticketIds->chunk($chunkSize) as $ticketChunk) {
             foreach ($ticketChunk as $ticketId) {
                 $result = $this->migrateTicketStatusUpdates($ticketId, $isDryRun);
-                
+
                 $totalProcessed += $result['processed'];
                 $totalUpdated += $result['updated'];
                 $errors = array_merge($errors, $result['errors']);
                 $warnings = array_merge($warnings, $result['warnings']);
-                
+
                 $progressBar->advance();
             }
         }
@@ -192,7 +198,7 @@ class MigrateTicketStatusUpdateValues extends Command
             'processed' => $totalProcessed,
             'updated' => $totalUpdated,
             'errors' => $errors,
-            'warnings' => $warnings
+            'warnings' => $warnings,
         ];
     }
 
@@ -222,29 +228,30 @@ class MigrateTicketStatusUpdateValues extends Command
 
         foreach ($statusUpdates as $statusUpdate) {
             $processed++;
-            
+
             try {
                 // Determina il nuovo stage_id dal valore corrente
                 $newStageId = $this->determineNewStageId($statusUpdate);
-                
+
                 if ($newStageId === null) {
                     $errors[] = "TicketStatusUpdate ID {$statusUpdate->id} (Ticket {$ticketId}): Cannot determine stage for content '{$statusUpdate->content}'";
+
                     continue;
                 }
 
                 $oldStageId = $previousStageId;
 
                 // Controlla se i valori sono già corretti
-                $needsUpdate = $statusUpdate->old_stage_id !== $oldStageId || 
+                $needsUpdate = $statusUpdate->old_stage_id !== $oldStageId ||
                               $statusUpdate->new_stage_id !== $newStageId;
 
-                if ($needsUpdate && !$isDryRun) {
+                if ($needsUpdate && ! $isDryRun) {
                     // Aggiorna il record solo se necessario
                     $affected = DB::table('ticket_status_updates')
                         ->where('id', $statusUpdate->id)
                         ->update([
                             'old_stage_id' => $oldStageId,
-                            'new_stage_id' => $newStageId
+                            'new_stage_id' => $newStageId,
                         ]);
 
                     if ($affected > 0) {
@@ -256,7 +263,7 @@ class MigrateTicketStatusUpdateValues extends Command
                     $updated++; // Simula per dry run
                 } else {
                     // Valori già corretti, non serve aggiornare
-                    if (!$needsUpdate) {
+                    if (! $needsUpdate) {
                         $warnings[] = "TicketStatusUpdate ID {$statusUpdate->id}: Values already correct - skipped";
                     }
                 }
@@ -265,7 +272,7 @@ class MigrateTicketStatusUpdateValues extends Command
                 $previousStageId = $newStageId;
 
             } catch (\Exception $e) {
-                $errors[] = "TicketStatusUpdate ID {$statusUpdate->id} (Ticket {$ticketId}): " . $e->getMessage();
+                $errors[] = "TicketStatusUpdate ID {$statusUpdate->id} (Ticket {$ticketId}): ".$e->getMessage();
             }
         }
 
@@ -273,7 +280,7 @@ class MigrateTicketStatusUpdateValues extends Command
             'processed' => $processed,
             'updated' => $updated,
             'errors' => $errors,
-            'warnings' => $warnings
+            'warnings' => $warnings,
         ];
     }
 
@@ -322,12 +329,12 @@ class MigrateTicketStatusUpdateValues extends Command
         // Lista dei possibili nomi di status da cercare nel content
         $statusNames = [
             'nuovo',
-            'assegnato', 
+            'assegnato',
             'in corso',
             'in attesa',
             'risolto',
             'chiuso',
-            'attesa feedback cliente'
+            'attesa feedback cliente',
         ];
 
         $contentLower = strtolower($content);
@@ -369,37 +376,37 @@ class MigrateTicketStatusUpdateValues extends Command
         $this->info('📈 Migration Results:');
         $this->line("Status updates processed: {$result['processed']}");
         $this->line("Status updates updated: {$result['updated']}");
-        $this->line("Errors: " . count($result['errors']));
-        $this->line("Warnings: " . count($result['warnings'] ?? []));
+        $this->line('Errors: '.count($result['errors']));
+        $this->line('Warnings: '.count($result['warnings'] ?? []));
 
         // Mostra warnings (non bloccanti)
-        if (!empty($result['warnings'])) {
+        if (! empty($result['warnings'])) {
             $this->newLine();
             $this->warn('⚠️  Warnings (non-blocking):');
             foreach (array_slice($result['warnings'], 0, 5) as $warning) {
                 $this->line("  • $warning");
             }
             if (count($result['warnings']) > 5) {
-                $this->line("  • ... and " . (count($result['warnings']) - 5) . " more warnings");
+                $this->line('  • ... and '.(count($result['warnings']) - 5).' more warnings');
             }
         }
 
         // Mostra errori (bloccanti)
-        if (!empty($result['errors'])) {
+        if (! empty($result['errors'])) {
             $this->newLine();
             $this->error('❌ Errors occurred:');
             foreach (array_slice($result['errors'], 0, 5) as $error) {
                 $this->line("  • $error");
             }
             if (count($result['errors']) > 5) {
-                $this->line("  • ... and " . (count($result['errors']) - 5) . " more errors");
+                $this->line('  • ... and '.(count($result['errors']) - 5).' more errors');
             }
         }
 
         if ($result['success']) {
             $this->newLine();
             $this->info('✅ Migration completed successfully!');
-            if (!empty($result['warnings'])) {
+            if (! empty($result['warnings'])) {
                 $this->warn('⚠️  Some warnings occurred but migration was successful.');
             }
             $this->newLine();

@@ -48,6 +48,6 @@ return new class extends Migration
             $table->foreign('old_company_id')->references('id')->on('companies')->onDelete('set null');
             $table->foreign('new_company_id')->references('id')->on('companies')->onDelete('set null');
         });
-        
+
     }
 };

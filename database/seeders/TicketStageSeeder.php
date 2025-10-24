@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\TicketStage;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class TicketStageSeeder extends Seeder
@@ -22,7 +21,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 1,
                 'is_sla_pause' => false, // Il timer SLA inizia subito
                 'is_system' => true,
-                'system_key' => 'new'
+                'system_key' => 'new',
             ],
             [
                 'name' => 'Assegnato',
@@ -32,7 +31,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 2,
                 'is_sla_pause' => false, // SLA continua
                 'is_system' => true,
-                'system_key' => 'assigned'
+                'system_key' => 'assigned',
             ],
             [
                 'name' => 'In corso',
@@ -42,7 +41,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 3,
                 'is_sla_pause' => false, // SLA continua
                 'is_system' => true,
-                'system_key' => 'in_progress'
+                'system_key' => 'in_progress',
             ],
             [
                 'name' => 'In attesa',
@@ -52,7 +51,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 4,
                 'is_sla_pause' => true, // SLA in pausa
                 'is_system' => true,
-                'system_key' => 'waiting'
+                'system_key' => 'waiting',
             ],
             [
                 'name' => 'Attesa feedback cliente',
@@ -62,7 +61,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 5,
                 'is_sla_pause' => true, // SLA in pausa (dipende dal cliente)
                 'is_system' => true,
-                'system_key' => 'waiting_user'
+                'system_key' => 'waiting_user',
             ],
             [
                 'name' => 'Risolto',
@@ -72,7 +71,7 @@ class TicketStageSeeder extends Seeder
                 'order' => 6,
                 'is_sla_pause' => true, // SLA fermato, risoluzione completata
                 'is_system' => false,
-                'system_key' => null
+                'system_key' => null,
             ],
             [
                 'name' => 'Chiuso',
@@ -82,8 +81,8 @@ class TicketStageSeeder extends Seeder
                 'order' => 7,
                 'is_sla_pause' => true, // SLA completamente fermato
                 'is_system' => true,
-                'system_key' => 'closed'
-            ]
+                'system_key' => 'closed',
+            ],
         ];
 
         foreach ($stages as $stageData) {
@@ -99,7 +98,7 @@ class TicketStageSeeder extends Seeder
             ]);
 
             // Imposta system_key separatamente se necessario (non è fillable)
-            if (!is_null($stageData['system_key'])) {
+            if (! is_null($stageData['system_key'])) {
                 $stage->system_key = $stageData['system_key'];
                 $stage->save();
             }

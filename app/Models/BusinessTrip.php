@@ -20,16 +20,18 @@ class BusinessTrip extends Model
     /**
      * Get the user that owns the business trip.
      */
-
-    public function user() {
+    public function user()
+    {
         return $this->belongsTo(User::class);
     }
 
-    public function expenses() {
+    public function expenses()
+    {
         return $this->hasMany(BusinessTripExpense::class);
     }
 
-    public function transfers() {
+    public function transfers()
+    {
         return $this->hasMany(BusinessTripTransfer::class);
     }
 }

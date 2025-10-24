@@ -34,7 +34,7 @@ class TicketFactory extends Factory
         return $this->afterMaking(function (Ticket $ticket) {
             // ...
         })->afterCreating(function (Ticket $ticket) {
-            
+
             $form_fields = $ticket->ticketType->typeFormField;
 
             $message_data = [];
@@ -42,12 +42,12 @@ class TicketFactory extends Factory
             foreach ($form_fields as $field) {
                 // field_type: email, text, date, radio, tel, select
                 $field_type = $field->field_type;
-                $value =  $field_type == 'date' ? fake()->date() : 
-                    ($field_type == 'email' ? fake()->email() : 
-                    ($field_type == 'tel' ? fake()->phoneNumber() : 
-                    ($field_type == 'radio' || $field_type == 'select' ? $field->field_options[0] : 
+                $value = $field_type == 'date' ? fake()->date() :
+                    ($field_type == 'email' ? fake()->email() :
+                    ($field_type == 'tel' ? fake()->phoneNumber() :
+                    ($field_type == 'radio' || $field_type == 'select' ? $field->field_options[0] :
                     fake()->sentence())));
-                ;
+
                 $message_data[$field->field_name] = $value;
             }
 

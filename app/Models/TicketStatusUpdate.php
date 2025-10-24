@@ -16,7 +16,7 @@ class TicketStatusUpdate extends Model
         'type',
         'show_to_user',
         'old_stage_id',
-        'new_stage_id'
+        'new_stage_id',
     ];
 
     /* get the owner */
@@ -44,5 +44,4 @@ class TicketStatusUpdate extends Model
     {
         return $this->belongsTo(TicketStage::class, 'new_stage_id');
     }
-    
 }

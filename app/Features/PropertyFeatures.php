@@ -2,14 +2,13 @@
 
 namespace App\Features;
 
-use Illuminate\Support\Lottery;
-
-class PropertyFeatures {
+class PropertyFeatures
+{
     /**
      * Define all available properties features.
      */
-
-    public static function getFeatures(): array {
+    public static function getFeatures(): array
+    {
         return [
             'list',
             'massive_generation',
@@ -18,7 +17,8 @@ class PropertyFeatures {
         ];
     }
 
-    public function __invoke(string $feature) {
+    public function __invoke(string $feature)
+    {
         return match ($feature) {
             'list' => $this->canListProperty(),
             'massive_generation' => $this->canMassiveGeneration(),
@@ -28,25 +28,31 @@ class PropertyFeatures {
         };
     }
 
-    private function canListProperty() {
+    private function canListProperty()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canMassiveGeneration() {
+    private function canMassiveGeneration()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canAssignMassive() {
+    private function canAssignMassive()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canPropertyDeleteMassive() {
+    private function canPropertyDeleteMassive()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function isTenantAllowed(): bool {
+    private function isTenantAllowed(): bool
+    {
         $current_tenant = config('app.tenant');
         $allowedTenants = config('features-tenants.properties.allowed_tenants', []);
+
         return in_array($current_tenant, $allowedTenants, true);
     }
 }

@@ -3,14 +3,14 @@
 namespace App\Features;
 
 use Laravel\Pennant\Feature;
-use Illuminate\Support\Facades\Log;
 
-class TicketFeatures {
-
+class TicketFeatures
+{
     /**
      * Definisce tutte le feature disponibili per i ticket
      */
-    public static function getFeatures(): array {
+    public static function getFeatures(): array
+    {
         return [
             'list',
             'create',
@@ -19,11 +19,12 @@ class TicketFeatures {
             'billing',
             'search',
             'search_erp',
-            'show_visibility_fields'
+            'show_visibility_fields',
         ];
     }
 
-    public function __invoke(string $feature) {
+    public function __invoke(string $feature)
+    {
         return match ($feature) {
             'list' => $this->canListTickets(),
             'create' => $this->canCreateTicket(),
@@ -37,45 +38,56 @@ class TicketFeatures {
         };
     }
 
-    private function canListTickets() {
+    private function canListTickets()
+    {
         return true;
     }
 
-    private function canCreateTicket() {
+    private function canCreateTicket()
+    {
         return true;
     }
 
-    private function canMassiveGeneration() {
+    private function canMassiveGeneration()
+    {
         return true;
     }
 
-    private function canTypes() {
+    private function canTypes()
+    {
         return true;
     }
 
-    private function canBilling() {
+    private function canBilling()
+    {
         return true;
     }
 
-    private function canSearch() {
+    private function canSearch()
+    {
         return true;
     }
 
-    private function canSearchErp() {
+    private function canSearchErp()
+    {
         return config('app.tenant') === 'spreetzit';
     }
 
-    private function canShowVisibilityFields() {
+    private function canShowVisibilityFields()
+    {
         return $this->isTenantAllowed() && $this->isExclusiveFeatureEnabled('show_visibility_fields');
     }
 
-    private function isTenantAllowed(): bool {
+    private function isTenantAllowed(): bool
+    {
         $current_tenant = config('app.tenant');
         $allowedTenants = config('features-tenants.tickets.allowed_tenants', []);
+
         return in_array($current_tenant, $allowedTenants, true);
     }
 
-    private function isExclusiveFeatureEnabled(string $feature): bool {
+    private function isExclusiveFeatureEnabled(string $feature): bool
+    {
         $current_tenant = config('app.tenant');
         $exclusiveFeatures = config('features-tenants.tickets.exclusive_features', []);
 

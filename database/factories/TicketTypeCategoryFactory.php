@@ -17,10 +17,11 @@ class TicketTypeCategoryFactory extends Factory
     public function definition(): array
     {
         $boolean = fake()->boolean();
+
         return [
             'name' => fake()->word(),
             'is_problem' => $boolean,
-            'is_request' => !$boolean,
+            'is_request' => ! $boolean,
         ];
     }
 }

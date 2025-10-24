@@ -22,11 +22,11 @@ return new class extends Migration
             $table->unsignedBigInteger('uploaded_by');
             $table->unsignedInteger('file_size')->nullable();
             $table->timestamps();
-            
+
             // Foreign keys
             $table->foreign('company_id')->references('id')->on('companies')->onDelete('cascade');
             $table->foreign('uploaded_by')->references('id')->on('users')->onDelete('cascade');
-            
+
             // Indexes for better performance
             $table->index('company_id');
             $table->index('uploaded_by');

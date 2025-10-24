@@ -1,5 +1,7 @@
 <?php
+
 // Questa è una tabella pivot per la quale si vogliono registrare le modifiche. quindi si intercettano i metodi.
+
 namespace App\Models;
 
 use Carbon\Carbon;
@@ -8,15 +10,15 @@ use Illuminate\Database\Eloquent\Relations\Pivot;
 class HardwareUser extends Pivot
 {
     public $timestamps = true;
+
     protected $table = 'hardware_user';
-    
+
     protected $fillable = [
         'created_at',
         'updated_at',
         'created_by',
         'responsible_user_id',
     ];
-
 
     protected static function boot()
     {
@@ -36,8 +38,8 @@ class HardwareUser extends Pivot
                 'hardware_id' => $model->hardware_id,
                 'old_data' => null,
                 'new_data' => json_encode([
-                    "user_id" => $model->user_id,
-                    "responsible_user_id" => $model->responsible_user_id, // Responsabile associazione (che esce sul pdf)
+                    'user_id' => $model->user_id,
+                    'responsible_user_id' => $model->responsible_user_id, // Responsabile associazione (che esce sul pdf)
                 ]),
             ]);
         });
@@ -51,8 +53,8 @@ class HardwareUser extends Pivot
                 'modified_by' => auth()->id(),
                 'hardware_id' => $model->hardware_id,
                 'old_data' => json_encode([
-                    "user_id" => $model->user_id,
-                    "responsible_user_id" => $pivot->responsible_user_id,
+                    'user_id' => $model->user_id,
+                    'responsible_user_id' => $pivot->responsible_user_id,
                 ]),
                 'new_data' => null,
             ]);

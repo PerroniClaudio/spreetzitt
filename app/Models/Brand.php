@@ -5,7 +5,6 @@ namespace App\Models;
 use App\Http\Controllers\FileUploadController;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class Brand extends Model
 {
@@ -21,6 +20,7 @@ class Brand extends Model
     public function withGUrl()
     {
         $this->logo_url = $this->logo_url != null ? FileUploadController::generateSignedUrlForFile($this->logo_url, 70) : '';
+
         return $this;
     }
 }

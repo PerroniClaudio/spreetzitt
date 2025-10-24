@@ -2,14 +2,13 @@
 
 namespace App\Features;
 
-use Illuminate\Support\Lottery;
-
-class HardwareFeatures {
+class HardwareFeatures
+{
     /**
      * Define all available hardware features.
      */
-
-    public static function getFeatures(): array {
+    public static function getFeatures(): array
+    {
         return [
             'list',
             'massive_generation',
@@ -18,7 +17,8 @@ class HardwareFeatures {
         ];
     }
 
-    public function __invoke(string $feature) {
+    public function __invoke(string $feature)
+    {
         return match ($feature) {
             'list' => $this->canListHardware(),
             'massive_generation' => $this->canMassiveGeneration(),
@@ -28,25 +28,31 @@ class HardwareFeatures {
         };
     }
 
-    private function canListHardware() {
+    private function canListHardware()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canMassiveGeneration() {
+    private function canMassiveGeneration()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canAssignMassive() {
+    private function canAssignMassive()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function canHardwareDeleteMassive() {
+    private function canHardwareDeleteMassive()
+    {
         return $this->isTenantAllowed(); // Replace with allowed tenants
     }
 
-    private function isTenantAllowed(): bool {
+    private function isTenantAllowed(): bool
+    {
         $current_tenant = config('app.tenant');
         $allowedTenants = config('features-tenants.hardware.allowed_tenants', []);
+
         return in_array($current_tenant, $allowedTenants, true);
     }
 }

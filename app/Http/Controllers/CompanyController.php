@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\TicketTypesExportCompany;
 use App\Http\Requests\CompanyDocumentUploadRequest;
 use App\Models\Brand;
 use App\Models\Company;
 use App\Models\CustomUserGroup;
 use App\Models\Supplier;
+use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Exports\TicketTypesExportCompany;
-use App\Models\TicketType;
 
 class CompanyController extends Controller
 {
@@ -284,14 +284,15 @@ class CompanyController extends Controller
 
     public function ticketTypesExport(Company $company)
     {
-    $ticketTypes = $company->ticketTypes()->where('is_deleted', 0)->with('category')->get();
+        $ticketTypes = $company->ticketTypes()->where('is_deleted', 0)->with('category')->get();
 
         $name = 'ticket_types_company_'.$company->name.'_'.time().'.xlsx';
 
         return Excel::download(new TicketTypesExportCompany($ticketTypes), $name);
     }
 
-    public function ticketTypesDuplicate(Company $host, Company $guest) {
+    public function ticketTypesDuplicate(Company $host, Company $guest)
+    {
         $copyCompanyId = $guest->id;
         $pasteCompanyId = $host->id;
         $res = '';
@@ -301,12 +302,12 @@ class CompanyController extends Controller
             $newType->save();
             $newType->groups()->sync($type->groups->pluck('id'));
             $formFields = $type->typeFormField;
-            $res .= "Tipo: " . $newType->id . " - " . $newType->name . "<br>";
+            $res .= 'Tipo: '.$newType->id.' - '.$newType->name.'<br>';
             foreach ($formFields as $field) {
                 $field->replicate()->fill(['ticket_type_id' => $newType->id])->save();
             }
         }
-        
+
         return response([
             'message' => 'Import completato. '.$res,
         ], 200);
@@ -961,7 +962,7 @@ class CompanyController extends Controller
         }
 
         $disk = FileUploadController::getStorageDisk();
-        
+
         if (! Storage::disk($disk)->exists($company->privacy_policy_path)) {
             return response()->json([
                 'error' => 'File privacy policy non trovato',
@@ -973,7 +974,7 @@ class CompanyController extends Controller
 
         return response($fileContent)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'inline; filename="privacy_policy_' . $company->name . '.pdf"')
+            ->header('Content-Disposition', 'inline; filename="privacy_policy_'.$company->name.'.pdf"')
             ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');
@@ -991,7 +992,7 @@ class CompanyController extends Controller
         }
 
         $disk = FileUploadController::getStorageDisk();
-        
+
         if (! Storage::disk($disk)->exists($company->cookie_policy_path)) {
             return response()->json([
                 'error' => 'File cookie policy non trovato',
@@ -1003,7 +1004,7 @@ class CompanyController extends Controller
 
         return response($fileContent)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'inline; filename="cookie_policy_' . $company->name . '.pdf"')
+            ->header('Content-Disposition', 'inline; filename="cookie_policy_'.$company->name.'.pdf"')
             ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
             ->header('Pragma', 'no-cache')
             ->header('Expires', '0');

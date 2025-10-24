@@ -22,8 +22,6 @@ class News extends Model
 
     /**
      * Get the source that owns the news.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function source(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

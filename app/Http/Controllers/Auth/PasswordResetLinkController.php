@@ -24,7 +24,7 @@ class PasswordResetLinkController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if(!$user){
+        if (! $user) {
             return response()->json([
                 'message' => 'Unauthorized',
             ], 401);

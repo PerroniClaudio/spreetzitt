@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Property extends Model {
+class Property extends Model
+{
     use HasFactory;
     use SoftDeletes;
 
@@ -23,11 +24,13 @@ class Property extends Model {
         'company_id',
     ];
 
-    public function users() {
+    public function users()
+    {
         return $this->belongsToMany(User::class, 'properties_users');
     }
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class);
     }
 }

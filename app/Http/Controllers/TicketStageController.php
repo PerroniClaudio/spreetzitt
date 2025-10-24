@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\TicketStage;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class TicketStageController extends Controller
@@ -15,10 +15,10 @@ class TicketStageController extends Controller
     public function index(): JsonResponse
     {
         $stages = TicketStage::active()->ordered()->get();
-        
+
         return response()->json([
             'stages' => $stages,
-            'message' => 'Ticket stages retrieved successfully'
+            'message' => 'Ticket stages retrieved successfully',
         ]);
     }
 
@@ -35,13 +35,13 @@ class TicketStageController extends Controller
                     'value' => $stage->id,
                     'label' => $stage->name,
                     'admin_color' => $stage->admin_color,
-                    'user_color' => $stage->user_color
+                    'user_color' => $stage->user_color,
                 ];
             });
 
         return response()->json([
             'options' => $stages,
-            'message' => 'Stage options retrieved successfully'
+            'message' => 'Stage options retrieved successfully',
         ]);
     }
 
@@ -56,10 +56,10 @@ class TicketStageController extends Controller
             'admin_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'user_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'order' => 'nullable|integer|min:0',
-            'is_sla_pause' => 'boolean'
+            'is_sla_pause' => 'boolean',
         ]);
 
-        if (!isset($validated['order'])) {
+        if (! isset($validated['order'])) {
             $validated['order'] = TicketStage::max('order') + 1;
         }
 
@@ -67,7 +67,7 @@ class TicketStageController extends Controller
 
         return response()->json([
             'stage' => $stage,
-            'message' => 'Ticket stage created successfully'
+            'message' => 'Ticket stage created successfully',
         ], 201);
     }
 
@@ -78,7 +78,7 @@ class TicketStageController extends Controller
     {
         return response()->json([
             'stage' => $ticketStage,
-            'message' => 'Ticket stage retrieved successfully'
+            'message' => 'Ticket stage retrieved successfully',
         ]);
     }
 
@@ -92,20 +92,20 @@ class TicketStageController extends Controller
                 'required',
                 'string',
                 'max:255',
-                Rule::unique('ticket_stages', 'name')->ignore($ticketStage->id)
+                Rule::unique('ticket_stages', 'name')->ignore($ticketStage->id),
             ],
             'description' => 'nullable|string',
             'admin_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'user_color' => 'required|string|regex:/^#[a-fA-F0-9]{6}$/',
             'order' => 'nullable|integer|min:0',
-            'is_sla_pause' => 'boolean'
+            'is_sla_pause' => 'boolean',
         ]);
 
         $ticketStage->update($validated);
 
         return response()->json([
             'stage' => $ticketStage->fresh(),
-            'message' => 'Ticket stage updated successfully'
+            'message' => 'Ticket stage updated successfully',
         ]);
     }
 
@@ -115,18 +115,18 @@ class TicketStageController extends Controller
     public function destroy(TicketStage $ticketStage): JsonResponse
     {
         // Il controllo su is_system lo fa direttamente il modello.
-        // Se ci sono ticket con quello stage non si può eliminare, anche per evitare casini nella visualizzazione della lista ticket 
+        // Se ci sono ticket con quello stage non si può eliminare, anche per evitare casini nella visualizzazione della lista ticket
         // (che ha le checkbox coi filtri per stato, quindi se lo stato non è tra le checkbox non si vedrebbero i ticket ecc ecc.)
         if ($ticketStage->tickets()->exists()) {
             return response()->json([
-                'message' => 'Cannot disable this stage because there are tickets assigned to it.'
+                'message' => 'Cannot disable this stage because there are tickets assigned to it.',
             ], 422);
         }
 
         $ticketStage->delete();
 
         return response()->json([
-            'message' => 'Ticket stage disabled successfully'
+            'message' => 'Ticket stage disabled successfully',
         ]);
     }
 
@@ -140,7 +140,7 @@ class TicketStageController extends Controller
 
         return response()->json([
             'stage' => $stage->fresh(),
-            'message' => 'Ticket stage enabled successfully'
+            'message' => 'Ticket stage enabled successfully',
         ]);
     }
 
@@ -150,10 +150,10 @@ class TicketStageController extends Controller
     public function all(): JsonResponse
     {
         $stages = TicketStage::withTrashed()->ordered()->get();
-        
+
         return response()->json([
             'stages' => $stages,
-            'message' => 'All ticket stages retrieved successfully'
+            'message' => 'All ticket stages retrieved successfully',
         ]);
     }
 }

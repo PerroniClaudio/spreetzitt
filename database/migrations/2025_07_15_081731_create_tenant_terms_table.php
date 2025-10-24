@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('description')->nullable();
             $table->string('category')->nullable()->index();
             $table->timestamps();
-            
+
             $table->unique(['tenant', 'key']);
         });
     }

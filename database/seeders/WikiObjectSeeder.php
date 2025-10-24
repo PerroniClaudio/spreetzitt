@@ -3,17 +3,18 @@
 namespace Database\Seeders;
 
 use App\Models\WikiObject;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
-class WikiObjectSeeder extends Seeder {
+class WikiObjectSeeder extends Seeder
+{
     /**
      * Run the database seeds.
      */
-    public function run(): void {
+    public function run(): void
+    {
         //
 
-        $path = "/";
+        $path = '/';
 
         for ($i = 0; $i < 10; $i++) {
 
@@ -25,7 +26,7 @@ class WikiObjectSeeder extends Seeder {
 
             $randomWord = fake()->word;
 
-            $path .= $randomWord . "/";
+            $path .= $randomWord.'/';
         }
     }
 }

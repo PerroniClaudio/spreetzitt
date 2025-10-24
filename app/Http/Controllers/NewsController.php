@@ -1,34 +1,30 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\News;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class NewsController extends Controller
 {
     /**
      * Estrae l'HTML di una pagina tramite file_get_contents (solo HTML statico).
-     *
-     * @param string $url
-     * @return string
      */
     public static function getRenderedHtml(string $url): string
     {
         return @file_get_contents($url);
     }
-    
+
     /**
      * Estrae solo il contenuto rilevante (main, article, section) da una pagina HTML.
      * Riduce la lunghezza del prompt per Vertex AI.
-     *
-     * @param string $html
-     * @return string
      */
     public static function extractRelevantHtml(string $html): string
     {
         libxml_use_internal_errors(true);
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         $dom->loadHTML($html);
         $xpath = new \DOMXPath($dom);
         $nodes = $xpath->query('//main | //article | //section');
@@ -49,38 +45,152 @@ class NewsController extends Controller
         $content = preg_replace('/<!--.*?-->/s', '', $content);
         // Rimuove tabulazioni e a capo
         $content = str_replace(["\t", "\n", "\r"], '', $content);
+
         return $content;
     }
 
     /**
      * Restituisce tutte le news per una determinata source tramite slug.
      *
-     * @param string $slug
+     * @param  string  $slug
      * @return \Illuminate\Http\JsonResponse
      */
     public function bySource($slug)
     {
         $source = \App\Models\NewsSource::where('slug', $slug)->first();
-        if (!$source) {
+        if (! $source) {
             return response()->json(['message' => 'NewsSource not found'], 404);
         }
         $news = $source->news()->orderByDesc('published_at')->get();
+
         return response()->json($news);
     }
 
     public function testScraper()
     {
-        $url = 'https://wutheringwaves.kurogames.com/en/main/news';
+        $url = 'https://www.ninjaone.com/it/blog/';
         $html = self::getRenderedHtml($url);
         $htmlRilevante = self::extractRelevantHtml($html);
 
-        Log::info('Relevant HTML extracted:', ['html' => $htmlRilevante]);
+        Log::info('NEWS - Relevant HTML extracted:', ['html' => $htmlRilevante]);
 
-        $controller = new VertexAiController();
+        $controller = new VertexAiController;
         $response = $controller->extractNewsFromHtml($htmlRilevante);
 
         $newsArray = json_decode($response['result'], true);
+
         return response()->json($newsArray);
+    }
+
+    /**
+     * Estrae l'HTML di una pagina utilizzando Firecrawl (supporta JavaScript e SPA).
+     * Accetta header addizionali tramite $extraHeaders (es. ['Cookie' => 'li_at=...']).
+     *
+     * @throws \Exception
+     */
+    public static function getRenderedHtmlWithFirecrawl(string $url, array $extraHeaders = []): string
+    {
+        $apiKey = config('firecrawl.api_key');
+
+        if (! $apiKey) {
+            Log::error('NEWS - Firecrawl API key not configured');
+            throw new \Exception('Firecrawl API key not configured');
+        }
+
+        // Headers di default
+        $defaultHeaders = [
+            'Authorization' => 'Bearer '.$apiKey,
+            'Content-Type' => 'application/json',
+        ];
+
+        // Recupera eventuale cookie di autenticazione preconfigurato (config/firecrawl.php)
+        $configuredAuthCookie = config('firecrawl.auth_cookie'); // es: "li_at=XXXXX"
+        if (! empty($configuredAuthCookie)) {
+            $defaultHeaders['Cookie'] = $configuredAuthCookie;
+        }
+
+        // Se è passato un Cookie in extraHeaders, unirlo con quello configurato
+        if (isset($extraHeaders['Cookie']) && ! empty($extraHeaders['Cookie'])) {
+            if (isset($defaultHeaders['Cookie'])) {
+                $defaultHeaders['Cookie'] = $defaultHeaders['Cookie'].'; '.$extraHeaders['Cookie'];
+            } else {
+                $defaultHeaders['Cookie'] = $extraHeaders['Cookie'];
+            }
+            unset($extraHeaders['Cookie']);
+        }
+
+        $headers = array_merge($defaultHeaders, $extraHeaders);
+
+        try {
+            $response = Http::withHeaders($headers)->post('https://api.firecrawl.dev/v2/scrape', [
+                'url' => $url,
+                'onlyMainContent' => false,
+                'maxAge' => 172800000,
+                'parsers' => [],
+                'formats' => ['html'],
+            ]);
+
+            if ($response->failed()) {
+                dd($response->body());
+                throw new \Exception('Firecrawl request failed: '.$response->status());
+            }
+
+            $data = $response->json();
+
+            if (! empty($data['success']) && isset($data['data']['html'])) {
+                return $data['data']['html'];
+            }
+
+            throw new \Exception('Failed to scrape with Firecrawl: '.($data['error'] ?? json_encode($data)));
+        } catch (\Exception $e) {
+
+            Log::error('NEWS - Firecrawl scraping error', ['url' => $url, 'error' => $e->getMessage()]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Testa lo scraper con Firecrawl per pagine con JavaScript/SPA.
+     */
+    public function testScraperWithFirecrawl()
+    {
+        $url = 'https://news.integys.com/';
+
+        try {
+            $html = self::getRenderedHtmlWithFirecrawl($url);
+
+            // Pulisce aggressivamente
+            $htmlPulito = self::extractRelevantHtml($html);
+
+            Log::info('NEWS - HTML size - Before: '.strlen($html).' bytes, After: '.strlen($htmlPulito).' bytes');
+
+            $controller = new VertexAiController;
+            $response = $controller->extractNewsFromHtml($htmlPulito);
+
+            $newsArray = json_decode($response['result'], true);
+
+            return response()->json($newsArray);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error scraping with Firecrawl',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Metodo smart con fallback: prova Firecrawl, ritorna a file_get_contents se fallisce.
+     */
+    public static function getRenderedHtmlSmart(string $url, array $extraHeaders = []): string
+    {
+        try {
+            return self::getRenderedHtmlWithFirecrawl($url, $extraHeaders);
+        } catch (\Exception $e) {
+            Log::warning('NEWS - Firecrawl failed, falling back to file_get_contents', ['url' => $url, 'error' => $e->getMessage()]);
+
+            return self::getRenderedHtml($url);
+        }
     }
 
     /**

@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Laravel\Scout\Searchable;
 
-class OldTicket extends Model {
+class OldTicket extends Model
+{
     use HasFactory, Searchable;
 
     protected $fillable = [
@@ -19,7 +20,8 @@ class OldTicket extends Model {
         'closing_notes',
     ];
 
-    public function messages() {
+    public function messages()
+    {
         return $this->hasMany(OldTicketMessage::class, 'old_ticket_id', 'old_ticket_id');
     }
 }

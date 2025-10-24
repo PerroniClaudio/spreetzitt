@@ -10,9 +10,9 @@ class ActivationToken extends Model
     use HasFactory;
 
     protected $fillable = [
-        "uid",
-        "token",
-        "used",
+        'uid',
+        'token',
+        'used',
     ];
 
     public function user()

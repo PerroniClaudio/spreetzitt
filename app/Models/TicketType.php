@@ -5,7 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketType extends Model {
+class TicketType extends Model
+{
     use HasFactory;
 
     protected $fillable = [
@@ -31,7 +32,8 @@ class TicketType extends Model {
         'hourly_cost_expires_at',
     ];
 
-    public function tickets() {
+    public function tickets()
+    {
         // Questo non funziona perchè non c'è la foreign key ticket_type_id nella tabella tickets
         // Essendo ogni tipo collegato ad un'azienda si possono ottenere i ticket di un tipo con una certa azienda
         // return $this->hasMany(Ticket::class);
@@ -39,15 +41,18 @@ class TicketType extends Model {
     }
 
     // Restituisce il numero di ticket di questo tipo e con questa compagnia (ogni tipo è associato ad una sola compagnia)
-    public function countRelatedTickets() {
+    public function countRelatedTickets()
+    {
         return $this->company->tickets()->where('type_id', $this->id)->count();
     }
 
-    public function typeFormField() {
+    public function typeFormField()
+    {
         return $this->hasMany(TypeFormFields::class, 'ticket_type_id');
     }
 
-    public function typeHardwareFormField() {
+    public function typeHardwareFormField()
+    {
         return $this->hasMany(TypeFormFields::class, 'ticket_type_id')->where('field_type', 'hardware')->get();
     }
 
@@ -55,28 +60,33 @@ class TicketType extends Model {
     //     return $this->belongsToMany(Company::class, 'company_ticket_types')->withPivot('sla_taking_charge', 'sla_resolving');
     // }
 
-    public function company() {
+    public function company()
+    {
         return $this->belongsTo(Company::class, 'company_id');
     }
 
-
-    public function category() {
+    public function category()
+    {
         return $this->belongsTo(TicketTypeCategory::class, 'ticket_type_category_id');
     }
 
-    public function groups() {
+    public function groups()
+    {
         return $this->belongsToMany(Group::class, 'ticket_type_group', 'ticket_type_id', 'group_id');
     }
 
-    public function brand() {
+    public function brand()
+    {
         return $this->belongsTo(Brand::class, 'brand_id');
     }
 
-    public function hardwareTypes() {
+    public function hardwareTypes()
+    {
         return $this->belongsToMany(HardwareType::class, 'hardware_type_ticket_type', 'ticket_type_id', 'hardware_type_id');
     }
 
-    public function customGroups() {
+    public function customGroups()
+    {
         return $this->belongsToMany(CustomUserGroup::class, 'ticket_types_custom_groups', 'ticket_type_id', 'custom_user_group_id');
     }
 

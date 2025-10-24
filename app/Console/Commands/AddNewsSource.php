@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\NewsSource;
+use Illuminate\Console\Command;
 
 class AddNewsSource extends Command
 {
@@ -47,6 +47,7 @@ class AddNewsSource extends Command
 
         if (NewsSource::where('slug', $slug)->exists()) {
             $this->error('Slug già esistente. Operazione annullata.');
+
             return 1;
         }
 
@@ -59,6 +60,7 @@ class AddNewsSource extends Command
         ]);
 
         $this->info('Sorgente creata con successo!');
+
         return 0;
     }
 }

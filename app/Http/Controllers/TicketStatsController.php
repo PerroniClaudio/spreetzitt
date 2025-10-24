@@ -2,18 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketStats;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
-class TicketStatsController extends Controller {
-
-    public function latestStats(Request $request) {
+class TicketStatsController extends Controller
+{
+    public function latestStats(Request $request)
+    {
         $user = $request->user();
-        if ($user["is_admin"] != 1) {
+        if ($user['is_admin'] != 1) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -29,9 +29,10 @@ class TicketStatsController extends Controller {
         ], 200);
     }
 
-    public function statsForCompany(Request $request) {
+    public function statsForCompany(Request $request)
+    {
         $user = $request->user();
-        if ($user["is_company_admin"] != 1) {
+        if ($user['is_company_admin'] != 1) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -39,13 +40,13 @@ class TicketStatsController extends Controller {
 
         $company = $user->selectedCompany();
 
-        $cacheKey = 'tickets_stats_' . $company->id . '_' . $request->start_date . '_' . $request->end_date;
+        $cacheKey = 'tickets_stats_'.$company->id.'_'.$request->start_date.'_'.$request->end_date;
 
         //? Quanti utenti sono stati creati in un determinato periodo
 
         $usersCount = User::whereHas('companies', function ($query) use ($company) {
-                $query->where('companies.id', $company->id);
-            })
+            $query->where('companies.id', $company->id);
+        })
             ->whereBetween('created_at', [$request->start_date, $request->end_date])
             ->count();
 
@@ -61,17 +62,17 @@ class TicketStatsController extends Controller {
 
         foreach ($tickets as $ticket) {
 
-            if (!isset($ticketPerUser[$ticket->user->id])) {
+            if (! isset($ticketPerUser[$ticket->user->id])) {
 
                 if ($ticket->user->is_admin == 1) {
                     $ticketPerUser[$ticket->user->id] = [
-                        'user' => "Supporto iFortech",
+                        'user' => 'Supporto iFortech',
                         'tickets' => 0,
                     ];
                 } else {
 
                     $ticketPerUser[$ticket->user->id] = [
-                        'user' => $ticket->user->name . ' ' . $ticket->user->surname,
+                        'user' => $ticket->user->name.' '.$ticket->user->surname,
                         'tickets' => 0,
                     ];
                 }
@@ -84,14 +85,13 @@ class TicketStatsController extends Controller {
             return $b['tickets'] - $a['tickets'];
         });
 
-
         //? Quanti ticket aperti per tipologia nel periodo definito
 
         $ticketsPerType = [];
 
         foreach ($tickets as $ticket) {
 
-            if (!isset($ticketsPerType[$ticket->ticketType->id])) {
+            if (! isset($ticketsPerType[$ticket->ticketType->id])) {
                 $ticketsPerType[$ticket->ticketType->id] = [
                     'type' => $ticket->ticketType->name,
                     'tickets' => 0,
@@ -111,7 +111,7 @@ class TicketStatsController extends Controller {
                     'users_count' => $usersCount,
                     'ticket_per_user' => $ticketPerUser,
                     'ticket_per_type' => $ticketsPerType,
-                ]
+                ],
             ],
             200
         );

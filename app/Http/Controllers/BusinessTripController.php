@@ -7,7 +7,6 @@ use App\Models\BusinessTripExpense;
 use App\Models\BusinessTripTransfer;
 use Illuminate\Http\Request;
 
-
 class BusinessTripController extends Controller
 {
     /**
@@ -91,7 +90,7 @@ class BusinessTripController extends Controller
         return response([
             'businessTrip' => $businessTrip,
         ], 200);
-        
+
     }
 
     /**
@@ -153,7 +152,7 @@ class BusinessTripController extends Controller
 
     public function storeTransfer(BusinessTrip $businessTrip, Request $request)
     {
-  
+
         $transfer = BusinessTripTransfer::create([
             'business_trip_id' => $businessTrip->id,
             'company_id' => $request->company_id,

@@ -10,14 +10,14 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
-        "user_id",
-        "company_id",
-        "date",
-        "time_in",
-        "time_out",
-        "hours",
-        "status",
-        "attendance_type_id",
+        'user_id',
+        'company_id',
+        'date',
+        'time_in',
+        'time_out',
+        'hours',
+        'status',
+        'attendance_type_id',
     ];
 
     public function user()
@@ -29,7 +29,6 @@ class Attendance extends Model
     {
         return $this->belongsTo(Company::class);
     }
-
 
     public function attendanceType()
     {

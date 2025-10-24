@@ -17,7 +17,7 @@ return new class extends Migration
             $table->boolean('is_admin')->default(false);
             $table->unsignedBigInteger('company_id')->nullable();
             $table->boolean('is_company_admin')->default(false);
-            
+
             // Chiave esterna per l'id della compagnia (companies)
             $table->foreign('company_id')
                 ->references('id')

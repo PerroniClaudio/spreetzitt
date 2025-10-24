@@ -17,9 +17,9 @@ class TimeOffRequestFactory extends Factory
     public function definition(): array
     {
         return [
-            'user_id' => fake()->numberBetween(1,12),
-            'company_id' => fake()->numberBetween(2,3),
-            'time_off_type_id' => fake()->numberBetween(1,5),
+            'user_id' => fake()->numberBetween(1, 12),
+            'company_id' => fake()->numberBetween(2, 3),
+            'time_off_type_id' => fake()->numberBetween(1, 5),
             'date_from' => fake()->dateTimeBetween('-3 month', 'today'),
             'date_to' => fake()->dateTimeBetween('-3 month', 'today'),
             'status' => fake()->randomElement([0, 1, 2]),

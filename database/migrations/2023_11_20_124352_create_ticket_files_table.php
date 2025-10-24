@@ -19,8 +19,7 @@ return new class extends Migration
             $table->string('extension');
             $table->string('mime_type');
             $table->string('size');
-            
-            
+
             $table->timestamps();
         });
     }

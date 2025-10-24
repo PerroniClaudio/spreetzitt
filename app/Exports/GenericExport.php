@@ -2,22 +2,24 @@
 
 namespace App\Exports;
 
-use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketReportExport;
 use App\Models\User;
 use Maatwebsite\Excel\Concerns\FromArray;
 
-class GenericExport implements FromArray {
-
+class GenericExport implements FromArray
+{
     private $report;
+
     private $hours_for_scadenza = 2;
-    
-    public function __construct(TicketReportExport $ticketReportExport){
+
+    public function __construct(TicketReportExport $ticketReportExport)
+    {
         $this->report = $ticketReportExport;
     }
 
-    private function getNightHours($start, $end) {
+    private function getNightHours($start, $end)
+    {
 
         $nightHours = 0;
 
@@ -25,19 +27,18 @@ class GenericExport implements FromArray {
 
             if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = 10;
-            } else if ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isBefore($start->copy()->startOfDay()->addHours(8))) {
+            } elseif ($start->isBefore($start->copy()->startOfDay()->addHours(18)) && $end->isBefore($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = $start->diffInHours($start->copy()->startOfDay()->addHours(8));
-            } else if ($start->isAfter($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
+            } elseif ($start->isAfter($start->copy()->startOfDay()->addHours(18)) && $end->isAfter($start->copy()->startOfDay()->addHours(8))) {
                 $nightHours = $end->diffInHours($start->copy()->startOfDay()->addHours(18));
             }
         } else {
             $nightHours = $start->diffInDays($end) * 13;
         }
 
-
         return $nightHours;
     }
-    
+
     // // Funzione da testare con dove viene utilizzata prima di pubblicarla
     // private function getNightHours($start, $end) {
 
@@ -48,7 +49,7 @@ class GenericExport implements FromArray {
     //         $orePrimoGiorno = 0;
     //         $orePrimoGiorno += $start->hour < $endHour ? ($endHour - $start->hour) : 0;
     //         $orePrimoGiorno += $start->hour <= $startHour ? (24 - $startHour) : ($startHour - $start->hour);
-            
+
     //         // Calcola ore ultimo giorno fino alla scadenza (inizia in un altro giorno)
     //         $oreUltimoGiorno = 0;
     //         $oreUltimoGiorno += $end->hour < $endHour ? $end->hour : ($endHour);
@@ -80,35 +81,35 @@ class GenericExport implements FromArray {
     //         return $sameDayHours;
     //     }
     // }
-    
 
     /**
      * @return \Illuminate\Support\Collection
      */
-    public function array(): array {
+    public function array(): array
+    {
 
         $ticket_data = [];
         $headers = [
-            "ID",
-            "Autore",
-            "Utente interessato", // referer
-            "Data",
-            "Tipologia",
-            "Webform",
-            "Chiusura",
-            "Tempo in attesa (ore)",
-            "Numero di volte in attesa"
+            'ID',
+            'Autore',
+            'Utente interessato', // referer
+            'Data',
+            'Tipologia',
+            'Webform',
+            'Chiusura',
+            'Tempo in attesa (ore)',
+            'Numero di volte in attesa',
         ];
 
-        if($this->report->company_id != 1){
+        if ($this->report->company_id != 1) {
             $tickets = Ticket::where('company_id', $this->report->company_id)->whereBetween('created_at', [
                 $this->report->start_date,
-                $this->report->end_date
+                $this->report->end_date,
             ]);
         } else {
             $tickets = Ticket::whereBetween('created_at', [
                 $this->report->start_date,
-                $this->report->end_date
+                $this->report->end_date,
             ]);
         }
 
@@ -116,13 +117,13 @@ class GenericExport implements FromArray {
 
         // Se è impostato $optional_paramters->specific_types allora filtro i ticket per i tipi indicati
 
-        if(isset($optional_parameters['specific_types']) && count($optional_parameters['specific_types']) > 0){
+        if (isset($optional_parameters['specific_types']) && count($optional_parameters['specific_types']) > 0) {
             $tickets = $tickets->whereIn('type_id', $optional_parameters['specific_types'])->get();
-        } else if(isset($optional_parameters['type'])) {
+        } elseif (isset($optional_parameters['type'])) {
 
             //Se è incident prendi solo le categorie che hanno is_incident = 1, se è request prendi solo le categorie che hanno is_incident = 0
 
-            $tickets = $tickets->whereHas('ticketType.category', function($query) use ($optional_parameters){
+            $tickets = $tickets->whereHas('ticketType.category', function ($query) use ($optional_parameters) {
                 $query->where('is_problem', $optional_parameters['type'] == 'incident' ? 1 : 0);
             })->get();
 
@@ -130,20 +131,19 @@ class GenericExport implements FromArray {
             $tickets = $tickets->get();
         }
 
-
         foreach ($tickets as $ticket) {
 
             $messages = $ticket->messages;
             $webform = json_decode($messages->first()->message, true);
-            $webform_text = "";
+            $webform_text = '';
             $has_referer = false;
-            $referer_name = "";
+            $referer_name = '';
 
-            if(isset($webform)){
+            if (isset($webform)) {
                 foreach ($webform as $key => $value) {
-                    $webform_text .= $key . ": " . (is_array($value) ? implode(', ', $value) : $value) . "\n";
-    
-                    if ($key == "referer") {
+                    $webform_text .= $key.': '.(is_array($value) ? implode(', ', $value) : $value)."\n";
+
+                    if ($key == 'referer') {
                         $has_referer = true;
                     }
                 }
@@ -152,15 +152,14 @@ class GenericExport implements FromArray {
             if ($has_referer) {
                 if (isset($webform['referer'])) {
                     $referer = User::find($webform['referer']);
-                    $referer_name = $referer ? $referer->name . " " . $referer->surname : null;
+                    $referer_name = $referer ? $referer->name.' '.$referer->surname : null;
                 }
             }
 
             $waiting_times = $ticket->waitingTimes();
             $waiting_hours = $ticket->waitingHours();
 
-            if($optional_parameters['sla'] !=  "nessuna") {
-
+            if ($optional_parameters['sla'] != 'nessuna') {
 
                 $sla = round($ticket->sla_solve / 60, 1);
                 $ticketCreationDate = $ticket->created_at;
@@ -169,7 +168,7 @@ class GenericExport implements FromArray {
                 $diffInHours = $ticketCreationDate->diffInHours($now);
                 $diffInHours -= $this->getNightHours($ticketCreationDate, $now);
 
-                // ? Rimuovere sabati e domeniche 
+                // ? Rimuovere sabati e domeniche
 
                 $weekendDays = 0;
 
@@ -179,32 +178,31 @@ class GenericExport implements FromArray {
                         $weekendDays++;
                     }
                 }
-                
-                $diffInHours -= $weekendDays * 24;
-                
-                // ? Se il ticket è rimasto in attesa è necessario rimuovere le ore in cui è rimasto in attesa.
-                
-                $diffInHours -= $waiting_hours;
 
+                $diffInHours -= $weekendDays * 24;
+
+                // ? Se il ticket è rimasto in attesa è necessario rimuovere le ore in cui è rimasto in attesa.
+
+                $diffInHours -= $waiting_hours;
 
                 //? Calcolo sla
 
-                if($optional_parameters['sla'] == "scadenza"){
+                if ($optional_parameters['sla'] == 'scadenza') {
 
                     // Il ticket è da considerarsi "In scadenza" se la $diffinhours è comunque minore del tempo di sla ma la differenza tra $sla e $diffinhours è minore del tempo di scadenza
 
-                    if (($diffInHours < $sla) && ($sla - $diffInHours < $this->hours_for_scadenza)){
-                            
+                    if (($diffInHours < $sla) && ($sla - $diffInHours < $this->hours_for_scadenza)) {
+
                         $this_ticket = [
                             $ticket->id,
-                            $ticket->user->name . " " . $ticket->user->surname,
+                            $ticket->user->name.' '.$ticket->user->surname,
                             $referer_name,
                             $ticket->created_at,
                             $ticket->ticketType->name,
                             $webform_text,
                             $ticket->created_at,
                             $waiting_hours,
-                            $waiting_times
+                            $waiting_times,
                         ];
 
                         foreach ($ticket->messages as $message) {
@@ -223,21 +221,21 @@ class GenericExport implements FromArray {
 
                 }
 
-                if($optional_parameters['sla'] == "scaduti"){ 
-                    // Ticket da considerarsi scaduto 
+                if ($optional_parameters['sla'] == 'scaduti') {
+                    // Ticket da considerarsi scaduto
 
                     if ($diffInHours > $sla) {
-                            
+
                         $this_ticket = [
                             $ticket->id,
-                            $ticket->user->name . " " . $ticket->user->surname,
+                            $ticket->user->name.' '.$ticket->user->surname,
                             $referer_name,
                             $ticket->created_at,
                             $ticket->ticketType->name,
                             $webform_text,
                             $ticket->created_at,
                             $waiting_hours,
-                            $waiting_times
+                            $waiting_times,
                         ];
 
                         foreach ($ticket->messages as $message) {
@@ -259,14 +257,14 @@ class GenericExport implements FromArray {
 
                 $this_ticket = [
                     $ticket->id,
-                    $ticket->user->name . " " . $ticket->user->surname,
+                    $ticket->user->name.' '.$ticket->user->surname,
                     $referer_name,
                     $ticket->created_at,
                     $ticket->ticketType->name,
                     $webform_text,
                     $ticket->created_at,
                     $waiting_hours,
-                    $waiting_times
+                    $waiting_times,
                 ];
 
                 foreach ($ticket->messages as $message) {
@@ -283,10 +281,7 @@ class GenericExport implements FromArray {
 
             }
 
-            
-
-
-            /* 
+            /*
 
             if($optional_parameters['sla'] !=  "nessuna") {
 
@@ -298,7 +293,7 @@ class GenericExport implements FromArray {
 
                 $diffInHours -= $this->getNightHours($ticketCreationDate, $now);
 
-                // ? Rimuovere sabati e domeniche 
+                // ? Rimuovere sabati e domeniche
 
                 $weekendDays = 0;
 
@@ -315,12 +310,12 @@ class GenericExport implements FromArray {
 
                 $diffInHours -= $waiting_hours;
 
-                if($optional_parameters['sla'] == "scadenza"){ 
+                if($optional_parameters['sla'] == "scadenza"){
 
                     // Il ticket è da considerarsi "In scadenza" se la $diffinhours è comunque minore del tempo di sla ma la differenza tra $sla e $diffinhours è minore del tempo di scadenza
 
                     if (($diffInHours < $sla) && ($sla - $diffInHours < $this->hours_for_scadenza)){
-                            
+
                         $this_ticket = [
                             $ticket->id,
                             $ticket->user->name . " " . $ticket->user->surname,
@@ -349,12 +344,12 @@ class GenericExport implements FromArray {
 
                 }
 
-                if($optional_parameters['sla'] == "scaduti"){ 
+                if($optional_parameters['sla'] == "scaduti"){
 
-                    // Ticket da considerarsi scaduto 
+                    // Ticket da considerarsi scaduto
 
                     if ($diffInHours > $sla) {
-                            
+
                         $this_ticket = [
                             $ticket->id,
                             $ticket->user->name . " " . $ticket->user->surname,
@@ -382,7 +377,7 @@ class GenericExport implements FromArray {
                     }
 
                 }
- 
+
             } else {
                 $this_ticket = [
                     $ticket->id,
@@ -410,12 +405,12 @@ class GenericExport implements FromArray {
             }
 
             */
-    
+
         }
-        
+
         return [
             $headers,
-            $ticket_data
+            $ticket_data,
         ];
     }
 }

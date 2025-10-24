@@ -6,16 +6,18 @@ use App\Models\Property;
 use App\Models\TypeFormFields;
 use Illuminate\Http\Request;
 
-class PropertyController extends Controller {
+class PropertyController extends Controller
+{
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         $authUser = $request->user();
 
         if ($authUser->is_admin) {
             $properties = Property::with(['users', 'company'])->get();
-        } else if ($authUser->is_company_admin) {
+        } elseif ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
             $properties = Property::with(['users', 'company'])
                 ->where('company_id', $selectedCompany)
@@ -35,7 +37,8 @@ class PropertyController extends Controller {
     /**
      * Show the form for creating a new resource.
      */
-    public function create() {
+    public function create()
+    {
         return response([
             'message' => 'Please use /api/store to create a new property.',
         ], 404);
@@ -44,12 +47,13 @@ class PropertyController extends Controller {
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         //
 
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to create a property.',
             ], 403);
@@ -79,7 +83,8 @@ class PropertyController extends Controller {
     /**
      * Display the specified resource.
      */
-    public function show(Property $property) {
+    public function show(Property $property)
+    {
         //
 
         return response([
@@ -90,19 +95,21 @@ class PropertyController extends Controller {
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Property $property) {
+    public function edit(Property $property)
+    {
         //
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Property $property) {
+    public function update(Request $request, Property $property)
+    {
         //
 
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to update this property.',
             ], 403);
@@ -132,10 +139,11 @@ class PropertyController extends Controller {
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Property $property) {
+    public function destroy(Property $property)
+    {
         $authUser = request()->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete this property.',
             ], 403);
@@ -144,17 +152,18 @@ class PropertyController extends Controller {
         $property->delete();
 
         return response([
-            'message' => 'Property deleted successfully.'
+            'message' => 'Property deleted successfully.',
         ], 200);
     }
 
     /**
      * Restore the specified resource from soft delete.
      */
-    public function restore($id) {
+    public function restore($id)
+    {
         $authUser = request()->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to restore this property.',
             ], 403);
@@ -169,10 +178,11 @@ class PropertyController extends Controller {
         ], 200);
     }
 
-    public function addUser(Request $request, Property $property) {
+    public function addUser(Request $request, Property $property)
+    {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to associate a user with this property.',
             ], 403);
@@ -190,17 +200,18 @@ class PropertyController extends Controller {
         ], 200);
     }
 
-    public function formFieldPropertyList(Request $request, TypeFormFields $typeFormField) {
+    public function formFieldPropertyList(Request $request, TypeFormFields $typeFormField)
+    {
         $authUser = $request->user();
 
-        if (!$typeFormField) {
+        if (! $typeFormField) {
             return response([
                 'message' => 'Type form field not found',
             ], 404);
         }
 
         $company = $typeFormField->ticketType->company;
-        if (!$authUser->is_admin && !(!!$company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+        if (! $authUser->is_admin && ! ((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to view these properties',
             ], 403);
@@ -212,17 +223,17 @@ class PropertyController extends Controller {
         } else {
             $query = $authUser->properties()->where('company_id', $company->id);
         }
-        
+
         // Aggiungi le relazioni
         $query->with(['users', 'company']);
-        
+
         // Se necessario rimuove gli immobili che non hanno il tipo associato
-        if (!$typeFormField->include_no_type_property) {
+        if (! $typeFormField->include_no_type_property) {
             $query->whereNotNull('activity_type');
         }
-        
+
         // Se necessario limitare a determinati tipi di immobile
-        if (!empty($typeFormField->property_types)) {
+        if (! empty($typeFormField->property_types)) {
             $propertyTypeIds = $typeFormField->property_types;
             $query->where(function ($query) use ($propertyTypeIds, $typeFormField) {
                 $query->whereIn('activity_type', $propertyTypeIds);

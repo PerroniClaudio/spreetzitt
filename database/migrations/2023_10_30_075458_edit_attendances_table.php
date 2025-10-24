@@ -13,7 +13,7 @@ return new class extends Migration
     {
         //
 
-        Schema::table('attendances', function(Blueprint $table) {
+        Schema::table('attendances', function (Blueprint $table) {
 
             $table->unsignedBigInteger('attendance_type_id');
 

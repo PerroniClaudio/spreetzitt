@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\TenantTerm;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class TenantTermController extends Controller
 {
@@ -15,10 +15,10 @@ class TenantTermController extends Controller
     {
         $tenant = config('app.tenant', env('TENANT', 'default'));
         $terms = TenantTerm::getTermsForTenant($tenant);
-        
+
         return response()->json([
             'tenant' => $tenant,
-            'terms' => $terms
+            'terms' => $terms,
         ]);
     }
 
@@ -29,17 +29,17 @@ class TenantTermController extends Controller
     {
         $tenant = config('app.tenant', env('TENANT', 'default'));
         $term = TenantTerm::getTermForTenant($tenant, $key);
-        
+
         if ($term === null) {
             return response()->json([
-                'message' => 'Term not found'
+                'message' => 'Term not found',
             ], 404);
         }
 
         return response()->json([
             'tenant' => $tenant,
             'key' => $key,
-            'value' => $term
+            'value' => $term,
         ]);
     }
 
@@ -52,11 +52,11 @@ class TenantTermController extends Controller
             'key' => 'required|string|max:255',
             'value' => 'required',
             'description' => 'nullable|string',
-            'category' => 'nullable|string|max:255'
+            'category' => 'nullable|string|max:255',
         ]);
 
         $tenant = config('app.tenant', env('TENANT', 'default'));
-        
+
         $term = TenantTerm::setTermForTenant(
             $tenant,
             $request->key,
@@ -67,7 +67,7 @@ class TenantTermController extends Controller
 
         return response()->json([
             'message' => 'Term saved successfully',
-            'term' => $term
+            'term' => $term,
         ], 201);
     }
 
@@ -79,30 +79,30 @@ class TenantTermController extends Controller
         $request->validate([
             'value' => 'required',
             'description' => 'nullable|string',
-            'category' => 'nullable|string|max:255'
+            'category' => 'nullable|string|max:255',
         ]);
 
         $tenant = config('app.tenant', env('TENANT', 'default'));
-        
+
         $term = TenantTerm::where('tenant', $tenant)
             ->where('key', $key)
             ->first();
 
-        if (!$term) {
+        if (! $term) {
             return response()->json([
-                'message' => 'Term not found'
+                'message' => 'Term not found',
             ], 404);
         }
 
         $term->update([
             'value' => $request->value,
             'description' => $request->description,
-            'category' => $request->category
+            'category' => $request->category,
         ]);
 
         return response()->json([
             'message' => 'Term updated successfully',
-            'term' => $term
+            'term' => $term,
         ]);
     }
 
@@ -112,19 +112,19 @@ class TenantTermController extends Controller
     public function destroy(string $key): JsonResponse
     {
         $tenant = config('app.tenant', env('TENANT', 'default'));
-        
+
         $deleted = TenantTerm::where('tenant', $tenant)
             ->where('key', $key)
             ->delete();
 
-        if (!$deleted) {
+        if (! $deleted) {
             return response()->json([
-                'message' => 'Term not found'
+                'message' => 'Term not found',
             ], 404);
         }
 
         return response()->json([
-            'message' => 'Term deleted successfully'
+            'message' => 'Term deleted successfully',
         ]);
     }
 
@@ -134,7 +134,7 @@ class TenantTermController extends Controller
     public function byCategory(string $category): JsonResponse
     {
         $tenant = config('app.tenant', env('TENANT', 'default'));
-        
+
         $terms = TenantTerm::where('tenant', $tenant)
             ->where('category', $category)
             ->get()
@@ -147,7 +147,7 @@ class TenantTermController extends Controller
         return response()->json([
             'tenant' => $tenant,
             'category' => $category,
-            'terms' => $terms
+            'terms' => $terms,
         ]);
     }
 }
