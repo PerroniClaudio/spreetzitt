@@ -2709,6 +2709,7 @@ class TicketController extends Controller
         // Invalida la cache per chi ha creato il ticket e per i referenti.
         $ticket->invalidateCache();
 
+        $oldStageId = $ticket->stage_id;
         // Se lo stato è 'Nuovo' aggiornarlo in assegnato
         $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
         $newStageId = TicketStage::where('system_key', 'new')->value('id');
@@ -2719,6 +2720,8 @@ class TicketController extends Controller
             $update = TicketStatusUpdate::create([
                 'ticket_id' => $ticket->id,
                 'user_id' => $authUser->id,
+                'old_stage_id' => $oldStageId,
+                'new_stage_id' => $assignedStageId,
                 'content' => 'Modifica automatica: Stato del ticket modificato in "'.$newStageText.'"',
                 'type' => 'status',
             ]);
