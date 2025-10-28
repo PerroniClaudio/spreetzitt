@@ -570,16 +570,17 @@ class DashboardController extends Controller
         $tenant = $this->getCurrentTenant();
         $user = auth()->user();
 
-        $rightCards = [
-            [
-                'id' => 'user-ticket-redirect',
-                'type' => 'user-tickets-redirect',
-                'color' => 'primary',
-                'content' => 'Gestione ticket',
-                'icon' => 'mdi-view-list',
-                'description' => 'Visualizza tutti i tuoi ticket',
-            ],
-        ];
+        // $rightCards = [
+        //     [
+        //         'id' => 'user-ticket-redirect',
+        //         'type' => 'user-tickets-redirect',
+        //         'color' => 'primary',
+        //         'content' => 'Gestione ticket',
+        //         'icon' => 'mdi-view-list',
+        //         'description' => 'Visualizza tutti i tuoi ticket',
+        //     ],
+        // ];
+        $rightCards = [];
 
         // Se il tenant è spreetzit, mostriamo la card hardware-stats
         if ($tenant === 'spreetzit') {
@@ -595,9 +596,9 @@ class DashboardController extends Controller
                 'id' => 'user-vendor-news',
                 'type' => 'user-vendor-news',
                 'color' => 'secondary',
-                'content' => 'News dai Fornitori',
+                'content' => 'News dal nostro mondo',
                 'icon' => 'mdi-newspaper',
-                'description' => 'News dai Fornitori',
+                'description' => 'News dal nostro mondo',
             ];
         } else {
             // Per gli altri tenant, mostriamo la card new-ticket standard
@@ -711,6 +712,11 @@ class DashboardController extends Controller
             case 'user-open-tickets':
                 $card['value'] = $stats['open_tickets_count'];
                 $card['data'] = $this->getUserOpenTicketsData();
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => '/support/user/tickets',
+                    'label' => 'Visualizza ticket',
+                ];
                 break;
             case 'user-tickets-redirect':
                 $card['action'] = [
