@@ -596,9 +596,9 @@ class DashboardController extends Controller
                 'id' => 'user-vendor-news',
                 'type' => 'user-vendor-news',
                 'color' => 'secondary',
-                'content' => 'News dai Fornitori',
+                'content' => 'News dal nostro mondo',
                 'icon' => 'mdi-newspaper',
-                'description' => 'News dai Fornitori',
+                'description' => 'News dal nostro mondo',
             ];
         } else {
             // Per gli altri tenant, mostriamo la card new-ticket standard
