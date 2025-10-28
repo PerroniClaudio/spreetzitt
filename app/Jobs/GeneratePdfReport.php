@@ -104,14 +104,25 @@ class GeneratePdfReport implements ShouldQueue
             // ticket ancora aperti a fine periodo selezionato
             $still_open_tickets_count = 0;
 
+            // // Conteggio ticket non fatturabili
+            // $unbillable_remote_tickets_count = 0;
+            // $unbillable_on_site_normal_tickets_count = 0;
+            // $unbillable_on_site_slave_tickets_count = 0;
+            // // Tempo di lavoro per gestire i ticket non fatturabili (in minuti)
+            // $unbillable_remote_work_time = 0;
+            // $unbillable_on_site_normal_work_time = 0;
+            // $unbillable_on_site_slave_work_time = 0;
+
             // Conteggio ticket non fatturabili
-            $unbillable_remote_tickets_count = 0;
+            $unbillable_remote_normal_tickets_count = 0;
+            $unbillable_remote_activity_tickets_count = 0;
             $unbillable_on_site_normal_tickets_count = 0;
-            $unbillable_on_site_slave_tickets_count = 0;
+            $unbillable_on_site_activity_tickets_count = 0;
             // Tempo di lavoro per gestire i ticket non fatturabili (in minuti)
-            $unbillable_remote_work_time = 0;
+            $unbillable_remote_normal_work_time = 0;
+            $unbillable_remote_activity_work_time = 0;
             $unbillable_on_site_normal_work_time = 0;
-            $unbillable_on_site_slave_work_time = 0;
+            $unbillable_on_site_activity_work_time = 0;
 
             // Conteggio ticket fatturabili
             // $billable_tickets_count = 0;
@@ -186,38 +197,55 @@ class GeneratePdfReport implements ShouldQueue
                         continue;
                     }
 
-                    // Dei ticket da includere bisogna contare separatamente quanti sono quelli fatturabili e quelli no, oltre ai tempi di gestione.
-                    if ($ticket->is_billable == 0) {
-                        // Anche qui vogliamo escludere gli slave? per ora non faccio niente, poi si vedrà
-                        if ($ticket->work_mode == 'on_site') {
-                            // $unbillable_on_site_tickets_count++;
-                            // $unbillable_on_site_work_time += $ticket->actual_processing_time;
-                            if($ticket->master_id != null) {
-                                // Ticket slave
-                                $unbillable_on_site_slave_tickets_count++;
-                                $unbillable_on_site_slave_work_time += $ticket->actual_processing_time ?? 0;
-                            } else {
-                                // Ticket normale
-                                $unbillable_on_site_normal_tickets_count++;
-                                $unbillable_on_site_normal_work_time += $ticket->actual_processing_time ?? 0;
-                            }
-                        } elseif ($ticket->work_mode == 'remote') {
-                            $unbillable_remote_tickets_count++;
-                            $unbillable_remote_work_time += $ticket->actual_processing_time ?? 0;
-                        }
-                    } elseif ($ticket->is_billable == 1) {
-                        // $billable_tickets_count++;
-                        // $billable_work_time += $ticket->actual_processing_time;
-                        if ($ticket->master_id == null) {
+                    // Per il calcolo dei tempi ci sono queste novità da implementare:
+                    // - Le operazioni strutturate (master) non hanno un tempo loro e potremmo inserirle solo nella lista e non nei grafici. Vanno aggiunti i collegati separatamente perchè possono avere fatturabilità diverse.
+                    // - Le attività programmate (scheduling) hanno un tempo che va conteggiato, mentre i collegati non devono essere conteggiati.
+
+                    // CALCOLO TEMPI E CONTEGGI FATTURABILI/NO REMOTO/ON_SITE
+
+                    // Le operazioni strutturate non si contano.
+                    if($ticket->ticketType->is_master == 0) {
+                        // Dei ticket da includere bisogna contare separatamente quanti sono quelli fatturabili e quelli no, oltre ai tempi di gestione.
+                        if ($ticket->is_billable == 0) {
+                            // Anche qui vogliamo escludere i collegati ad attività strutturata? per ora non faccio niente, poi si vedrà
                             if ($ticket->work_mode == 'on_site') {
-                                $on_site_billable_tickets_count++;
-                                $on_site_billable_work_time += $ticket->actual_processing_time ?? 0;
+                                if($ticket->scheduling_id != null) {
+                                    // Ticket collegati ad attività programmata
+                                    $unbillable_on_site_activity_tickets_count++;
+                                    $unbillable_on_site_activity_work_time += $ticket->actual_processing_time ?? 0;
+                                } else {
+                                    // Ticket normale
+                                    $unbillable_on_site_normal_tickets_count++;
+                                    $unbillable_on_site_normal_work_time += $ticket->actual_processing_time ?? 0;
+                                }
                             } elseif ($ticket->work_mode == 'remote') {
-                                $remote_billable_tickets_count++;
-                                $remote_billable_work_time += $ticket->actual_processing_time ?? 0;
+                                // $unbillable_remote_tickets_count++;
+                                // $unbillable_remote_work_time += $ticket->actual_processing_time ?? 0;
+                                if($ticket->scheduling_id != null) {
+                                    // Ticket collegati ad attività programmata
+                                    $unbillable_remote_activity_tickets_count++;
+                                    $unbillable_remote_activity_work_time += $ticket->actual_processing_time ?? 0;
+                                } else {
+                                    // Ticket normale
+                                    $unbillable_remote_normal_tickets_count++;
+                                    $unbillable_remote_normal_work_time += $ticket->actual_processing_time ?? 0;
+                                }
+                            }
+                        } elseif ($ticket->is_billable == 1) {
+                            // $billable_tickets_count++;
+                            // $billable_work_time += $ticket->actual_processing_time;
+                            if ($ticket->scheduling_id == null) {
+                                if ($ticket->work_mode == 'on_site') {
+                                    $on_site_billable_tickets_count++;
+                                    $on_site_billable_work_time += $ticket->actual_processing_time ?? 0;
+                                } elseif ($ticket->work_mode == 'remote') {
+                                    $remote_billable_tickets_count++;
+                                    $remote_billable_work_time += $ticket->actual_processing_time ?? 0;
+                                }
+                            } else {
+                                // Il ticket è collegato ad attività programmata e non va sommato il suo tempo
                             }
                         }
-                        // Il ticket è slave e non va sommato il suo tempo
                     }
 
                     if (! $ticket->messages()->first()) {
@@ -639,12 +667,17 @@ class GeneratePdfReport implements ShouldQueue
                     'is_billable' => $ticket['data']['is_billable'],
                     'actual_processing_time' => $ticket['data']['actual_processing_time'] ?? 0,
                     'master_id' => $ticket['data']['master_id'],
+                    'scheduling_id' => $ticket['data']['scheduling_id'],
                     'is_master' => $ticket['data']['ticketType']['is_master'],
+                    'is_scheduling' => $ticket['data']['ticketType']['is_scheduling'],
                     'slave_ids' => Ticket::where('master_id', $ticket['data']['id'])->pluck('id')->toArray(),
+                    'activities_ids' => Ticket::where('scheduling_id', $ticket['data']['id'])->pluck('id')->toArray(),
+                    'scheduled_duration' => $ticket['data']['scheduled_duration'],
                     'handler_full_name' => $handlerFullName,
                     'work_mode' => $ticket['data']['work_mode'],
                     'source' => $ticketSources[$ticket['data']['source']] ?? "N/A",
                     'slaves_actual_processing_time_sum' => $ticket['data']['ticketType']['is_master'] ? Ticket::where('master_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
+                    'activities_actual_processing_time_sum' => $ticket['data']['ticketType']['is_scheduling'] ? Ticket::where('scheduling_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
                 ];
 
                 if (count($ticket['data']['messages']) > 3) {
@@ -1602,11 +1635,15 @@ class GeneratePdfReport implements ShouldQueue
                 'still_open_tickets_count' => $still_open_tickets_count,
                 'other_tickets_count' => $other_tickets_count,
                 'unbillable_on_site_normal_tickets_count' => $unbillable_on_site_normal_tickets_count,
-                'unbillable_on_site_slave_tickets_count' => $unbillable_on_site_slave_tickets_count,
-                'unbillable_remote_tickets_count' => $unbillable_remote_tickets_count,
+                'unbillable_on_site_activity_tickets_count' => $unbillable_on_site_activity_tickets_count,
+                // 'unbillable_remote_tickets_count' => $unbillable_remote_tickets_count,
+                'unbillable_remote_normal_tickets_count' => $unbillable_remote_normal_tickets_count,
+                'unbillable_remote_activity_tickets_count' => $unbillable_remote_activity_tickets_count,
                 'unbillable_on_site_normal_work_time' => $unbillable_on_site_normal_work_time,
-                'unbillable_on_site_slave_work_time' => $unbillable_on_site_slave_work_time,
-                'unbillable_remote_work_time' => $unbillable_remote_work_time,
+                'unbillable_on_site_activity_work_time' => $unbillable_on_site_activity_work_time,
+                // 'unbillable_remote_work_time' => $unbillable_remote_work_time,
+                'unbillable_remote_normal_work_time' => $unbillable_remote_normal_work_time,
+                'unbillable_remote_activity_work_time' => $unbillable_remote_activity_work_time,
                 'remote_billable_tickets_count' => $remote_billable_tickets_count,
                 'on_site_billable_tickets_count' => $on_site_billable_tickets_count,
                 'remote_billable_work_time' => $remote_billable_work_time,
