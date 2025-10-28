@@ -60,7 +60,7 @@
     <div class="card">
         <p style="margin-bottom: 0.5rem;"><b>Conteggio e fatturabilità ticket</b></p>
         <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-            In caso di operazioni strutturate e ticket a esse collegati, viene conteggiato solo il tempo dell'operazione strutturata.
+            In caso di attività programmate e ticket a esse collegati, viene conteggiato solo il tempo dell'attività programmata.
             <br>
             Per "Remoto fatturabile" si intendono ad esempio: attività di progetto, non incluse nel contratto, ecc.
         </p>
@@ -70,8 +70,8 @@
                 $on_site_billable_tickets_count + $remote_billable_tickets_count;
             $total_billable_work_time = $on_site_billable_work_time + $remote_billable_work_time;
             $total_unbillable_tickets_count =
-                $unbillable_on_site_normal_tickets_count + $unbillable_on_site_slave_tickets_count + $unbillable_remote_tickets_count;
-            $total_unbillable_work_time = $unbillable_on_site_normal_work_time + $unbillable_on_site_slave_work_time + $unbillable_remote_work_time;
+                $unbillable_on_site_normal_tickets_count + $unbillable_on_site_activity_tickets_count + $unbillable_remote_normal_tickets_count + $unbillable_remote_activity_tickets_count;
+            $total_unbillable_work_time = $unbillable_on_site_normal_work_time + $unbillable_on_site_activity_work_time + $unbillable_remote_normal_work_time + $unbillable_remote_activity_work_time;
         @endphp
 
         <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
@@ -152,7 +152,7 @@
             <thead>
                 <tr style="border: 1px solid #353131;">
                     <th style="border: 1px solid #353131;" class="text-small-plus  ">
-                        Descrizione delle attività incluse nelle operazioni strutturate o nel contratto accordi di servizio
+                        Descrizione delle attività incluse nelle attività programmate o nel contratto accordi di servizio
                     </th>
                     <th style="border: 1px solid #353131; width:15%;" class="text-small-plus  ">
                         Conteggio ticket
@@ -166,7 +166,7 @@
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività onsite incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un'operazione strutturata)
+                            Attività onsite incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un'attività programmata)
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
@@ -183,34 +183,51 @@
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività onsite non fatturabili incluse in un'operazione strutturata
+                            Attività onsite non fatturabili incluse in un'attività programmata
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ $unbillable_on_site_slave_tickets_count }}
+                            {{ $unbillable_on_site_activity_tickets_count }}
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ sprintf('%02d:%02d', intdiv($unbillable_on_site_slave_work_time, 60), $unbillable_on_site_slave_work_time % 60) }}
+                            {{ sprintf('%02d:%02d', intdiv($unbillable_on_site_activity_work_time, 60), $unbillable_on_site_activity_work_time % 60) }}
                         </p>
                     </td>
                 </tr>
                 <tr style="border: 1px solid #353131;">
                     <td style="border: 1px solid #353131; padding-left: 0.5rem;">
                         <p class="text-small-plus">
-                            Attività in remoto incluse nel contratto quadro/accordi di servizio
+                            Attività in remoto incluse nel contratto quadro/accordi di servizio (non fatturabili e non incluse in un'attività programmata)
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ $unbillable_remote_tickets_count }}
+                            {{ $unbillable_remote_normal_tickets_count }}
                         </p>
                     </td>
                     <td style="border: 1px solid #353131; text-align: center;">
                         <p class="text-small-plus " style="font-weight: 600">
-                            {{ sprintf('%02d:%02d', intdiv($unbillable_remote_work_time, 60), $unbillable_remote_work_time % 60) }}
+                            {{ sprintf('%02d:%02d', intdiv($unbillable_remote_normal_work_time, 60), $unbillable_remote_normal_work_time % 60) }}
+                        </p>
+                    </td>
+                </tr>
+                <tr style="border: 1px solid #353131;">
+                    <td style="border: 1px solid #353131; padding-left: 0.5rem;">
+                        <p class="text-small-plus">
+                            Attività in remoto non fatturabili incluse in un'attività programmata
+                        </p>
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        <p class="text-small-plus " style="font-weight: 600">
+                            {{ $unbillable_remote_activity_tickets_count }}
+                        </p>
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        <p class="text-small-plus " style="font-weight: 600">
+                            {{ sprintf('%02d:%02d', intdiv($unbillable_remote_activity_work_time, 60), $unbillable_remote_activity_work_time % 60) }}
                         </p>
                     </td>
                 </tr>
@@ -295,7 +312,7 @@
             {{-- Tabella ticket fatturabili col dettaglio del tempo, divisi per categoria --}}
             <p style="margin-bottom: 0.5rem;"><b>Tempo di gestione ticket fatturabili per categoria</b></p>
             <p style="font-size: 0.75rem; margin-top: 0; margin-bottom: 0.5rem;">
-                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati alle operazioni strutturate.
+                Qui vengono accorpati i ticket per categoria, escludendo quelli collegati alle attività programmate.
             </p>
     
             <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
@@ -315,9 +332,11 @@
                 </thead>
                 <tbody>
                     @php
+                        // Qui si può migliorare decidendo se mostrare le operazioni strutturate, quelli collegati o entrambi (per ora esclude le operazioni strutturate)
+                        // Allo stesso modo si può decidere di mostrare solo l'attività strutturata o i collegati (al momento solo l'attività strutturata viene mostrata)
                         $billableTicketsByCategory = collect($tickets)
                             ->filter(function ($ticket) {
-                                return $ticket['is_billable'] && $ticket['master_id'] == null;
+                                return $ticket['is_billable'] && ($ticket['scheduling_id'] == null) && $ticket['is_master'] == false;
                             })
                             ->groupBy('category')
                             ->sortByDesc(function ($groupedTickets) {
@@ -391,7 +410,7 @@
     
             @php
                 $billableTicketsOnsite = collect($tickets)->filter(function ($ticket) {
-                    return $ticket['is_billable'] && ($ticket['master_id'] == null) && ($ticket['work_mode'] == 'on_site');
+                    return $ticket['is_billable'] && ($ticket['is_master'] == null) && ($ticket['scheduling_id'] == null) && ($ticket['work_mode'] == 'on_site');
                 });
             @endphp
     
@@ -732,7 +751,9 @@
         <p style="font-size:9">
             <span>R/I indica Request/Incident ovvero Richiesta/Problema.</span>
             <br>
-            <span>O/C/S indica se è un'operazione strutturata, se Collegato a un'operazione strutturata o se è Singolo.</span>
+            <span>O/C/S indica se è un'operazione strutturata, se collegato a un'operazione strutturata o se è singolo.</span>
+            <br>
+            <span>SOD/SRD/COL/SIN indica se è un'attività programmata (supporto on site dedicato, supporto remoto dedicato), se collegato a un'attività programmata o se è singolo.</span>
             <br>
             <span>SUP indica il Supporto.</span>
             <br>
@@ -745,13 +766,13 @@
         <table style="width:100%; border: 1px solid #201e1e; border-collapse: collapse;">
             <tbody>
                 <tr style=" border: 1px solid #353131;" class="text-small-plus">
-                    <th style="width:8%; border: 1px solid #353131;">
+                    <th style="width:6%; border: 1px solid #353131;">
                         Ticket
                     </th>
-                    <th style="width:8%; border: 1px solid #353131;">
+                    <th style="width:5%; border: 1px solid #353131;">
                         R/I
                     </th>
-                    <th style="width:28%; border: 1px solid #353131;">
+                    <th style="width:25%; border: 1px solid #353131;">
                         Categoria
                     </th>
                     <th style="width:12%; border: 1px solid #353131;">
@@ -773,20 +794,23 @@
                         O/C/S
                     </th>
                     <th style="width:8%; border: 1px solid #353131;">
+                        SOD/SRD/COL/SIN
+                    </th>
+                    <th style="width:8%; border: 1px solid #353131;">
                         Stato attuale
                     </th>
                 </tr>
                 @foreach ($tickets as $ticket)
                     <tr class="text-small">
-                        <td style="width:8%; border: 1px solid #353131; text-align: center;">
+                        <td style="width:6%; border: 1px solid #353131; text-align: center;">
                             <a href="#ticket-{{ $ticket['id'] }}">
                                 #{{ $ticket['id'] }}
                             </a>
                         </td>
-                        <td style="width:8%; border: 1px solid #353131; text-align: center;">
+                        <td style="width:5%; border: 1px solid #353131; text-align: center;">
                             {{ $ticket['incident_request'] == 'Request' ? 'R' : 'I' }}
                         </td>
-                        <td style="width:28%; border: 1px solid #353131; padding-left: 0.5rem;">
+                        <td style="width:25%; border: 1px solid #353131; padding-left: 0.5rem;">
                             {{-- {{ $ticket['category'] }} --}}
                             {{ $ticket['category'] }}
                         </td>
@@ -812,6 +836,21 @@
                                 O
                             @else
                                 S
+                            @endif
+                        </td>
+                        <td style="width:8%; border: 1px solid #353131; text-align: center;">
+                            @if ($ticket['scheduling_id'] != null)
+                                COL
+                            @elseif ($ticket['is_scheduling'])
+                                @if ($ticket['work_mode'] == 'on_site')
+                                    SOD
+                                @elseif ($ticket['work_mode'] == 'remote')
+                                    SRD
+                                @else
+                                    SD
+                                @endif
+                            @else
+                                SIN
                             @endif
                         </td>
                         <td style="width:8%; border: 1px solid #353131; text-align: center;">
@@ -867,21 +906,48 @@
                                 </td>
                             </tr>
                             <tr>
-                                <td style="width: 50%;">
+                                {{-- <td style="width: 50%;">
                                     <p>
                                         <span class="ticket-section-title">Ticket </span>
                                         <span>{{ $ticket['master_id'] != null
                                             ? // ? 'Collegato a <a href="#ticket-'.e($ticket['master_id']).'">#'.e($ticket['master_id']).'</a>'
-                                            'Collegato a operazione strutturata'
+                                                'Collegato a operazione strutturata'
                                             : ($ticket['is_master']
                                                 ? 'Operazione strutturata'
                                                 : 'Singolo') }}</span>
                                     </p>
+                                </td> --}}
+                                <td style="width: 50%;">
+                                    <p>
+                                        <span class="ticket-section-title">Ticket </span>
+                                        <span>{{ $ticket['scheduling_id'] != null
+                                            ? // ? 'Collegato a <a href="#ticket-'.e($ticket['scheduling_id']).'">#'.e($ticket['scheduling_id']).'</a>'
+                                                ($ticket['master_id'] != null
+                                                        ? 'Collegato ad operazione strutturata e ad attività programmata'
+                                                        : ($ticket['is_master']
+                                                            ? 'Operazione strutturata collegata ad attività programmata'
+                                                            : 'Collegato ad attività programmata')
+                                                )
+                                            : ($ticket['is_scheduling']
+                                                ? 'Attività programmata'
+                                                : ($ticket['master_id'] != null
+                                                        ? 'Collegato a operazione strutturata'
+                                                        : ($ticket['is_master']
+                                                            ? 'Operazione strutturata'
+                                                            : 'Singolo')
+                                                )) }}</span>
+                                    </p>
                                 </td>
                                 <td style="width: 50%;">
                                     <p>
-                                        <span class="ticket-section-title">Tempo:</span>
-                                        <span>{{ sprintf('%02d:%02d', intdiv($ticket['actual_processing_time'], 60), $ticket['actual_processing_time'] % 60) }}</span>
+                                        <span class="ticket-section-title">
+                                            {{ $ticket['is_master'] ? 'Tempo (somma dei collegati):' : 'Tempo:' }}
+                                        </span>
+                                        <span>{{ 
+                                            $ticket['is_master'] 
+                                                ? sprintf('%02d:%02d', intdiv($ticket['slaves_actual_processing_time_sum'], 60), $ticket['slaves_actual_processing_time_sum'] % 60) 
+                                                : sprintf('%02d:%02d', intdiv($ticket['actual_processing_time'], 60), $ticket['actual_processing_time'] % 60)
+                                        }}</span>
                                     </p>
                                 </td>
                             </tr>
@@ -938,7 +1004,7 @@
                                         @endif
                                         @if ($ticket['is_master'])
                                             <p>
-                                                <span class="ticket-section-title">Ticket collegati: </span>
+                                                <span class="ticket-section-title">Ticket collegati ad operazione strutturata: </span>
                                                 @if (!empty($ticket['slave_ids']))
                                                     @foreach ($ticket['slave_ids'] as $slave_id)
                                                         <a href="#ticket-{{ $slave_id }}">
@@ -950,6 +1016,32 @@
                                                     @endforeach
                                                 @else
                                                     <span>Non ci sono ticket collegati</span>
+                                                @endif
+                                            </p>
+                                        @endif
+
+                                        @if ($ticket['scheduling_id'] != null)
+                                            <p>
+                                                <span class="ticket-section-title">Attività programmata: </span>
+                                                <a href="#ticket-{{ $ticket['scheduling_id'] }}">
+                                                    #{{ $ticket['scheduling_id'] }}
+                                                </a>
+                                            </p>
+                                        @endif
+                                        @if ($ticket['is_scheduling'])
+                                            <p>
+                                                <span class="ticket-section-title">Ticket collegati ad attività programmata: </span>
+                                                @if (!empty($ticket['activities_ids']))
+                                                    @foreach ($ticket['activities_ids'] as $activity_id)
+                                                        <a href="#ticket-{{ $activity_id }}">
+                                                            #{{ $activity_id }}
+                                                        </a>
+                                                        @if (!$loop->last)
+                                                            ,
+                                                        @endif
+                                                    @endforeach
+                                                @else
+                                                    <span>Non ci sono ticket collegati ad attività programmata</span>
                                                 @endif
                                             </p>
                                         @endif
