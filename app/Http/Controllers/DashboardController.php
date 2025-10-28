@@ -570,16 +570,17 @@ class DashboardController extends Controller
         $tenant = $this->getCurrentTenant();
         $user = auth()->user();
 
-        $rightCards = [
-            [
-                'id' => 'user-ticket-redirect',
-                'type' => 'user-tickets-redirect',
-                'color' => 'primary',
-                'content' => 'Gestione ticket',
-                'icon' => 'mdi-view-list',
-                'description' => 'Visualizza tutti i tuoi ticket',
-            ],
-        ];
+        // $rightCards = [
+        //     [
+        //         'id' => 'user-ticket-redirect',
+        //         'type' => 'user-tickets-redirect',
+        //         'color' => 'primary',
+        //         'content' => 'Gestione ticket',
+        //         'icon' => 'mdi-view-list',
+        //         'description' => 'Visualizza tutti i tuoi ticket',
+        //     ],
+        // ];
+        $rightCards = [];
 
         // Se il tenant è spreetzit, mostriamo la card hardware-stats
         if ($tenant === 'spreetzit') {
@@ -711,6 +712,11 @@ class DashboardController extends Controller
             case 'user-open-tickets':
                 $card['value'] = $stats['open_tickets_count'];
                 $card['data'] = $this->getUserOpenTicketsData();
+                $card['action'] = [
+                    'type' => 'link',
+                    'url' => '/support/user/tickets',
+                    'label' => 'Visualizza ticket',
+                ];
                 break;
             case 'user-tickets-redirect':
                 $card['action'] = [
