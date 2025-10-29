@@ -17,11 +17,13 @@ class TicketReminder extends Model
         'message',
         'reminder_date',
         'is_ticket_deadline',
+        'attendees',
     ];
 
     protected $casts = [
         'reminder_date' => 'datetime',
         'is_ticket_deadline' => 'boolean',
+        'attendees' => 'array',
     ];
 
     public function user(): BelongsTo

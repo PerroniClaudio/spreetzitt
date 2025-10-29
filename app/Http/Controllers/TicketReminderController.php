@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TicketReminder;
 use App\Models\TicketStage;
+use Illuminate\Http\Client\Response as HttpClientResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
@@ -42,6 +43,11 @@ class TicketReminderController extends Controller
             'reminder_date' => 'required|date|after:now',
             'create_outlook_event' => 'nullable|boolean',
             'is_ticket_deadline' => 'nullable|boolean',
+            'attendees' => 'nullable|array',
+            'attendees.*' => 'required|array',
+            'attendees.*.email' => 'required|email',
+            'attendees.*.name' => 'nullable|string|max:255',
+            'attendees.*.type' => 'nullable|in:required,optional,resource',
         ]);
 
         try {
@@ -53,6 +59,7 @@ class TicketReminderController extends Controller
                 'message' => $validated['message'],
                 'reminder_date' => $validated['reminder_date'],
                 'is_ticket_deadline' => $validated['is_ticket_deadline'] ?? false,
+                'attendees' => $validated['attendees'] ?? null,
             ]);
 
             $reminder->load(['user', 'ticket']);
@@ -271,7 +278,7 @@ class TicketReminderController extends Controller
             $endTime = $startTime->copy()->addMinutes(30); // Durata fissa 30 minuti
 
             $eventTitle = $reminder->is_ticket_deadline
-                ? '🚨 SCADENZA: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)
+                ? 'SCADENZA: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id)
                 : 'Ticket Reminder: '.($reminder->ticket->description ?? 'Ticket #'.$reminder->ticket_id);
 
             $categories = $reminder->is_ticket_deadline
@@ -298,6 +305,10 @@ class TicketReminderController extends Controller
                 'importance' => $reminder->is_ticket_deadline ? 'high' : 'normal',
             ];
 
+            if (! empty($validated['attendees'])) {
+                $eventData['attendees'] = $this->formatAttendeesForGraph($validated['attendees']);
+            }
+
             // Chiama Microsoft Graph API
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer '.$user->microsoft_access_token,
@@ -310,6 +321,7 @@ class TicketReminderController extends Controller
                 // Aggiorna il reminder con l'ID dell'evento Outlook
                 $reminder->update([
                     'event_uuid' => $outlookEvent['id'] ?? $reminder->event_uuid,
+                    'attendees' => $validated['attendees'] ?? null,
                 ]);
 
                 return [
@@ -317,6 +329,10 @@ class TicketReminderController extends Controller
                     'event' => $outlookEvent,
                 ];
             } else {
+                if ($authFailure = $this->handleMicrosoftAuthFailure($user, $response)) {
+                    return $authFailure;
+                }
+
                 // Log dell'errore
                 Log::error('Errore creazione evento Outlook', [
                     'user_id' => $user->id,
@@ -341,6 +357,60 @@ class TicketReminderController extends Controller
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Handle unauthorized responses from Microsoft Graph.
+     */
+    private function handleMicrosoftAuthFailure($user, HttpClientResponse $response): ?array
+    {
+        if (in_array($response->status(), [401, 403], true)) {
+            $user->update([
+                'microsoft_access_token' => null,
+            ]);
+
+            Log::warning('Token Microsoft scaduto o non valido', [
+                'user_id' => $user->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => 'Token Microsoft scaduto o non valido. Effettuare nuovamente il login con Microsoft per continuare.',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Format attendees payload for Microsoft Graph API.
+     */
+    private function formatAttendeesForGraph(array $attendees): array
+    {
+        return array_values(array_filter(array_map(function (array $attendee) {
+            $email = $attendee['email'] ?? null;
+
+            if (! $email) {
+                return null;
+            }
+
+            $payload = [
+                'emailAddress' => [
+                    'address' => $email,
+                ],
+                'type' => strtolower($attendee['type'] ?? 'required'),
+            ];
+
+            $name = trim($attendee['name'] ?? '');
+
+            if ($name !== '') {
+                $payload['emailAddress']['name'] = $name;
+            }
+
+            return $payload;
+        }, $attendees)));
     }
 
     /**
@@ -606,34 +676,38 @@ class TicketReminderController extends Controller
                     'success' => true,
                     'event' => $response->json(),
                 ];
-            } else {
-                // Se l'evento non esiste su Outlook (404), considera come successo parziale
-                if ($response->status() === 404) {
-                    Log::warning('Evento Outlook non trovato durante l\'aggiornamento (probabilmente eliminato manualmente)', [
-                        'user_id' => $user->id,
-                        'reminder_id' => $reminder->id,
-                        'event_uuid' => $reminder->event_uuid,
-                    ]);
+            }
 
-                    return [
-                        'success' => false,
-                        'error' => 'Evento non trovato su Outlook (potrebbe essere stato eliminato manualmente)',
-                    ];
-                }
+            if ($authFailure = $this->handleMicrosoftAuthFailure($user, $response)) {
+                return $authFailure;
+            }
 
-                // Log dell'errore
-                Log::error('Errore aggiornamento evento Outlook', [
+            // Se l'evento non esiste su Outlook (404), considera come successo parziale
+            if ($response->status() === 404) {
+                Log::warning('Evento Outlook non trovato durante l\'aggiornamento (probabilmente eliminato manualmente)', [
                     'user_id' => $user->id,
                     'reminder_id' => $reminder->id,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+                    'event_uuid' => $reminder->event_uuid,
                 ]);
 
                 return [
                     'success' => false,
-                    'error' => $response->json(),
+                    'error' => 'Evento non trovato su Outlook (potrebbe essere stato eliminato manualmente)',
                 ];
             }
+
+            // Log dell'errore
+            Log::error('Errore aggiornamento evento Outlook', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->json(),
+            ];
 
         } catch (\Exception $e) {
             Log::error('Errore durante l\'aggiornamento dell\'evento Outlook', [
@@ -671,33 +745,37 @@ class TicketReminderController extends Controller
                 return [
                     'success' => true,
                 ];
-            } else {
-                // Se l'evento non esiste su Outlook (404), considera come successo
-                if ($response->status() === 404) {
-                    Log::info('Evento Outlook non trovato durante l\'eliminazione (probabilmente già eliminato)', [
-                        'user_id' => $user->id,
-                        'reminder_id' => $reminder->id,
-                        'event_uuid' => $reminder->event_uuid,
-                    ]);
+            }
 
-                    return [
-                        'success' => true, // Consideriamo come successo perché l'obiettivo è eliminarlo
-                    ];
-                }
+            if ($authFailure = $this->handleMicrosoftAuthFailure($user, $response)) {
+                return $authFailure;
+            }
 
-                // Log dell'errore
-                Log::error('Errore eliminazione evento Outlook', [
+            // Se l'evento non esiste su Outlook (404), considera come successo
+            if ($response->status() === 404) {
+                Log::info('Evento Outlook non trovato durante l\'eliminazione (probabilmente già eliminato)', [
                     'user_id' => $user->id,
                     'reminder_id' => $reminder->id,
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+                    'event_uuid' => $reminder->event_uuid,
                 ]);
 
                 return [
-                    'success' => false,
-                    'error' => $response->json(),
+                    'success' => true, // Consideriamo come successo perché l'obiettivo è eliminarlo
                 ];
             }
+
+            // Log dell'errore
+            Log::error('Errore eliminazione evento Outlook', [
+                'user_id' => $user->id,
+                'reminder_id' => $reminder->id,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $response->json(),
+            ];
 
         } catch (\Exception $e) {
             Log::error('Errore durante l\'eliminazione dell\'evento Outlook', [
