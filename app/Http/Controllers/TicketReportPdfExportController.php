@@ -93,7 +93,24 @@ class TicketReportPdfExportController extends Controller
             $company = Company::find($request->company_id);
 
             // $name = preg_replace('/[^a-zA-Z0-9_-]/', '', strtolower($company->name)) . '_' . time() . '_' . $request->company_id . '_tickets.pdf';
-            $name = time().'_'.$request->company_id.'_tickets.pdf';
+            
+            // $name = time().'_'.$request->company_id.'_tickets.pdf'; 1761744459_Aziendacliente1_2025-10-20_2025-10-29_.pdf
+            
+            $companyName = preg_replace('/[^a-zA-Z0-9]/', '', $company->name);
+            $optionalParamsText = '';
+            if (isset($request->optional_parameters)) {
+            // Decodifica se è una stringa JSON, altrimenti usa direttamente
+            $optionalParameters = is_string($request->optional_parameters) 
+                ? json_decode($request->optional_parameters, true) 
+                : (array) $request->optional_parameters;
+            
+                if (isset($optionalParameters['type'])) {
+                    $reqOptParType = $optionalParameters['type'];
+                    $optionalParamsText .= $reqOptParType == 'all' ? 'Tutti' : ($reqOptParType == 'request' ? 'Request' : ($reqOptParType == 'incident' ? 'Incident' : ''));
+                }
+            }
+            
+            $name = time().'_'.$companyName.'_'.$request->start_date.'_'.$request->end_date.'_'.$optionalParamsText.'.pdf';
 
             // $file =  Excel::store(new TicketsExport($company, $request->start_date, $request->end_date), 'exports/' . $request->company_id . '/' . $name, 'gcs');
 
