@@ -1321,7 +1321,7 @@
                                     </p>
                                 </td>
                             </tr>
-                            @if ($ticket['master_id'] != null || $ticket['is_master'])
+                            @if ($ticket['master_id'] != null || $ticket['is_master'] || $ticket['scheduling_id'] != null || $ticket['is_scheduling'])
                                 <tr>
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
