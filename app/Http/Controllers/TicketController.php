@@ -2091,7 +2091,7 @@ class TicketController extends Controller
         DB::beginTransaction();
         
         try {
-            $warning = null;
+            $warning = "";
 
             // Assegna il ticket all'attività programmata
             $ticket->update(['scheduling_id' => $schedulingTicket->id]);
@@ -2100,35 +2100,110 @@ class TicketController extends Controller
             if ($ticket->ticketType->is_master == 1) {
                 $slaveTickets = $ticket->slaves;
                 $slaveCount = $slaveTickets->count();
-                
+
                 if ($slaveCount > 0) {
+                    $slavesUpdated = false;
                     foreach ($slaveTickets as $slaveTicket) {
-                        $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                        if($slaveTicket->scheduling_id != $schedulingTicket->id) {
+                            $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                            $slavesUpdated = true;
+                        }
                     }
-                    $warning = "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati.";
+                    if ($slavesUpdated) {
+                        $warning .= "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati. ";
+                    }
                 }
             }
 
-            // Se il ticket ha un master, rimuovi l'associazione del master all'attività programmata, perchè uno dei figli non è più associato.
+            // Se il ticket ha un master, rimuovi l'associazione del master all'attività programmata precedente, perchè uno dei figli non è più associato a quella. Il master può essere associato solo se tutti i figli sono associati alla stessa.
             if ($ticket->master_id != null) {
                 $masterTicket = Ticket::find($ticket->master_id);
-                if ($masterTicket && $masterTicket->scheduling_id == $schedulingTicket->id) {
-                    $masterTicket->update(['scheduling_id' => null]);
-                    $warning = "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata.";
+                if($masterTicket) {
+                    // Se il master è associato a un'attività programmata diversa da quella appena assegnata al figlio, rimuovi l'associazione del master.
+                    if ($masterTicket->scheduling_id != null && $masterTicket->scheduling_id != $schedulingTicket->id) {
+                        $masterTicket->update(['scheduling_id' => null]);
+                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata a cui era associato in precedenza. ";
+                    }
+    
+                    // Se tutti i figli del master sono ora associati alla stessa attività programmata, associa anche il master a quell'attività programmata.
+                    $allSlaves = $masterTicket->slaves;
+                    $allSlavesAssociatedToSameScheduling = true;
+                    foreach ($allSlaves as $slave) {
+                        if ($slave->scheduling_id != $schedulingTicket->id) {
+                            $allSlavesAssociatedToSameScheduling = false;
+                            break;
+                        }
+                    }
+
+                    if ($allSlavesAssociatedToSameScheduling) {
+                        $masterTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. Poiché tutti i ticket associati sono collegati alla stessa attività programmata, anche l'operazione strutturata è stata collegata automaticamente a tale attività programmata. ";
+                    }
                 }
+
             }
 
             DB::commit();
 
             return response([
                 'ticket' => $ticket,
-                'warning' => $warning,
+                'warning' => $warning ?? null,
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
             
             return response([
                 'message' => 'Errore durante il collegamento all\'attività programmata: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function removeSchedulingConnection(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->scheduling_id == null) {
+            return response([
+                'message' => 'This ticket is not connected to any scheduling.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warning = '';
+
+            // Rimuovi l'associazione all'attività programmata
+            $ticket->update(['scheduling_id' => null]);
+
+            // Se il ticket ha un master, scollega il master dall'attività programmata.
+            if ($ticket->master_id != null) {
+                $masterTicket = Ticket::find($ticket->master_id);
+                if ($masterTicket && $masterTicket->scheduling_id != null) {
+                    $masterTicket->update(['scheduling_id' => null]);
+                    $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata a cui era associata in precedenza.";
+                }
+            }
+
+            // Se il ticket è un master non si deve fare altro, perchè gli slave possono essere associati singolarmente anche ad attività diverse.
+
+            DB::commit();
+
+            return response([
+                'ticket' => $ticket,
+                'warning' => $warning ?? null,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response([
+                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: ' . $e->getMessage(),
             ], 500);
         }
     }

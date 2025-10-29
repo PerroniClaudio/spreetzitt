@@ -123,6 +123,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket/{ticket}/available-scheduling-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableSchedulingTickets']);
     Route::get('/ticket/{ticket}/connected-to-scheduling', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToScheduling']);
     Route::post('/ticket/{ticket}/connect-to-scheduling', [App\Http\Controllers\TicketController::class, 'connectToSchedulingTicket']);
+    Route::post('/ticket/{ticket}/remove-scheduling-connection', [App\Http\Controllers\TicketController::class, 'removeSchedulingConnection']);
     Route::get('/ticket/{ticket}/scheduling-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketRecapData']);
 
     // Assegnazione ticket
