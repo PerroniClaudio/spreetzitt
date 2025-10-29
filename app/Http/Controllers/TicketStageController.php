@@ -50,6 +50,13 @@ class TicketStageController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $authUser = $request->user();
+        if($authUser['is_superadmin'] == false){
+            return response()->json([
+                'message' => 'Only superadmins can store ticket stages.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name' => 'required|string|max:255|unique:ticket_stages,name',
             'description' => 'nullable|string',
@@ -87,6 +94,13 @@ class TicketStageController extends Controller
      */
     public function update(Request $request, TicketStage $ticketStage): JsonResponse
     {
+        $authUser = $request->user();
+        if($authUser['is_superadmin'] == false){
+            return response()->json([
+                'message' => 'Only superadmins can edit ticket stages.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'name' => [
                 'required',
@@ -112,8 +126,14 @@ class TicketStageController extends Controller
     /**
      * Remove the specified resource from storage (soft delete).
      */
-    public function destroy(TicketStage $ticketStage): JsonResponse
+    public function destroy(Request $request, TicketStage $ticketStage): JsonResponse
     {
+        $authUser = $request->user();
+        if($authUser['is_superadmin'] == false){
+            return response()->json([
+                'message' => 'Only superadmins can destroy ticket stages.',
+            ], 403);
+        }
         // Il controllo su is_system lo fa direttamente il modello.
         // Se ci sono ticket con quello stage non si può eliminare, anche per evitare casini nella visualizzazione della lista ticket
         // (che ha le checkbox coi filtri per stato, quindi se lo stato non è tra le checkbox non si vedrebbero i ticket ecc ecc.)
@@ -133,8 +153,15 @@ class TicketStageController extends Controller
     /**
      * Restore a soft deleted ticket stage.
      */
-    public function restore(int $id): JsonResponse
+    public function restore(Request $request, int $id): JsonResponse
     {
+        $authUser = $request->user();
+        if($authUser['is_superadmin'] == false){
+            return response()->json([
+                'message' => 'Only superadmins can enable ticket stages.',
+            ], 403);
+        }
+
         $stage = TicketStage::withTrashed()->findOrFail($id);
         $stage->restore();
 
