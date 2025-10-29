@@ -991,7 +991,7 @@
                                     </p>
                                 </td>
                             </tr>
-                            @if ($ticket['master_id'] != null || $ticket['is_master'])
+                            @if ($ticket['master_id'] != null || $ticket['is_master'] || $ticket['scheduling_id'] != null || $ticket['is_scheduling'])
                                 <tr>
                                     <td colspan="2">
                                         @if ($ticket['master_id'] != null)
@@ -1349,6 +1349,33 @@
                                                 @endif
                                             </p>
                                         @endif
+
+                                        @if ($ticket['scheduling_id'] != null)
+                                            <p>
+                                                <span class="ticket-section-title">Attività programmata: </span>
+                                                <a href="#ticket-{{ $ticket['scheduling_id'] }}">
+                                                    #{{ $ticket['scheduling_id'] }}
+                                                </a>
+                                            </p>
+                                        @endif
+                                        @if ($ticket['is_scheduling'])
+                                            <p>
+                                                <span class="ticket-section-title">Ticket collegati ad attività programmata: </span>
+                                                @if (!empty($ticket['activities_ids']))
+                                                    @foreach ($ticket['activities_ids'] as $activity_id)
+                                                        <a href="#ticket-{{ $activity_id }}">
+                                                            #{{ $activity_id }}
+                                                        </a>
+                                                        @if (!$loop->last)
+                                                            ,
+                                                        @endif
+                                                    @endforeach
+                                                @else
+                                                    <span>Non ci sono ticket collegati ad attività programmata</span>
+                                                @endif
+                                            </p>
+                                        @endif
+
                                     </td>
                                 </tr>
                             @endif
