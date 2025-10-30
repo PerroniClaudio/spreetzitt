@@ -134,6 +134,11 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket-assign/assign', [App\Http\Controllers\TicketController::class, 'assign']);
     Route::post('/ticket-assign/reassign', [App\Http\Controllers\TicketController::class, 'reassign']);
 
+    // Ticket Log Routes
+
+    Route::get('/ticket/{ticket}/logs', [App\Http\Controllers\TicketLogController::class, 'index']);
+    Route::get('/ticket-logs/{ticketLog}', [App\Http\Controllers\TicketLogController::class, 'show']);
+
     // Company Routes
 
     Route::get('/companies/allowed', [App\Http\Controllers\UserController::class, 'companies']);
