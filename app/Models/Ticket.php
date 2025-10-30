@@ -389,4 +389,14 @@ class Ticket extends Model
     {
         return $this->hasMany(TicketReminder::class)->where('is_ticket_deadline', true);
     }
+
+    /**
+     * Get all ticket logs that involve this ticket.
+     */
+    public function ticketLogs()
+    {
+        return $this->belongsToMany(TicketLog::class, 'ticket_log_ticket', 'ticket_id', 'ticket_log_id')
+                    ->withTimestamps()
+                    ->orderBy('created_at', 'desc');
+    }
 }

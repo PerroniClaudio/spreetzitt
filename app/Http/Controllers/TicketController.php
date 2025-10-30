@@ -13,6 +13,7 @@ use App\Models\HardwareAuditLog;
 use App\Models\Ticket;
 use App\Models\TicketAssignmentHistoryRecord;
 use App\Models\TicketFile;
+use App\Models\TicketLog;
 use App\Models\TicketMessage;
 use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
@@ -2093,6 +2094,10 @@ class TicketController extends Controller
         try {
             $warning = "";
 
+            $oldSchedulingId = $ticket->scheduling_id;
+
+            $ticketIdsBySchedulingId = [$oldSchedulingId => [$ticket->id]];
+
             // Assegna il ticket all'attività programmata
             $ticket->update(['scheduling_id' => $schedulingTicket->id]);
 
@@ -2102,13 +2107,29 @@ class TicketController extends Controller
                 $slaveCount = $slaveTickets->count();
 
                 if ($slaveCount > 0) {
+                    // Raggruppa gli slave per scheduling_id corrente
+                    $slavesBySchedulingId = $slaveTickets->groupBy('scheduling_id');
                     $slavesUpdated = false;
-                    foreach ($slaveTickets as $slaveTicket) {
-                        if($slaveTicket->scheduling_id != $schedulingTicket->id) {
-                            $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
-                            $slavesUpdated = true;
+                    
+                    foreach ($slavesBySchedulingId as $currentSchedulingId => $slavesGroup) {
+                        $slaveIds = $slavesGroup->pluck('id')->toArray();
+                        $hasChanges = false;
+                        
+                        // Aggiorna tutti gli slave di questo gruppo al nuovo scheduling
+                        foreach ($slavesGroup as $slaveTicket) {
+                            if($slaveTicket->scheduling_id != $schedulingTicket->id) {
+                                $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                                $slavesUpdated = true;
+                                $hasChanges = true;
+                            }
+                        }
+                        
+                        // Crea un log per questo gruppo di slave (se almeno uno è stato modificato)
+                        if ($hasChanges) {
+                            $ticketIdsBySchedulingId[$currentSchedulingId] = array_merge($ticketIdsBySchedulingId[$currentSchedulingId], $slaveIds);
                         }
                     }
+                    
                     if ($slavesUpdated) {
                         $warning .= "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati. ";
                     }
@@ -2119,12 +2140,6 @@ class TicketController extends Controller
             if ($ticket->master_id != null) {
                 $masterTicket = Ticket::find($ticket->master_id);
                 if($masterTicket) {
-                    // Se il master è associato a un'attività programmata diversa da quella appena assegnata al figlio, rimuovi l'associazione del master.
-                    if ($masterTicket->scheduling_id != null && $masterTicket->scheduling_id != $schedulingTicket->id) {
-                        $masterTicket->update(['scheduling_id' => null]);
-                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata a cui era associato in precedenza. ";
-                    }
-    
                     // Se tutti i figli del master sono ora associati alla stessa attività programmata, associa anche il master a quell'attività programmata.
                     $allSlaves = $masterTicket->slaves;
                     $allSlavesAssociatedToSameScheduling = true;
@@ -2136,11 +2151,27 @@ class TicketController extends Controller
                     }
 
                     if ($allSlavesAssociatedToSameScheduling) {
+                        $oldMasterSchedulingId = $masterTicket->scheduling_id;
                         $masterTicket->update(['scheduling_id' => $schedulingTicket->id]);
+                        $ticketIdsBySchedulingId[$oldMasterSchedulingId] = array_merge($ticketIdsBySchedulingId[$oldMasterSchedulingId], [$masterTicket->id]);
                         $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. Poiché tutti i ticket associati sono collegati alla stessa attività programmata, anche l'operazione strutturata è stata collegata automaticamente a tale attività programmata. ";
+                    }
+
+                    // Questa operazione va dopo il controllo di sugli slave, per motivi di log. (se è entrato nel blocco precedente usa quel log, altrimenti usa questo)
+                    // Se il master è associato a un'attività programmata diversa da quella appena assegnata al figlio, rimuovi l'associazione del master.
+                    if ($masterTicket->scheduling_id != null && $masterTicket->scheduling_id != $schedulingTicket->id) {
+                        $oldMasterSchedulingId = $masterTicket->scheduling_id;
+                        $masterTicket->update(['scheduling_id' => null]);
+                        $this->createEditSchedulingLog($oldMasterSchedulingId, null, [$masterTicket->id], $user->id);
+                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata a cui era associato in precedenza. ";
                     }
                 }
 
+            }
+
+            foreach ($ticketIdsBySchedulingId as $schedulingId => $ticketIds) {
+                // Crea un log per ogni scheduling id coinvolto
+                $this->createEditSchedulingLog($schedulingId, $schedulingTicket->id, $ticketIds, $user->id);
             }
 
             DB::commit();
@@ -2177,18 +2208,27 @@ class TicketController extends Controller
         DB::beginTransaction();
         
         try {
-            $warning = '';
+            $warning = '';            
+            $oldSchedulingId = $ticket->scheduling_id;
 
             // Rimuovi l'associazione all'attività programmata
             $ticket->update(['scheduling_id' => null]);
+
+            $ticketIdsBySchedulingId = [$oldSchedulingId => [$ticket->id]];
 
             // Se il ticket ha un master, scollega il master dall'attività programmata.
             if ($ticket->master_id != null) {
                 $masterTicket = Ticket::find($ticket->master_id);
                 if ($masterTicket && $masterTicket->scheduling_id != null) {
+                    $ticketIdsBySchedulingId[$masterTicket->scheduling_id][] = $masterTicket->id;
                     $masterTicket->update(['scheduling_id' => null]);
                     $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dall'attività programmata a cui era associata in precedenza.";
                 }
+            }
+
+            foreach ($ticketIdsBySchedulingId as $schedulingId => $ticketIds) {
+                // Crea uno o due log in base a se il master era associato o no alla stessa attività (dovrebbe esserlo)
+                $this->createEditSchedulingLog($schedulingId, null, $ticketIds, $user->id);
             }
 
             // Se il ticket è un master non si deve fare altro, perchè gli slave possono essere associati singolarmente anche ad attività diverse.
@@ -2206,6 +2246,68 @@ class TicketController extends Controller
                 'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    private function createEditSchedulingLog($oldSchedulingId, $newSchedulingId, array $ticketIds, $userId)
+    {
+        $tickets = Ticket::whereIn('id', $ticketIds)->get();
+        if ($tickets->isEmpty()) {
+            return;
+        }
+
+        // Se non ci sono cambiamenti, non fare nulla
+        if ($oldSchedulingId == $newSchedulingId) {
+            return;
+        }
+
+        // Recupera i ticket di scheduling coinvolti
+        $oldSchedulingTicket = $oldSchedulingId ? Ticket::find($oldSchedulingId) : null;
+        $newSchedulingTicket = $newSchedulingId ? Ticket::find($newSchedulingId) : null;
+
+        // Prepara i messaggi usando il plurale appropriato
+        $ticketCount = count($ticketIds);
+        $ticketNumbers = '#' . implode(', #', $ticketIds);
+        $verbSingular = $ticketCount === 1;
+
+        // Determina il tipo di operazione e genera il contenuto del log
+        $content = '';
+
+        if ($oldSchedulingId == null && $newSchedulingId != null) {
+            // Associazione nuova
+            $verb = $verbSingular ? 'collegato' : 'collegati';
+            $content = "Ticket {$ticketNumbers} {$verb} all'attività programmata #{$newSchedulingId}";
+
+        } elseif ($oldSchedulingId != null && $newSchedulingId == null) {
+            // Disconnessione
+            $verb = $verbSingular ? 'scollegato' : 'scollegati';
+            $content = "Ticket {$ticketNumbers} {$verb} dall'attività programmata #{$oldSchedulingId}";
+
+        } elseif ($oldSchedulingId != null && $newSchedulingId != null) {
+            // Cambio di associazione
+            $verb = $verbSingular ? 'spostato' : 'spostati';
+            $content = "Ticket {$ticketNumbers} {$verb} dall'attività programmata #{$oldSchedulingId} all'attività programmata #{$newSchedulingId}";
+        }
+
+        // Crea il log una sola volta
+        $ticketLog = TicketLog::create([
+            'user_id' => $userId,
+            'content' => $content,
+            'type' => 'scheduling',
+            'show_to_user' => true,
+        ]);
+
+        // Collega tutti i ticket coinvolti al log
+        $ticketsToAttach = $ticketIds; // Inizia con tutti i ticket dell'operazione
+        if ($oldSchedulingTicket) {
+            $ticketsToAttach[] = $oldSchedulingId;
+        }
+        if ($newSchedulingTicket) {
+            $ticketsToAttach[] = $newSchedulingId;
+        }
+
+        // Rimuovi duplicati e collega
+        $ticketsToAttach = array_unique($ticketsToAttach);
+        $ticketLog->tickets()->syncWithoutDetaching($ticketsToAttach);
     }
 
     public function getTicketsConnectedToScheduling(Ticket $ticket, Request $request)
