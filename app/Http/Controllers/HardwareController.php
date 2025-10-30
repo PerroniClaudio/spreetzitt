@@ -67,13 +67,20 @@ class HardwareController extends Controller
             ], 403);
         }
 
-        $hardwareList = Hardware::where('company_id', $company->id)
-            ->with(['hardwareType', 'company'])
+        $hardwareQuery = Hardware::query();
+
+        if(!!$authUser->is_admin) {
+            $hardwareQuery->withTrashed();
+        }
+
+        $hardwareList = $hardwareQuery->where('company_id', $company->id)
+            ->with(['hardwareType', 'company', 'users'])
             ->get()
             ->map(function ($hardware) {
-                $hardware->users = $hardware->users()->pluck('user_id')->toArray();
-
-                return $hardware;
+                return [
+                    ...$hardware->toArray(),
+                    'users' => $hardware->users->pluck('id')->toArray(),
+                ];
             });
 
         return response([
