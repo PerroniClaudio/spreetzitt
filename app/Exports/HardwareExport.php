@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\Hardware;
+use Carbon\Carbon;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
@@ -16,6 +17,7 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
     protected $includeTrashed;
     protected $allowedStatuses;
     protected $allowedPositions;
+    protected $hardwareOwnershipTypes;
 
     public function __construct($companyId = null, $userId = null, $includeTrashed = false)
     {
@@ -25,6 +27,7 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
 
         $this->allowedStatuses = config('app.hardware_statuses');
         $this->allowedPositions = config('app.hardware_positions');
+        $this->hardwareOwnershipTypes = config('app.hardware_ownership_types');
     }
 
     public function collection(): Collection
@@ -64,8 +67,8 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'Posizione',
             'Uso esclusivo',
             'Data di acquisto',
-            'Tipo di possesso',
-            'Nota sul tipo di possesso',
+            'Proprietà',
+            'Nota sulla proprietà (se altro)',
             'Note',
             'Azienda',
             'Tipo di hardware',
@@ -88,8 +91,8 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $this->allowedStatuses[$hardware->status] ?? $hardware->status,
             $this->allowedPositions[$hardware->position] ?? $hardware->position,
             $hardware->is_exclusive_use ? 'Si' : 'No',
-            $hardware->purchase_date ? $hardware->purchase_date->format('Y-m-d') : '',
-            $hardware->ownership_type,
+            $this->formatDate($hardware->purchase_date),
+            $this->hardwareOwnershipTypes[$hardware->ownership_type] ?? $hardware->ownership_type,
             $hardware->ownership_type_note,
             $hardware->notes,
             $hardware->company ? $hardware->company->name : '',
@@ -97,9 +100,57 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $hardware->users->map(function ($user) {
                 return $user->name . ' ' . $user->surname . ' (' . $user->email . ')';
             })->implode('; '),
-            $hardware->created_at ? $hardware->created_at->format('Y-m-d H:i:s') : '',
-            $hardware->updated_at ? $hardware->updated_at->format('Y-m-d H:i:s') : '',
-            $hardware->deleted_at ? $hardware->deleted_at->format('Y-m-d H:i:s') : '',
+            $this->formatDateTime($hardware->created_at),
+            $this->formatDateTime($hardware->updated_at),
+            $this->formatDateTime($hardware->deleted_at),
         ];
+    }
+
+    /**
+     * Format date safely
+     */
+    private function formatDate($date): string
+    {
+        if (!$date) {
+            return '';
+        }
+        
+        if (is_string($date)) {
+            try {
+                return Carbon::parse($date)->format('Y-m-d');
+            } catch (\Exception $e) {
+                return $date; // Return as is if parsing fails
+            }
+        }
+        
+        if (method_exists($date, 'format')) {
+            return $date->format('Y-m-d');
+        }
+        
+        return (string) $date;
+    }
+
+    /**
+     * Format datetime safely
+     */
+    private function formatDateTime($datetime): string
+    {
+        if (!$datetime) {
+            return '';
+        }
+        
+        if (is_string($datetime)) {
+            try {
+                return Carbon::parse($datetime)->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                return $datetime; // Return as is if parsing fails
+            }
+        }
+        
+        if (method_exists($datetime, 'format')) {
+            return $datetime->format('Y-m-d H:i:s');
+        }
+        
+        return (string) $datetime;
     }
 }
