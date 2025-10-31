@@ -29,10 +29,10 @@ class AppServiceProvider extends ServiceProvider
         $this->registerFeatures();
         $this->configurePennantScope();
 
-        // LogViewer::auth(function ($request) {
-        //     $user = $request->user();
-        //     return $user && $user->is_admin;
-        // });
+        LogViewer::auth(function ($request) {
+            $user = $request->user();
+            return $user && $user->is_admin;
+        });
     }
 
     /**
