@@ -586,7 +586,7 @@ class UserController extends Controller
         $user = User::where('id', $userId)->first();
         if (
             ! $authUser->is_admin
-            && ! ($authUser->is_company_admin && ($user->companies()->whereIn('companies.id', $authUser->selectedCompany()->id)->exists()))
+            && ! ($authUser->is_company_admin && ($user->companies()->where('companies.id', $authUser->selectedCompany()->id)->exists()))
             && ! ($user->id == $authUser)
         ) {
             return response([
