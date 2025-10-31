@@ -48,6 +48,8 @@ class User extends Authenticatable
         'remember_token',
         'two_factor_secret',
         'two_factor_recovery_codes',
+        'microsoft_token',
+        'microsoft_access_token',
     ];
 
     /**

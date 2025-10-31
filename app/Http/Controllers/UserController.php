@@ -93,7 +93,7 @@ class UserController extends Controller
     {
         $authUser = $request->user();
 
-        $user = User::where('id', $id)->with(['companies'])->first();
+        $user = User::where('id', $id)->with(['companies:id,name,note,logo_url'])->first();
 
         // Se non è l'utente stesso, un admin o company_admin e della stessa compagnia allora non è autorizzato
         if (! ($authUser['is_admin'] == 1 || ($authUser['id'] == $id) || ($user && (
