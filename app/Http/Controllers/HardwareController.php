@@ -20,6 +20,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Faker\Factory as Faker;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
 use function PHPUnit\Framework\isEmpty;
@@ -1227,7 +1228,23 @@ class HardwareController extends Controller
         $includeTrashed = true;
         $name = 'all_hardware_export_' . time() . '.xlsx';
 
-        return Excel::download(new HardwareExport(null, null, $includeTrashed), $name);
+        try {
+            // Aumenta temporaneamente il limite di memoria
+            ini_set('memory_limit', '512M');
+            ini_set('max_execution_time', 300);
+            
+            return Excel::download(new HardwareExport(null, null, $includeTrashed), $name);
+        } catch (\Exception $e) {
+            Log::error('Hardware export failed: ' . $e->getMessage(), [
+                'user_id' => $authUser->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response([
+                'message' => 'Export failed. Please try again later.',
+                'error' => app()->environment('local') ? $e->getMessage() : null
+            ], 500);
+        }
     }
 
     /**
