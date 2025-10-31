@@ -609,7 +609,9 @@ class UserController extends Controller
         }
 
         if ($authUser->is_company_admin) {
-            $tickets = $user->ownTicketsMerged();
+            $tickets = $user->ownTicketsMerged()->filter(function ($ticket) use ($authUser) {
+                return $ticket->company_id == $authUser->selectedCompany()->id;
+            })->values(); // ← Resetta le chiavi per mantenere l'array
 
             foreach ($tickets as $ticket) {
                 // Nascondere i dati utente se è stato aperto dal supporto
