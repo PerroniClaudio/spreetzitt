@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\HardwareAssignationTemplateExport;
 use App\Exports\HardwareDeletionTemplateExport;
+use App\Exports\HardwareExport;
 use App\Exports\HardwareLogsExport;
 use App\Exports\HardwareTemplateExport;
 use App\Imports\HardwareAssignationsImport;
@@ -1209,5 +1210,73 @@ class HardwareController extends Controller
         $name = 'hardware_'.$hardwareId.'_logs_'.time().'.xlsx';
 
         return Excel::download(new HardwareLogsExport($hardwareId), $name);
+    }
+
+    /**
+     * Export all hardware (admin only, can include trashed)
+     */
+    public function exportAllHardware(Request $request)
+    {
+        $authUser = $request->user();
+        if (!$authUser->is_admin) {
+            return response([
+                'message' => 'You are not allowed to export all hardware',
+            ], 403);
+        }
+
+        $includeTrashed = true;
+        $name = 'all_hardware_export_' . time() . '.xlsx';
+
+        return Excel::download(new HardwareExport(null, null, $includeTrashed), $name);
+    }
+
+    /**
+     * Export company hardware
+     */
+    public function exportCompanyHardware(Request $request, Company $company)
+    {
+        $authUser = $request->user();
+        
+        if (!$authUser->is_admin && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+            return response([
+                'message' => 'You are not allowed to export this company\'s hardware',
+            ], 403);
+        }
+
+        // Solo gli admin possono includere il trashed
+        $includeTrashed = $authUser->is_admin;
+        $name = 'company_' . $company->name . '_hardware_export_' . time() . '.xlsx';
+
+        return Excel::download(new HardwareExport($company->id, null, $includeTrashed), $name);
+    }
+
+    /**
+     * Export user hardware
+     */
+    public function exportUserHardware(Request $request, User $user)
+    {
+        $authUser = $request->user();
+        
+        // Controllo autorizzazioni
+        if (!$authUser->is_admin 
+            && !($authUser->is_company_admin && $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists())
+            && !($authUser->id == $user->id)
+        ) {
+            return response([
+                'message' => 'You are not allowed to export this user\'s hardware',
+            ], 403);
+        }
+
+        // Solo gli admin possono includere il trashed
+        // $includeTrashed = $authUser->is_admin && $request->boolean('include_trashed', false);
+        $includeTrashed = $authUser->is_admin;
+        
+        $userFileName = $user->surname 
+            ? ($user->name ? $user->surname . '_' . $user->name : $user->surname)
+            : ($user->name ?? $user->id);
+        $name = 'user_' . $userFileName . '_hardware_export_' . time() . '.xlsx';
+        $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
+
+        return Excel::download(new HardwareExport(null, $user->id, $includeTrashed), $name);
     }
 }

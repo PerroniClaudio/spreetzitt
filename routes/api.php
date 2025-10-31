@@ -336,6 +336,11 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/form-field-hardware-list/{typeFormField}', [App\Http\Controllers\HardwareController::class, 'formFieldHardwareList']);
     Route::get('/hardware-list-full', [App\Http\Controllers\HardwareController::class, 'hardwareListWithTrashed']);
 
+    // Hardware Export Routes (hardware/export-all va tenuta prima di hardware/{hardware})
+    Route::get('/hardware/export-all', [App\Http\Controllers\HardwareController::class, 'exportAllHardware']);
+    Route::get('/hardware/export-company/{company}', [App\Http\Controllers\HardwareController::class, 'exportCompanyHardware']);
+    Route::get('/hardware/export-user/{user}', [App\Http\Controllers\HardwareController::class, 'exportUserHardware']);
+
     // Property Routes
     Route::get('/form-field-property-list/{typeFormField}', [App\Http\Controllers\PropertyController::class, 'formFieldPropertyList']);
     Route::post('/hardware', [App\Http\Controllers\HardwareController::class, 'store']);
