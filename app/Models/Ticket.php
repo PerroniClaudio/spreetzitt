@@ -53,11 +53,18 @@ class Ticket extends Model
         'assigned',
         'last_assignment_id',
         'scheduled_duration',
+        'project_name',
+        'project_start',
+        'project_end',
+        'project_expected_duration',
+        'project_id',
     ];
 
     protected $casts = [
         'assigned' => 'boolean',
         'bill_date' => 'date:Y-m-d',
+        'project_start' => 'date:Y-m-d',
+        'project_end' => 'date:Y-m-d',
     ];
 
     public function toSearchableArray()
@@ -398,5 +405,37 @@ class Ticket extends Model
         return $this->belongsToMany(TicketLog::class, 'ticket_log_ticket', 'ticket_id', 'ticket_log_id')
                     ->withTimestamps()
                     ->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Get the project that this ticket belongs to.
+     */
+    public function project()
+    {
+        return $this->belongsTo(Ticket::class, 'project_id');
+    }
+
+    /**
+     * Get all tickets that belong to this project.
+     */
+    public function projectTickets()
+    {
+        return $this->hasMany(Ticket::class, 'project_id');
+    }
+
+    /**
+     * Check if this ticket is a project.
+     */
+    public function isProject(): bool
+    {
+        return $this->ticketType && $this->ticketType->is_project;
+    }
+
+    /**
+     * Check if this ticket belongs to a project.
+     */
+    public function belongsToProject(): bool
+    {
+        return !is_null($this->project_id);
     }
 }

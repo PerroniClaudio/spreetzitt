@@ -30,6 +30,11 @@ class TicketType extends Model
         'is_grouping',
         'hourly_cost',
         'hourly_cost_expires_at',
+        'is_project',
+    ];
+
+    protected $casts = [
+        'is_project' => 'boolean',
     ];
 
     public function tickets()
