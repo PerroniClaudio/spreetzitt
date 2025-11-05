@@ -33,10 +33,6 @@ class TicketType extends Model
         'is_project',
     ];
 
-    protected $casts = [
-        'is_project' => 'boolean',
-    ];
-
     public function tickets()
     {
         // Questo non funziona perchè non c'è la foreign key ticket_type_id nella tabella tickets

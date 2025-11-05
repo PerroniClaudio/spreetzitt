@@ -153,12 +153,21 @@ class TicketController extends Controller
                 ], 404);
             }
 
-            if($ticketType->is_scheduling == 1 && !$request->scheduledDuration){
-                return response([
-                    'message' => 'La durata pianificata è obbligatoria per questo tipo di ticket',
-                ], 400);
+            // Controllo per attività programmata
+            if($ticketType->is_scheduling == 1){
+                if(!$user->can_open_scheduling){
+                    return response([
+                        'message' => 'Non si hanno i permessi per aprire un ticket di tipo attività programmata',
+                    ], 403);
+                }
+                if(!$request->scheduledDuration) {
+                    return response([
+                        'message' => 'La durata pianificata è obbligatoria per questo tipo di ticket',
+                    ], 400);
+                }
             }
 
+            // Controlli per operazione strutturata
             $slaveTicketsRequest = collect();
             if ($ticketType->is_master == 1) {
 
@@ -175,6 +184,20 @@ class TicketController extends Controller
                         'message' => 'Dati mancanti o incompleti per i ticket collegati. ' 
                         . $slaveTypes->wherePivot('is_required', 1)->pluck('id')->diff($slaveTicketsRequest->pluck('type_id'))->count()
                         . ' di '. $slaveTypes->wherePivot('is_required', 1)->count(),
+                    ], 400);
+                }
+            }
+
+            // Controlli per progetto
+            if($ticketType->is_project == 1){
+                if(!$user->can_open_project){
+                    return response([
+                        'message' => 'Non si hanno i permessi per aprire un ticket di tipo progetto',
+                    ], 403);
+                }
+                if(!$request->projectExpectedDuration || !$request->projectName ) {
+                    return response([
+                        'message' => 'Nome e durata pianificata sono obbligatori per questo tipo di ticket',
                     ], 400);
                 }
             }
@@ -208,6 +231,8 @@ class TicketController extends Controller
                 'referer_it_id' => $request->referer_it ?? null,
                 'referer_id' => $request->referer ?? null,
                 'scheduled_duration' => $request->scheduledDuration ?? null,
+                'project_expected_duration' => $request->projectExpectedDuration ?? null,
+                'project_name' => $request->projectName ?? null
             ]);
 
             if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
@@ -1329,9 +1354,10 @@ class TicketController extends Controller
                     'message' => 'Non è possibile chiudere un\'operazione strutturata con ticket collegati ancora aperti.',
                 ], 400);
             }
-            $fields['actualProcessingTime'] = null;
-
-        } else {
+        }
+        
+        // Sia operazione strutturata che progetto non richiedono il tempo di lavorazione effettivo in chiusura, perchè si calcola sommando i collegati.
+        if(!$ticketType->is_master && !$ticketType->is_project) {
             $request->validate([
                 'actualProcessingTime' => 'required|int',
             ]);
@@ -1380,7 +1406,7 @@ class TicketController extends Controller
 
             $ticket->update([
                 'stage_id' => $closedTicketStageId,
-                'actual_processing_time' => $fields['actualProcessingTime'],
+                'actual_processing_time' => $fields['actualProcessingTime'] ?? null,
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
                 'no_user_response' => $fields['no_user_response'] ?? false,
@@ -1928,6 +1954,7 @@ class TicketController extends Controller
                 'master_id',
                 'scheduling_id',
                 'grouping_id',
+                'project_id',
             ]);
             $slaveTicket->user_full_name =
                 $slaveTicket->user->is_admin == 1
@@ -1972,6 +1999,7 @@ class TicketController extends Controller
         ], 200);
     }
 
+    // Attività programmate disponibili per il ticket (tra cui scegliere per collegarlo)
     public function getAvailableSchedulingTickets (Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -1985,6 +2013,11 @@ class TicketController extends Controller
         if ($ticket->ticketType->is_scheduling == 1) {
             return response([
                 'message' => 'This is a scheduling ticket. Scheduling tickets cannot be connected to other scheduling tickets.',
+            ], 400);
+        }
+        if ($ticket->ticketType->project_id != null) {
+            return response([
+                'message' => 'This is already connected to a project. A ticket can only be connected to a project or a scheduling ticket. Not both.',
             ], 400);
         }
 
@@ -2053,6 +2086,7 @@ class TicketController extends Controller
         ], 200);
     }
 
+    // Gestisce il collegamento di un ticket ad una attività programmata
     public function connectToSchedulingTicket(Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -2066,6 +2100,16 @@ class TicketController extends Controller
         if ($ticket->ticketType->is_scheduling == 1) {
             return response([
                 'message' => 'Cannot connect a scheduling ticket to another scheduling ticket.',
+            ], 400);
+        }
+        if ($ticket->ticketType->is_project == 1) {
+            return response([
+                'message' => 'This ticket is a project ticket. A project cannot be connected to a scheduling ticket.',
+            ], 400);
+        }
+        if( $ticket->project_id != null) {
+            return response([
+                'message' => 'This is already connected to a project. A ticket can only be connected to a project or a scheduling ticket. Not both.',
             ], 400);
         }
 
@@ -2101,9 +2145,9 @@ class TicketController extends Controller
             // Assegna il ticket all'attività programmata
             $ticket->update(['scheduling_id' => $schedulingTicket->id]);
 
-            // Se il ticket è un master, assegna anche tutti i suoi slave
+            // Se il ticket è un master (operazione strutturata), assegna anche tutti i suoi slave
             if ($ticket->ticketType->is_master == 1) {
-                $slaveTickets = $ticket->slaves;
+                $slaveTickets = $ticket->slaves; // Dell'operazione strutturata
                 $slaveCount = $slaveTickets->count();
 
                 if ($slaveCount > 0) {
@@ -2189,6 +2233,7 @@ class TicketController extends Controller
         }
     }
 
+    // Rimuove il collegamento all'attività programmata
     public function removeSchedulingConnection(Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -2248,6 +2293,7 @@ class TicketController extends Controller
         }
     }
 
+    // Gestisce i log di modifica dell'attività programmata per uno o più ticket
     private function createEditSchedulingLog($oldSchedulingId, $newSchedulingId, array $ticketIds, $userId)
     {
         $tickets = Ticket::whereIn('id', $ticketIds)->get();
@@ -2310,6 +2356,7 @@ class TicketController extends Controller
         $ticketLog->tickets()->syncWithoutDetaching($ticketsToAttach);
     }
 
+    // Prende tutti i ticket collegati a questa attività programmata.
     public function getTicketsConnectedToScheduling(Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -2338,6 +2385,7 @@ class TicketController extends Controller
                 'master_id',
                 'scheduling_id',
                 'grouping_id',
+                'project_id',
             ]);
             $connectedTicket->user_full_name =
                 $connectedTicket->user->is_admin == 1
@@ -2382,6 +2430,7 @@ class TicketController extends Controller
         ], 200);
     }
 
+    // Prende i dati di riepilogo dell'attività programmata
     public function getSchedulingTicketRecapData (Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -2435,6 +2484,478 @@ class TicketController extends Controller
         ], 200);
 
     }
+    
+
+    // Progetti disponibili per il ticket (tra cui scegliere per collegarlo)
+    public function getAvailableProjectTickets (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_project == 1) {
+            return response([
+                'message' => 'This is a project ticket. Project tickets cannot be connected to other project tickets.',
+            ], 400);
+        }
+        if ($ticket->ticketType->scheduling_id != null) {
+            return response([
+                'message' => 'This is already connected to a scheduling ticket. A ticket can only be connected to a scheduling ticket or a project ticket. Not both.',
+            ], 400);
+        }
+
+        $projectTickets = Ticket::whereHas('ticketType', function ($query) {
+            $query->where('is_project', true);
+        })->where('company_id', $ticket->company_id)
+        ->where('id', '!=', $ticket->id)
+        ->get();
+
+        $projectTickets->each(function ($projectTicket) use ($user) {
+            $projectTicket->user_full_name =
+                $projectTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$projectTicket->user->id : ''))
+                : ($projectTicket->user->surname
+                    ? $projectTicket->user->surname.' '.strtoupper(substr($projectTicket->user->name, 0, 1)).'.'
+                    : $projectTicket->user->name
+                );
+            $projectTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $projectTicket->ticketType;
+            $projectTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $projectTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $projectTicket->adminUser;
+            if ($adminUser) {
+                $projectTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $projectTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $projectTicket->admin_user_full_name = null;
+                $projectTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $projectTicket->referer;
+            if ($referer) {
+                $projectTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $projectTicket->makeVisible(['referer_full_name']);
+            }
+        });
+
+        return response([
+            'available_project_tickets' => $projectTickets,
+        ], 200);
+    }
+    
+    // Gestisce il collegamento di un ticket ad un progetto
+    public function connectToProjectTicket(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_project == 1) {
+            return response([
+                'message' => 'Cannot connect a project ticket to another project ticket.',
+            ], 400);
+        }
+        if ($ticket->ticketType->is_scheduling == 1) {
+            return response([
+                'message' => 'This ticket is a scheduling ticket. A scheduling ticket cannot be connected to a project.',
+            ], 400);
+        }
+        if( $ticket->scheduling_id != null) {
+            return response([
+                'message' => 'This is already connected to a scheduling ticket. A ticket can only be connected to a project or a scheduling ticket. Not both.',
+            ], 400);
+        }
+        
+        $fields = $request->validate([
+            'project_id' => 'required|int',
+        ]);
+
+        $projectTicket = Ticket::where('id', $fields['project_id'])->whereHas('ticketType', function ($query) {
+            $query->where('is_project', true);
+        })->first();
+
+        if (! $projectTicket) {
+            return response([
+                'message' => 'Project not found.',
+            ], 404);
+        }
+
+        if ($ticket->project_id == $projectTicket->id) {
+            return response([
+                'message' => 'This ticket is already connected to the selected project.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warning = "";
+
+            $oldProjectId = $ticket->project_id;
+
+            $ticketIdsByProjectId = [$oldProjectId => [$ticket->id]];
+
+            // Assegna il ticket al progetto
+            $ticket->update(['project_id' => $projectTicket->id]);
+
+            // Se il ticket è un master (operazione strutturata), assegna anche tutti i suoi slave
+            if ($ticket->ticketType->is_master == 1) {
+                $slaveTickets = $ticket->slaves; // Dell'operazione strutturata
+                $slaveCount = $slaveTickets->count();
+
+                if ($slaveCount > 0) {
+                    // Raggruppa gli slave per project_id corrente
+                    $slavesByProjectId = $slaveTickets->groupBy('project_id');
+                    $slavesUpdated = false;
+                    
+                    foreach ($slavesByProjectId as $currentProjectId => $slavesGroup) {
+                        $slaveIds = $slavesGroup->pluck('id')->toArray();
+                        $hasChanges = false;
+                        
+                        // Aggiorna tutti gli slave di questo gruppo al nuovo project
+                        foreach ($slavesGroup as $slaveTicket) {
+                            if($slaveTicket->project_id != $projectTicket->id) {
+                                $slaveTicket->update(['project_id' => $projectTicket->id]);
+                                $slavesUpdated = true;
+                                $hasChanges = true;
+                            }
+                        }
+                        
+                        // Crea un log per questo gruppo di slave (se almeno uno è stato modificato)
+                        if ($hasChanges) {
+                            $ticketIdsByProjectId[$currentProjectId] = array_merge($ticketIdsByProjectId[$currentProjectId], $slaveIds);
+                        }
+                    }
+                    
+                    if ($slavesUpdated) {
+                        $warning .= "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati. ";
+                    }
+                }
+            }
+
+            // Se il ticket ha un master, rimuovi l'associazione del master al progetto precedente, perchè uno dei figli non è più associato a quel progetto. Il master può essere associato solo se tutti i figli sono associati allo stesso progetto
+            if ($ticket->master_id != null) {
+                $masterTicket = Ticket::find($ticket->master_id);
+                if($masterTicket) {
+                    // Se tutti i figli del master sono ora associati allo stesso progetto, associa anche il master a quel progetto.
+                    $allSlaves = $masterTicket->slaves;
+                    $allSlavesAssociatedToSameProject = true;
+                    foreach ($allSlaves as $slave) {
+                        if ($slave->project_id != $projectTicket->id) {
+                            $allSlavesAssociatedToSameProject = false;
+                            break;
+                        }
+                    }
+
+                    if ($allSlavesAssociatedToSameProject) {
+                        $oldMasterProjectId = $masterTicket->project_id;
+                        $masterTicket->update(['project_id' => $projectTicket->id]);
+                        $ticketIdsByProjectId[$oldMasterProjectId] = array_merge($ticketIdsByProjectId[$oldMasterProjectId], [$masterTicket->id]);
+                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. Poiché tutti i ticket associati sono collegati allo stesso progetto, anche l'operazione strutturata è stata collegata automaticamente a tale progetto. ";
+                    }
+
+                    // Questa operazione va dopo il controllo di sugli slave, per motivi di log. (se è entrato nel blocco precedente usa quel log, altrimenti usa questo)
+                    // Se il master è associato a un progetto diverso da quello appena assegnato al figlio, rimuovi l'associazione del master.
+                    if ($masterTicket->project_id != null && $masterTicket->project_id != $projectTicket->id) {
+                        $oldMasterProjectId = $masterTicket->project_id;
+                        $masterTicket->update(['project_id' => null]);
+                        $this->createEditProjectLog($oldMasterProjectId, null, [$masterTicket->id], $user->id);
+                        $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dal progetto a cui era associata in precedenza. ";
+                    }
+                }
+
+            }
+
+            foreach ($ticketIdsByProjectId as $projectId => $ticketIds) {
+                // Crea un log per ogni project id coinvolto
+                $this->createEditProjectLog($projectId, $projectTicket->id, $ticketIds, $user->id);
+            }
+
+            DB::commit();
+
+            return response([
+                'ticket' => $ticket,
+                'warning' => $warning ?? null,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response([
+                'message' => 'Errore durante il collegamento al progetto: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // Rimuove il collegamento al progetto
+    public function removeProjectConnection(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->project_id == null) {
+            return response([
+                'message' => 'This ticket is not connected to any project.',
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        
+        try {
+            $warning = '';            
+            $oldProjectId = $ticket->project_id;
+
+            // Rimuovi l'associazione al progetto
+            $ticket->update(['project_id' => null]);
+
+            $ticketIdsByProjectId = [$oldProjectId => [$ticket->id]];
+
+            // Se il ticket ha un master, scollega il master dal progetto.
+            if ($ticket->master_id != null) {
+                $masterTicket = Ticket::find($ticket->master_id);
+                if ($masterTicket && $masterTicket->project_id != null) {
+                    $ticketIdsByProjectId[$masterTicket->project_id][] = $masterTicket->id;
+                    $masterTicket->update(['project_id' => null]);
+                    $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. L'operazione strutturata è stata rimossa dal progetto a cui era associata in precedenza.";
+                }
+            }
+
+            foreach ($ticketIdsByProjectId as $projectId => $ticketIds) {
+                // Crea uno o due log in base a se il master era associato o no alla stessa attività (dovrebbe esserlo)
+                $this->createEditProjectLog($projectId, null, $ticketIds, $user->id);
+            }
+
+            // Se il ticket è un master non si deve fare altro, perchè gli slave possono essere associati singolarmente anche ad attività diverse.
+
+            DB::commit();
+
+            return response([
+                'ticket' => $ticket,
+                'warning' => $warning ?? null,
+            ], 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response([
+                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    // Gestisce i log di modifica del progetto per uno o più ticket
+    private function createEditProjectLog($oldProjectId, $newProjectId, array $ticketIds, $userId)
+    {
+        $tickets = Ticket::whereIn('id', $ticketIds)->get();
+        if ($tickets->isEmpty()) {
+            return;
+        }
+
+        // Se non ci sono cambiamenti, non fare nulla
+        if ($oldProjectId == $newProjectId) {
+            return;
+        }
+
+        // Recupera i ticket di scheduling coinvolti
+        $oldProjectTicket = $oldProjectId ? Ticket::find($oldProjectId) : null;
+        $newProjectTicket = $newProjectId ? Ticket::find($newProjectId) : null;
+
+        // Prepara i messaggi usando il plurale appropriato
+        $ticketCount = count($ticketIds);
+        $ticketNumbers = '#' . implode(', #', $ticketIds);
+        $verbSingular = $ticketCount === 1;
+
+        // Determina il tipo di operazione e genera il contenuto del log
+        $content = '';
+
+        if ($oldProjectId == null && $newProjectId != null) {
+            // Associazione nuova
+            $verb = $verbSingular ? 'collegato' : 'collegati';
+            $content = "Ticket {$ticketNumbers} {$verb} al progetto #{$newProjectId}";
+
+        } elseif ($oldProjectId != null && $newProjectId == null) {
+            // Disconnessione
+            $verb = $verbSingular ? 'scollegato' : 'scollegati';
+            $content = "Ticket {$ticketNumbers} {$verb} dal progetto #{$oldProjectId}";
+
+        } elseif ($oldProjectId != null && $newProjectId != null) {
+            // Cambio di associazione
+            $verb = $verbSingular ? 'spostato' : 'spostati';
+            $content = "Ticket {$ticketNumbers} {$verb} dal progetto #{$oldProjectId} al progetto #{$newProjectId}";
+        }
+
+        // Crea il log una sola volta
+        $ticketLog = TicketLog::create([
+            'user_id' => $userId,
+            'content' => $content,
+            'type' => 'project',
+            'show_to_user' => true,
+        ]);
+
+        // Collega tutti i ticket coinvolti al log
+        $ticketsToAttach = $ticketIds; // Inizia con tutti i ticket dell'operazione
+        if ($oldProjectTicket) {
+            $ticketsToAttach[] = $oldProjectId;
+        }
+        if ($newProjectTicket) {
+            $ticketsToAttach[] = $newProjectId;
+        }
+
+        // Rimuovi duplicati e collega
+        $ticketsToAttach = array_unique($ticketsToAttach);
+        $ticketLog->tickets()->syncWithoutDetaching($ticketsToAttach);
+    }
+
+    // Prende tutti i ticket collegati a questo progetto.
+    public function getTicketsConnectedToProject(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+        $selectedCompanyId = $this->getSelectedCompanyId($user);
+
+        if ($user['is_admin'] != 1 &&
+            ! ($user['is_company_admin'] == 1 && $selectedCompanyId && $ticket->company_id == $selectedCompanyId)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $projectConnectedTickets = $ticket->projectTickets;
+
+        foreach ($projectConnectedTickets as $connectedTicket) {
+            $connectedTicket->setVisible([
+                'id',
+                'company_id',
+                'stage_id',
+                'description',
+                'group_id',
+                'created_at',
+                'type_id',
+                'source',
+                'parent_ticket_id',
+                'master_id',
+                'scheduling_id',
+                'grouping_id',
+                'project_id',
+            ]);
+            $connectedTicket->user_full_name =
+                $connectedTicket->user->is_admin == 1
+                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$connectedTicket->user->id : ''))
+                : ($connectedTicket->user->surname
+                    ? $connectedTicket->user->surname.' '.strtoupper(substr($connectedTicket->user->name, 0, 1)).'.'
+                    : $connectedTicket->user->name
+                );
+            $connectedTicket->makeVisible(['user_full_name']);
+
+            // Nome tipo ticket
+            $ticketType = $connectedTicket->ticketType;
+            $connectedTicket->ticket_type_name = $ticketType ? $ticketType->name : null;
+            $connectedTicket->makeVisible(['ticket_type_name']);
+
+            // Gestore (admin_user)
+            $adminUser = $connectedTicket->adminUser;
+            if ($adminUser) {
+                $connectedTicket->admin_user_full_name = $adminUser->surname
+                    ? $adminUser->surname.' '.strtoupper(substr($adminUser->name, 0, 1)).'.'
+                    : $adminUser->name;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            } else {
+                $connectedTicket->admin_user_full_name = null;
+                $connectedTicket->makeVisible(['admin_user_full_name']);
+            }
+
+            $referer = $connectedTicket->referer;
+            if ($referer) {
+                $connectedTicket->referer_full_name =
+                    $referer->surname
+                    ? $referer->surname.' '.strtoupper(substr($referer->name, 0, 1)).'.'
+                    : $referer->name;
+                $connectedTicket->makeVisible(['referer_full_name']);
+            }
+            $connectedTicket->ticket_type_name = $connectedTicket->ticketType ? $connectedTicket->ticketType->name : '';
+            $connectedTicket->makeVisible(['ticket_type_name']);
+        }
+
+        return response([
+            'connected_tickets' => $projectConnectedTickets,
+        ], 200);
+    }
+
+    
+    // Prende i dati di riepilogo del progetto
+    public function getProjectTicketRecapData (Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_project != 1) {
+            return response([
+                'message' => 'This is not a project ticket.',
+            ], 400);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        // Recupera tutti i ticket collegati a questo progetto
+        $projectTickets = $ticket->projectTickets;
+        
+        // Conteggio totale
+        $totalCount = $projectTickets->count();
+        
+        // Separa aperti e chiusi
+        $closedProjectTickets = $projectTickets->where('stage_id', $closedStageId);
+        $openProjectTickets = $projectTickets->where('stage_id', '!=', $closedStageId);
+        
+        $closedCount = $closedProjectTickets->count();
+        $openCount = $openProjectTickets->count();
+        
+        // Tempo totale dei ticket chiusi
+        $totalClosedProcessingTime = $closedProjectTickets->sum('actual_processing_time') ?? 0;
+        
+        // Tempo totale dei ticket ancora aperti (tempo parziale)
+        $totalOpenProcessingTime = $openProjectTickets->sum('actual_processing_time') ?? 0;
+        
+        $recapData = [
+            'project_expected_duration' => $ticket->project_expected_duration,
+            'total_slaves_count' => $totalCount,
+            'closed_slaves_count' => $closedCount,
+            'open_slaves_count' => $openCount,
+            'total_closed_processing_time' => $totalClosedProcessingTime,
+            'total_open_processing_time' => $totalOpenProcessingTime,
+            'total_processing_time' => $totalClosedProcessingTime + $totalOpenProcessingTime,
+            // 'project_ticket_processing_time' => $ticket->actual_processing_time ?? 0, // Il tempo effettivo dei progetti è la somma dei tempi dei ticket collegati.
+        ];
+
+        return response([
+            'recap_data' => $recapData,
+        ], 200);
+
+    }
+
 
     public function report(Ticket $ticket, Request $request)
     {

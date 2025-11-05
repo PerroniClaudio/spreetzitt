@@ -36,6 +36,8 @@ class User extends Authenticatable
         'microsoft_access_token',
         'is_deleted',
         'email_verified_at',
+        'can_open_scheduling',
+        'can_open_project',
     ];
 
     /**

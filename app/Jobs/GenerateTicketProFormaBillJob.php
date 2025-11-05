@@ -36,7 +36,7 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
         ]);
 
         try {
-            // Deve recuperare i ticket allo stesso modo del job GeneratePdfReport perchè comparando report e pro-forma devono coincidere i dati.
+            // DEVE RECUPERARE I TICKET ALLO STESSO MODO DEL JOB GeneratePdfReport perchè comparando report e pro-forma devono coincidere i dati.
             $user = User::find($proFormaBill->user_id);
             $company = Company::find($proFormaBill->company_id);
             $queryTo = \Carbon\Carbon::parse($proFormaBill->end_date)->endOfDay()->toDateTimeString();
@@ -51,6 +51,10 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
             $tickets = Ticket::where('company_id', $proFormaBill->company_id)
                 ->where('created_at', '<=', $queryTo)
                 ->where('description', 'NOT LIKE', 'Ticket importato%')
+                ->where('project_id', null)
+                ->whereHas('ticketType', function ($query) {
+                    $query->where('is_project', '!=', true);
+                })
                 ->whereDoesntHave('statusUpdates', function ($query) use ($proFormaBill) {
                     if (! empty($proFormaBill->start_date)) {
                         $query->where('type', 'closing')

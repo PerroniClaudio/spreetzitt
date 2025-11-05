@@ -83,6 +83,7 @@ class TicketTypeController extends Controller
             'is_master' => 'required|boolean',
             'is_scheduling' => 'required|boolean',
             'is_grouping' => 'required|boolean',
+            'is_project' => 'required|boolean',
         ]);
 
         // $ticketType = TicketType::create($validated);
@@ -150,10 +151,25 @@ class TicketTypeController extends Controller
 
         // $request['company_id'] = $request['company_id'] ? $request['company_id'] : null;
         // controllo ticket della compagnia precedente. se non ce ne sono si può modificare la compagnia, altrimenti no.
-        if ($ticketType['company_id'] && $ticketType['company_id'] != $request['company_id'] && $ticketType->countRelatedTickets() > 0) {
-            return response([
-                'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché ci sono ticket associati con l\'attuale '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')),
-            ], 400);
+        if ($ticketType['company_id'] && $ticketType['company_id'] != $request['company_id'] ) {
+            if($ticketType->countRelatedTickets() > 0){
+                return response([
+                    'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché ci sono ticket associati con l\'attuale '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')),
+                ], 400);
+            }
+
+            // Se è un'operazione strutturata si può cambiare solo se non ha tipi collegati.
+            if($ticketType->slaveTypes()->count() > 0){
+                return response([
+                    'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché quest\'operazione strutturata ha uno o più tipi collegati nell\'azienda attuale.',
+                ], 400);
+            }
+            // Se è collegato a uno o più tipi "operazione strutturata", non si può cambiare azienda.
+            if($ticketType->masterTypes()->count() > 0){
+                return response([
+                    'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché questo tipo di ticket è collegato a uno o più operazioni strutturate nell\'azienda attuale.',
+                ], 400);
+            }
         }
         // if ($ticketType->company_id != $request['company_id'] && $ticketType->countRelatedTickets()) {
         //     return response([
@@ -171,7 +187,8 @@ class TicketTypeController extends Controller
             );
         }
 
-        // Se si vuole togliere it_referer_limited su un tipo master, verifica gli slave obbligatori
+        // Se si vuole togliere it_referer_limited su un tipo master, verifica gli slave obbligatori.
+        // Se c'è uno slave obbligatorio limitato ai referenti IT, non si può togliere la limitazione, perchè sarebbe impossibile completare l'apertura a un utente normale.
         if (
             isset($fillableFields['it_referer_limited']) && $fillableFields['it_referer_limited'] == 0 &&
             $ticketType->is_master == 1

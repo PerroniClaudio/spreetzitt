@@ -120,11 +120,18 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-report/batch', [App\Http\Controllers\TicketController::class, 'batchReport']);
     Route::get('/ticket-types', [App\Http\Controllers\UserController::class, 'ticketTypes']);
     Route::get('/ticket/{ticket}/slave-tickets', [App\Http\Controllers\TicketController::class, 'getSlaveTickets']);
+    // Scheduling Tickets Routes
     Route::get('/ticket/{ticket}/available-scheduling-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableSchedulingTickets']);
     Route::get('/ticket/{ticket}/connected-to-scheduling', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToScheduling']);
     Route::post('/ticket/{ticket}/connect-to-scheduling', [App\Http\Controllers\TicketController::class, 'connectToSchedulingTicket']);
     Route::post('/ticket/{ticket}/remove-scheduling-connection', [App\Http\Controllers\TicketController::class, 'removeSchedulingConnection']);
     Route::get('/ticket/{ticket}/scheduling-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketRecapData']);
+    // ProjectTickets Routes
+    Route::get('/ticket/{ticket}/available-project-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableProjectTickets']);
+    Route::get('/ticket/{ticket}/connected-to-project', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToProject']);
+    Route::post('/ticket/{ticket}/connect-to-project', [App\Http\Controllers\TicketController::class, 'connectToProjectTicket']);
+    Route::post('/ticket/{ticket}/remove-project-connection', [App\Http\Controllers\TicketController::class, 'removeProjectConnection']);
+    Route::get('/ticket/{ticket}/project-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getProjectTicketRecapData']);
 
     // Assegnazione ticket
 

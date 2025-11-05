@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class TicketReportPdfExport extends Model
+class ProjectReportPdfExport extends Model
 {
     protected $fillable = [
         'file_name',
@@ -13,6 +13,7 @@ class TicketReportPdfExport extends Model
         'start_date',
         'end_date',
         'optional_parameters',
+        'project_id',
         'company_id',
         'is_generated',
         'is_user_generated',

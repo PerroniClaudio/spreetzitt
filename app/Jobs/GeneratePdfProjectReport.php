@@ -19,7 +19,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
-class GeneratePdfReport implements ShouldQueue
+class GeneratePdfProjectReport implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -45,7 +45,14 @@ class GeneratePdfReport implements ShouldQueue
      * Execute the job.
      */
     public function handle(): void
-    {
+    {   
+// CONTINUARE DA QUI
+        // Blocco per implementazione in corso.
+        $this->report->is_failed = true;
+        $this->report->error_message = 'Questo tipo di report non è ancora implementato.';
+        $this->report->save();
+        return;
+
         try {
             $report = $this->report;
             $user = User::find($report->user_id);
@@ -61,7 +68,7 @@ class GeneratePdfReport implements ShouldQueue
             // I progetti e i ticket a loro associati vanno esclusi da questo report.
 
             $queryTo = \Carbon\Carbon::parse($report->end_date)->endOfDay()->toDateTimeString();
-            // QUANDO SI MODIFICA QUESTA QUERY VA MODIFICATA ANCHE QUELLA IN GenerateTicketProFormaBillJob.php
+
             $tickets = Ticket::where('company_id', $report->company_id)
                 ->where('created_at', '<=', $queryTo)
                 ->where('description', 'NOT LIKE', 'Ticket importato%')

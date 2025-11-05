@@ -267,17 +267,33 @@ class CompanyController extends Controller
 
     public function ticketTypes(Company $company, Request $request)
     {
+        $authUser = $request->user();
         $isMassive = $request->query('is_massive');
+        $isNewTicket = $request->query('is_new_ticket');
+
+        $ticketTypesQuery = TicketType::query()->where('company_id', $company->id);
+
         if ($isMassive) {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 1)->with(['category', 'slaveTypes'])->get();
+            $ticketTypesQuery->where('is_massive_enabled', 1);
         } else {
-            $ticketTypes = $company->ticketTypes()->where('is_massive_enabled', 0)->with(['category', 'slaveTypes'])->get();
+            $ticketTypesQuery->where('is_massive_enabled', 0);
+        }
+        
+        if($isNewTicket) {
+            if($authUser->can_open_scheduling == false) {
+                $ticketTypesQuery->where('is_scheduling', 0);
+            }
+            if($authUser->can_open_project == false) {
+                $ticketTypesQuery->where('is_project', 0);
+            }
         }
 
-        if ($request->user()->is_superadmin == false) {
+        $ticketTypesQuery->with(['category', 'slaveTypes']);
+    
+        $ticketTypes = $ticketTypesQuery->get();
+        if ($authUser->is_superadmin == false) {
             $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
         }
-
         return response([
             'companyTicketTypes' => $ticketTypes,
         ], 200);

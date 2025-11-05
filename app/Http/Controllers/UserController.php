@@ -236,29 +236,20 @@ class UserController extends Controller
             }
         }
 
-        $updatedFields = [];
-
-        $userFields = $user->getFillable();
-
-        foreach ($request->all() as $fieldName => $fieldValue) {
-            if (in_array($fieldName, $userFields)) {
-                $updatedFields[$fieldName] = $fieldValue;
-            }
+        if(isset($request['can_open_scheduling']) && ($request['can_open_scheduling'] !== $user['can_open_scheduling']) && ($req_user['is_superadmin'] != 1)){
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
         }
 
-        $user->update([
-            'is_company_admin' => $updatedFields['is_company_admin'],
-            // 'company_id' => $updatedFields['company_id'],
-            'name' => $updatedFields['name'],
-            'surname' => $updatedFields['surname'],
-            'email' => $updatedFields['email'],
-            'phone' => $updatedFields['phone'],
-            'address' => $updatedFields['address'],
-            'city' => $updatedFields['city'],
-            'zip_code' => $updatedFields['zip_code'],
-            // 'password' => $updatedFields['password'] ?? $user->password,
-            'is_superadmin' => $updatedFields['is_superadmin'] ?? $user['is_superadmin'],
-        ]);
+        if(isset($request['can_open_project']) && ($request['can_open_project'] !== $user['can_open_project']) && ($req_user['is_superadmin'] != 1)){
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        // Aggiorna solo i campi fillable presenti nella request
+        $user->update($request->only($user->getFillable()));
 
         return response([
             'user' => $user,
@@ -351,25 +342,38 @@ class UserController extends Controller
 
         // Se l'utente è admin allora prende tutti i ticket types di tutti i gruppi associati all'utente, altrimenti solo quelli della sua compagnia
         if ($user['is_admin'] == 1) {
-            $ticketTypes = collect();
-            foreach ($user->groups as $group) {
-                $ticketTypes = $ticketTypes->concat($group->ticketTypes()->with(['category', 'slaveTypes'])->get());
-            }
+            $groupIds = $user->groups->pluck('id');
+            $ticketTypes = \App\Models\TicketType::whereHas('groups', function($query) use ($groupIds) {
+                $query->whereIn('groups.id', $groupIds);
+            })->with(['category', 'slaveTypes'])->distinct()->get();
         } else {
             $selectedCompany = $user->selectedCompany();
-            $ticketTypes = $selectedCompany ? $selectedCompany->ticketTypes()->where('is_custom_group_exclusive', false)->with(['category', 'slaveTypes'])->get() : collect();
+            $customGroupIds = $user->customUserGroups()->pluck('custom_user_groups.id');
+            
+            // Query unificata per evitare duplicati
+            $ticketTypesQuery = \App\Models\TicketType::with(['category', 'slaveTypes'])
+                ->where(function($query) use ($selectedCompany, $customGroupIds) {
+                    // Ticket types della compagnia (non esclusivi dei gruppi custom)
+                    if ($selectedCompany) {
+                        $query->where('company_id', $selectedCompany->id)
+                              ->where('is_custom_group_exclusive', false);
+                    }
+                    
+                    // Ticket types dei gruppi custom dell'utente
+                    if ($customGroupIds->isNotEmpty()) {
+                        $query->orWhereHas('customUserGroups', function($groupQuery) use ($customGroupIds) {
+                            $groupQuery->whereIn('custom_user_groups.id', $customGroupIds);
+                        });
+                    }
+                });
 
-            $customGroups = $user->customUserGroups()->get();
-            foreach ($customGroups as $customGroup) {
-                $ticketTypes = $ticketTypes->concat($customGroup->ticketTypes()->with(['category', 'slaveTypes'])->get());
+            // Se è richiesta apertura nuovo ticket, escludere progetti e scheduling
+            if ($request->get('new_ticket') == 'true') {
+                $ticketTypesQuery->where('is_project', false)
+                                 ->where('is_scheduling', false);
             }
 
-            // Gli utenti normali non devono vedere i ticket master (operazioni strutturate), mentre i company_admin possono solo vedere il dettaglio, ma non aprirli.
-            // if (! $user->is_company_admin || ($request->get('new_ticket') == 'true')) {
-            //     $ticketTypes = $ticketTypes->filter(function ($ticketType) {
-            //         return ! $ticketType->is_master;
-            //     });
-            // }
+            $ticketTypes = $ticketTypesQuery->distinct()->get();
         }
 
         if ($user->is_superadmin == false) {
