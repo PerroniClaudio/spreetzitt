@@ -232,7 +232,9 @@ class TicketController extends Controller
                 'referer_id' => $request->referer ?? null,
                 'scheduled_duration' => $request->scheduledDuration ?? null,
                 'project_expected_duration' => $request->projectExpectedDuration ?? null,
-                'project_name' => $request->projectName ?? null
+                'project_name' => $request->projectName ?? null,
+                'project_start' => $request->projectStartDate ?? null,
+                'project_end' => $request->projectEndDate ?? null,
             ]);
 
             if (Feature::for(config('app.tenant'))->active('ticket.show_visibility_fields')) {
