@@ -29,7 +29,7 @@ Route::get('/info', function () {
 
 Route::get('/test-scraper', function () {
 
-    $source = \App\Models\NewsSource::where('slug', 'fortinet-blog')->first();
+    $source = \App\Models\NewsSource::where('slug', 'integys')->first();
     dispatch(new \App\Jobs\FetchNewsForSource($source));
 });
 

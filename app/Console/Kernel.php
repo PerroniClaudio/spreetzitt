@@ -32,13 +32,14 @@ class Kernel extends ConsoleKernel
 
         // Check hourly cost expiration weekly (every Monday at 08:00)
         $schedule->job(new \App\Jobs\CheckHourlyCostExpiration)->weeklyOn(1, '08:00');
-            // Esegui FetchNewsForSource per ogni NewsSource ogni lunedì alle 7:00
-            $schedule->call(function () {
-                $sources = \App\Models\NewsSource::all();
-                foreach ($sources as $source) {
-                    dispatch(new \App\Jobs\FetchNewsForSource($source));
-                }
-            })->weeklyOn(1, '7:00');
+            
+        // Esegui FetchNewsForSource per ogni NewsSource ogni lunedì alle 7:00
+        $schedule->call(function () {
+            $sources = \App\Models\NewsSource::all();
+            foreach ($sources as $source) {
+                dispatch(new \App\Jobs\FetchNewsForSource($source));
+            }
+        })->weeklyOn(1, '7:00');
     }
 
     /**

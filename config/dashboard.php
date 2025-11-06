@@ -33,18 +33,6 @@ return [
     ],
     'spreetzit' => [
         'leftCards' => [
-            // [
-            //     'id' => 'ultimi-articoli-dpo',
-            //     'type' => 'latest-dpo-articles',
-            //     'color' => 'primary',
-            //     'content' => 'Ultimi articoli in DPO del comune'
-            // ],
-            // [
-            //     'id' => 'articoli-integys',
-            //     'type' => 'integys-articles',
-            //     'color' => 'secondary',
-            //     'content' => 'Ultimi Articoli in Integys'
-            // ],
             [
                 'id' => 'ticket-master',
                 'type' => 'ticket-master',
@@ -71,12 +59,6 @@ return [
                 'color' => 'secondary',
                 'content' => 'Accesso rapido report',
             ],
-            // [
-            //     'id' => 'news-vendor',
-            //     'type' => 'vendor-news',
-            //     'color' => 'primary',
-            //     'content' => 'News riguardanti vendor diversi'
-            // ],
             [
                 'id' => 'ticket-redirect',
                 'type' => 'tickets-redirect',

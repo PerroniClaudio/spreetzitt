@@ -61,6 +61,49 @@ class FetchNewsForSource implements ShouldQueue
     private function fetchInternalBlog(): void
     {
         // TODO: implementare fetch da blog interno
+        $url = $this->source->url;
+        $html = \App\Http\Controllers\NewsController::getRenderedHtmlWithFirecrawl($url);
+        $htmlRilevante = \App\Http\Controllers\NewsController::extractRelevantHtml($html);
+
+        $vertex = new \App\Http\Controllers\VertexAiController;
+        $response = $vertex->extractNewsFromHtml($htmlRilevante);
+
+        $newsArray = json_decode($response['result'] ?? '', true);
+        if (! is_array($newsArray)) {
+            Log::error('NEWS - Vertex AI non ha restituito un array valido', ['response' => $response, 'source_id' => $this->source->id]);
+
+            return;
+        }
+
+        $created = 0;
+        foreach ($newsArray as $newsData) {
+
+            // Validate published_at and fallback to now if invalid or missing
+            if (isset($newsData['published_at']) && ! empty($newsData['published_at'])) {
+                try {
+                    $publishedAt = Carbon::parse($newsData['published_at']);
+                } catch (\Exception $e) {
+                    $publishedAt = Carbon::now();
+                }
+            } else {
+                $publishedAt = Carbon::now();
+            }
+
+            $news = \App\Models\News::updateOrCreate([
+                'news_source_id' => $this->source->id,
+                'title' => $newsData['title'] ?? '',
+            ], [
+                'url' => $newsData['url'] ?? '',
+                'description' => $newsData['description'] ?? '',
+                'published_at' => $publishedAt,
+            ]);
+
+            if ($news->wasRecentlyCreated) {
+                $created++;
+            }
+        }
+
+        Log::info('NEWS - Fetch news completed for source', ['source_id' => $this->source->id, 'added' => $created, 'total_found' => count($newsArray)]);
     }
 
     /**

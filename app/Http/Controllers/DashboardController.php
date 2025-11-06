@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Dashboard;
+use App\Models\News;
 use App\Models\Ticket;
 use App\Models\TicketType;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 
 class DashboardController extends Controller
 {
@@ -382,8 +384,11 @@ class DashboardController extends Controller
             return [];
         }
 
-        // Recupera le newsSources abilitate per l'azienda
-        $sources = $selectedCompany->newsSources()->wherePivot('enabled', 1)->get();
+        // Recupera le newsSources abilitate per l'azienda, escludendo i blog interni
+        $sources = $selectedCompany->newsSources()
+            ->wherePivot('enabled', 1)
+            ->where('type', '!=', 'internal_blog')
+            ->get();
 
         $allNews = [];
 
@@ -442,6 +447,227 @@ class DashboardController extends Controller
 
         // Limitiamo a 10 items per default
         return array_slice($allNews, 0, 3);
+    }
+
+    /**
+     * Recupera le news interne attive per l'azienda dell'utente limitandosi alle sorgenti di tipo internal_blog.
+     *
+     * @return array<int, mixed>
+     */
+    private function getUserInternalNewsData(): array
+    {
+        $user = auth()->user();
+
+        $selectedCompany = $user->selectedCompany();
+
+        if (! $selectedCompany) {
+            return [];
+        }
+
+        $sources = $selectedCompany->newsSources()
+            ->wherePivot('enabled', 1)
+            ->where('type', 'internal_blog')
+            ->get();
+
+        if ($sources->isEmpty()) {
+            return [];
+        }
+
+        $allNews = [];
+
+        $newsController = new \App\Http\Controllers\NewsController();
+
+        foreach ($sources as $source) {
+            try {
+                $response = $newsController->bySource($source->slug);
+
+                if (method_exists($response, 'getData')) {
+                    $data = $response->getData(true);
+                    if (is_array($data)) {
+                        foreach ($data as $item) {
+                            if (is_array($item)) {
+                                $item['news_source'] = [
+                                    'id' => $source->id,
+                                    'display_name' => $source->display_name,
+                                    'slug' => $source->slug,
+                                    'url' => $source->url,
+                                    'type' => $source->type,
+                                ];
+                                $allNews[] = $item;
+                            }
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                continue;
+            }
+        }
+
+        usort($allNews, function ($a, $b) {
+            $at = $a['published_at'] ?? null;
+            $bt = $b['published_at'] ?? null;
+
+            if ($at === $bt) {
+                return 0;
+            }
+
+            if ($at === null) {
+                return 1;
+            }
+
+            if ($bt === null) {
+                return -1;
+            }
+
+            return strtotime($bt) <=> strtotime($at);
+        });
+
+        return array_slice($allNews, 0, 3);
+    }
+
+    /**
+     * Recupera fino a 5 news miste per l'utente evitando news consecutive dalla stessa source.
+     */
+    public function getNewsForUser()
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return response()->json([], 401);
+        }
+
+        $selectedCompany = $user->selectedCompany();
+
+        if (! $selectedCompany) {
+            return response()->json([]);
+        }
+
+        $sourceIds = $selectedCompany->newsSources()
+            ->wherePivot('enabled', 1)
+            ->pluck('news_sources.id')
+            ->toArray();
+
+        if (empty($sourceIds)) {
+            return response()->json([]);
+        }
+
+        $newsItems = News::with('source:id,display_name,slug,type,url')
+            ->whereIn('news_source_id', $sourceIds)
+            ->orderByDesc('published_at')
+            ->take(15)
+            ->get();
+
+        if ($newsItems->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $queues = [];
+        foreach ($newsItems as $news) {
+            $queues[$news->news_source_id][] = $news;
+        }
+
+        $result = [];
+        $lastSourceId = null;
+        $usedImageNumbers = [];
+
+        while (count($result) < 5) {
+            $candidates = [];
+
+            foreach ($queues as $sourceId => $items) {
+                if (! empty($items)) {
+                    $candidateNews = $items[0];
+                    $publishedAtInstance = $candidateNews->published_at instanceof Carbon
+                        ? $candidateNews->published_at
+                        : ($candidateNews->published_at ? Carbon::parse($candidateNews->published_at) : null);
+                    $publishedAtTimestamp = $publishedAtInstance ? $publishedAtInstance->getTimestamp() : 0;
+
+                    $candidates[] = [
+                        'source_id' => $sourceId,
+                        'news' => $candidateNews,
+                        'timestamp' => $publishedAtTimestamp,
+                        'published_at_instance' => $publishedAtInstance,
+                    ];
+                }
+            }
+
+            if (empty($candidates)) {
+                break;
+            }
+
+            usort($candidates, function ($a, $b) {
+                return $b['timestamp'] <=> $a['timestamp'];
+            });
+
+            $selected = null;
+
+            foreach ($candidates as $candidate) {
+                if ($candidate['source_id'] !== $lastSourceId) {
+                    $selected = $candidate;
+                    break;
+                }
+            }
+
+            if (! $selected) {
+                $selected = $candidates[0];
+            }
+
+            /** @var \App\Models\News $selectedNews */
+            $selectedNews = $selected['news'];
+            $sourceId = $selected['source_id'];
+
+            array_shift($queues[$sourceId]);
+
+            $publishedAt = $selected['published_at_instance'] ?? (
+                $selectedNews->published_at instanceof Carbon
+                    ? $selectedNews->published_at
+                    : ($selectedNews->published_at ? Carbon::parse($selectedNews->published_at) : null)
+            );
+
+            $imageUrl = $this->getRandomNewsImageUrl($usedImageNumbers);
+
+            $result[] = [
+                'id' => $selectedNews->id,
+                'title' => $selectedNews->title,
+                'description' => $selectedNews->description,
+                'url' => $selectedNews->url,
+                'published_at' => $publishedAt ? $publishedAt->toISOString() : null,
+                'image_url' => $imageUrl,
+                'news_source' => [
+                    'id' => $selectedNews->source->id ?? null,
+                    'display_name' => $selectedNews->source->display_name ?? null,
+                    'slug' => $selectedNews->source->slug ?? null,
+                    'type' => $selectedNews->source->type ?? null,
+                    'url' => $selectedNews->source->url ?? null,
+                ],
+            ];
+
+            $lastSourceId = $sourceId;
+        }
+
+        return response()->json($result);
+    }
+
+    private function getRandomNewsImageUrl(array &$usedImageNumbers): string
+    {
+        $possibleNumbers = range(1, 8);
+        $availableNumbers = array_values(array_diff($possibleNumbers, $usedImageNumbers));
+
+        if (empty($availableNumbers)) {
+            $usedImageNumbers = [];
+            $availableNumbers = $possibleNumbers;
+        }
+
+        $randomIndex = array_rand($availableNumbers);
+        $imageNumber = $availableNumbers[$randomIndex];
+        $usedImageNumbers[] = $imageNumber;
+
+        $imagePath = 'news_images/'.$imageNumber.'.webp';
+
+        try {
+            return FileUploadController::generateSignedUrlForFile($imagePath, 120);
+        } catch (\Throwable $e) {
+            return 'https://picsum.photos/id/345/200/300';
+        }
     }
 
     /**
@@ -570,28 +796,11 @@ class DashboardController extends Controller
         $tenant = $this->getCurrentTenant();
         $user = auth()->user();
 
-        // $rightCards = [
-        //     [
-        //         'id' => 'user-ticket-redirect',
-        //         'type' => 'user-tickets-redirect',
-        //         'color' => 'primary',
-        //         'content' => 'Gestione ticket',
-        //         'icon' => 'mdi-view-list',
-        //         'description' => 'Visualizza tutti i tuoi ticket',
-        //     ],
-        // ];
+
         $rightCards = [];
 
         // Se il tenant è spreetzit, mostriamo la card hardware-stats
         if ($tenant === 'spreetzit') {
-            $rightCards[] = [
-                'id' => 'user-hardware-stats',
-                'type' => 'user-hardware-stats',
-                'color' => 'secondary',
-                'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
-                'icon' => 'mdi-laptop',
-                'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato',
-            ];
             $rightCards[] = [
                 'id' => 'user-vendor-news',
                 'type' => 'user-vendor-news',
@@ -600,6 +809,15 @@ class DashboardController extends Controller
                 'icon' => 'mdi-newspaper',
                 'description' => 'News dal nostro mondo',
             ];
+            $rightCards[] = [
+                'id' => 'user-hardware-stats',
+                'type' => 'user-hardware-stats',
+                'color' => 'secondary',
+                'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
+                'icon' => 'mdi-laptop',
+                'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato',
+            ];
+            
         } else {
             // Per gli altri tenant, mostriamo la card new-ticket standard
             $rightCards[] = [
@@ -615,12 +833,12 @@ class DashboardController extends Controller
         return [
             'leftCards' => [
                 [
-                    'id' => 'user-ticket-aperti',
-                    'type' => 'user-open-tickets',
+                    'id' => 'user-internal-news',
+                    'type' => 'user-internal-news',
                     'color' => 'primary',
-                    'content' => 'I miei ticket aperti',
-                    'icon' => 'mdi-ticket-outline',
-                    'description' => 'Visualizza i tuoi ticket aperti',
+                    'content' => 'News interne',
+                    'icon' => 'mdi-newspaper-variant-multiple',
+                    'description' => 'Ultime notizie e aggiornamenti'
                 ],
                 [
                     'id' => 'user-ticket-recenti',
@@ -742,6 +960,9 @@ class DashboardController extends Controller
                     'label' => $user->is_company_admin ? 'Gestione hardware' : 'Visualizza hardware',
                 ];
                 $card['data'] = $this->getUserHardwareStats();
+                break;
+            case 'user-internal-news':
+                $card['data'] = $this->getUserInternalNewsData();
                 break;
             case 'user-vendor-news':
                 $card['data'] = $this->getUserVendorNewsData();

@@ -419,6 +419,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
 
     // User Dashboard
     Route::get('/user/dashboard/card-config', [App\Http\Controllers\DashboardController::class, 'userIndex']);
+    Route::get('/user/dashboard/news', [App\Http\Controllers\DashboardController::class, 'getNewsForUser']);
     Route::put('/user/dashboard/card-config', [App\Http\Controllers\DashboardController::class, 'updateUserCardConfig']);
 
     // News
