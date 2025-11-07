@@ -797,26 +797,42 @@ class DashboardController extends Controller
         $user = auth()->user();
 
 
-        $rightCards = [];
+        $rightCards = [[
+            'id' => 'user-ift-brands',
+            'type' => 'user-ift-brands',
+            'color' => 'primary',
+            'content' => 'I nostri brand',
+            'icon' => 'mdi-business',
+            'description' => 'I nostri brand',
+        ]];
 
         // Se il tenant è spreetzit, mostriamo la card hardware-stats
         if ($tenant === 'spreetzit') {
-            $rightCards[] = [
-                'id' => 'user-vendor-news',
-                'type' => 'user-vendor-news',
-                'color' => 'secondary',
-                'content' => 'News dal nostro mondo',
-                'icon' => 'mdi-newspaper',
-                'description' => 'News dal nostro mondo',
-            ];
-            $rightCards[] = [
-                'id' => 'user-hardware-stats',
-                'type' => 'user-hardware-stats',
-                'color' => 'secondary',
-                'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
-                'icon' => 'mdi-laptop',
-                'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato',
-            ];
+            // Esegui getUserHardwareStats e mostra la card solo se almeno un valore è > 0
+            $hardwareStats = $this->getUserHardwareStats();
+            $hasHardware = false;
+
+            if ($user->is_company_admin) {
+                // Per admin azienda, controlla se almeno uno tra total, assigned, unassigned è > 0
+                $hasHardware = 
+                    (isset($hardwareStats['total']) && $hardwareStats['total'] > 0) ||
+                    (isset($hardwareStats['assigned']) && $hardwareStats['assigned'] > 0) ||
+                    (isset($hardwareStats['unassigned']) && $hardwareStats['unassigned'] > 0);
+            } else {
+                // Per utente normale, controlla se total_assigned > 0
+                $hasHardware = isset($hardwareStats['total_assigned']) && $hardwareStats['total_assigned'] > 0;
+            }
+
+            if ($hasHardware) {
+                $rightCards[] = [
+                    'id' => 'user-hardware-stats',
+                    'type' => 'user-hardware-stats',
+                    'color' => 'secondary',
+                    'content' => $user->is_company_admin ? 'Statistiche hardware' : 'Il mio hardware',
+                    'icon' => 'mdi-laptop',
+                    'description' => $user->is_company_admin ? 'Stato hardware aziendale' : 'Hardware assegnato',
+                ];
+            }
             
         } else {
             // Per gli altri tenant, mostriamo la card new-ticket standard
@@ -839,6 +855,14 @@ class DashboardController extends Controller
                     'content' => 'News interne',
                     'icon' => 'mdi-newspaper-variant-multiple',
                     'description' => 'Ultime notizie e aggiornamenti'
+                ],
+                [
+                    'id' => 'user-vendor-news',
+                    'type' => 'user-vendor-news',
+                    'color' => 'secondary',
+                    'content' => 'News dal nostro mondo',
+                    'icon' => 'mdi-newspaper',
+                    'description' => 'News dal nostro mondo',
                 ],
                 [
                     'id' => 'user-ticket-recenti',
