@@ -1,16 +1,26 @@
 @include('components.style')
 
 <style>
+    /* FONT OVERRIDE AGGRESSIVO PER DOMPDF */
+    * {
+        font-family: "Inter", sans-serif !important;
+    }
+    
     /* Ticket container specifico per project reports */
     .ticket-container {
         font-size: 0.75rem !important;
         line-height: 1rem !important;
-        font-family: "Inter", sans-serif !important;
     }
 
-    /* Assicura che tutto il testo usi il font Inter */
+    /* Assicura che tutto il testo usi font sicuri per PDF */
     body, * {
-        font-family: "Inter", sans-serif !important;
+    }
+    
+    /* Forzatura specifica per le classi problematiche */
+    .font-semibold,
+    .stat-label, 
+    .summary-label,
+    .main-header {
     }
     
     /* Stili aggiuntivi specifici per i report di progetto */
@@ -21,7 +31,6 @@
         border: 1px solid #353131;
         border-collapse: collapse;
         font-size: 0.7rem;
-        font-family: "Inter", sans-serif !important;
     }
     
     .project-table th,
@@ -29,13 +38,11 @@
         border: 1px solid #353131;
         padding: 0.5rem;
         text-align: left;
-        font-family: "Inter", sans-serif !important;
     }
     
     .project-table th {
         background-color: #f3f4f6;
         font-weight: 600;
-        font-family: "Inter", sans-serif !important;
     }
     
     /* Sezioni informative miglioriate */
@@ -43,13 +50,11 @@
         width: 100%;
         border-collapse: collapse;
         font-size: 0.8rem;
-        font-family: "Inter", sans-serif !important;
     }
     
     .project-info-table td {
         padding: 0.25rem 0;
         vertical-align: top;
-        font-family: "Inter", sans-serif !important;
     }
     
     /* Box statistiche */
@@ -69,16 +74,42 @@
         font-size: 0.8rem;
     }
     
+    /* Grid 2x2 per 4 elementi in 2 righe - Float layout per DomPDF */
+    .stats-grid-2x2 {
+        overflow: hidden;
+        font-size: 0.8rem;
+    }
+    
     .stat-box {
+        float: left;
+        width: 48%;
+        margin-right: 2%;
+        margin-bottom: 0.5rem;
         text-align: center;
-        min-width: 120px;
         padding: 0.5rem;
+        box-sizing: border-box;
+    }
+    
+    .stat-box:nth-child(2n) {
+        margin-right: 0;
+    }
+    
+    /* Clearfix per pulire i float */
+    .stats-grid-2x2::after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+    
+    .stats-summary-grid::after {
+        content: "";
+        display: table;
+        clear: both;
     }
     
     .stat-label {
         font-weight: 600;
         color: #6b7280;
-        font-size: 0.75rem;
         margin-bottom: 0.25rem;
     }
     
@@ -88,11 +119,26 @@
         line-height: 1;
     }
     
+    /* Versione più piccola per i numeri */
+    .stat-value-small {
+        font-size: 1.2rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-top: 0.25rem;
+    }
+    
     .stat-value.primary { color: #1f2937; }
     .stat-value.success { color: #059669; }
     .stat-value.danger { color: #dc2626; }
     .stat-value.warning { color: #f59e0b; }
     .stat-value.info { color: #2563eb; }
+    
+    /* Colori per la versione piccola */
+    .stat-value-small.primary { color: #1f2937; }
+    .stat-value-small.success { color: #059669; }
+    .stat-value-small.danger { color: #dc2626; }
+    .stat-value-small.warning { color: #f59e0b; }
+    .stat-value-small.info { color: #2563eb; }
     
     /* Chart containers */
     .chart-container {
@@ -260,16 +306,14 @@
     .info-label {
         font-weight: 600;
         color: #6b7280;
-        font-family: "Inter", sans-serif !important;
     }
     
     .info-value {
         color: #1f2937;
-        font-family: "Inter", sans-serif !important;
     }
     
     /* Assicura Inter per tutte le classi di testo specifiche */
-    .data-section-title,
+    /* .data-section-title,
     .data-section-content,
     .message-header,
     .message-content,
@@ -281,8 +325,7 @@
     .main-header,
     .sub-header,
     div, p, span, tr, td, th {
-        font-family: "Inter", sans-serif !important;
-    }
+    } */
     
     /* Footer */
     .report-footer {
@@ -310,7 +353,9 @@
     .text-center { text-align: center; }
     .text-right { text-align: right; }
     .text-muted { color: #6b7280; }
-    .font-semibold { font-weight: 600; }
+    .font-semibold { 
+        font-weight: 600; 
+    }
     .font-bold { font-weight: 700; }
     .mb-1 { margin-bottom: 0.25rem; }
     .mb-2 { margin-bottom: 0.5rem; }
@@ -341,19 +386,30 @@
 
     /* Chart containers */
     .charts-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        justify-content: space-between;
+        width: 100%;
+        overflow: hidden;
+        margin-bottom: 1rem;
     }
     .chart-item {
         width: 48%;
+        float: left;
         text-align: center;
+        margin-right: 2%;
+    }
+    .chart-item:last-child {
+        margin-right: 0;
     }
     .chart-image {
         max-width: 100%;
         height: auto;
         max-height: 250px;
+    }
+    
+    /* Clearfix for floating elements */
+    .charts-container::after {
+        content: "";
+        display: table;
+        clear: both;
     }
 
     /* Spacer */
@@ -388,16 +444,26 @@
     }
     
     .stats-summary-grid {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 1rem;
-        justify-content: space-between;
+        overflow: hidden;
         font-size: 0.8rem;
+        margin-bottom: 1rem;
     }
     
     .summary-item {
+        float: left;
+        width: 30%;
+        margin-right: 3.33%;
         text-align: center;
-        min-width: 120px;
+        padding: 0.5rem;
+        box-sizing: border-box;
+    }
+    
+    .summary-item:nth-child(3n) {
+        margin-right: 0;
+    }
+    
+    .summary-item:last-child {
+        margin-right: 0;
     }
     
     .summary-label {
@@ -445,7 +511,6 @@
         color: #6b7280;
         font-style: italic;
         padding: 2rem;
-        font-family: "Inter", sans-serif !important;
     }
     
     /* Margin top utility */
@@ -473,14 +538,12 @@
     .data-section-content {
         font-size: 0.75rem;
         color: #4b5563;
-        font-family: "Inter", sans-serif !important;
     }
     
     /* Webform specific content */
     .webform-content {
         font-size: 0.75rem;
         line-height: 1.4;
-        font-family: "Inter", sans-serif !important;
     }
     
     .webform-item {
