@@ -250,17 +250,52 @@ class Ticket extends Model
             Se il ticket è stato in attesa almeno una volta bisogna calcolare il tempo totale in cui è rimasto in attesa.
         */
 
-        $statusUpdates = $this->statusUpdates()->whereIn('type', ['status', 'closing'])->get();
+        // prendere prima lo status update di chiusura.
+        // Se l'update di chiudura ha una creazione antecedente a quella del ticket exception
+        // Selezionare tutti gli status update con data di creazione successivi alla data di creazione del ticket e precedenti alla data di creazione dell'update di chiusura
+
+        // $statusUpdates = $this->statusUpdates()->whereIn('type', ['status', 'closing'])->get();
+        
+        // Implementazione della logica descritta nei commenti
+        // 1. Trova l'update di chiusura più recente
+        $closingUpdate = $this->statusUpdates()
+            ->where('type', 'closing')
+            ->orderBy('created_at', 'desc')
+            ->first();
+        
+        // 2. Se esiste un update di chiusura, verifica che non sia antecedente alla creazione del ticket
+        if ($closingUpdate && $closingUpdate->created_at->lessThan($this->created_at)) {
+            // Update di chiusura antecedente al ticket - situazione anomala, ignora
+            $closingUpdate = null;
+        }
+        
+        // 3. Seleziona tutti gli status update tra la creazione del ticket e la chiusura
+        $statusUpdatesQuery = $this->statusUpdates()
+            ->whereIn('type', ['status', 'closing'])
+            ->where('created_at', '>', $this->created_at);
+            
+        if ($closingUpdate) {
+            // Se c'è una chiusura valida, limita fino a quella data
+            $statusUpdatesQuery->where('created_at', '<=', $closingUpdate->created_at);
+        }
+        
+        $statusUpdates = $statusUpdatesQuery->orderBy('created_at', 'asc')->get();
+
 
         // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
         $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
             return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;
-        });
+        })->values(); // Reindicizza la collection per evitare errori di accesso agli indici
 
         $hasBeenWaiting = false;
         $waitingRecords = [];
         $waitingEndingRecords = [];
         $waitingMinutes = 0;
+
+        // Verifica che ci siano aggiornamenti di stato da processare
+        if ($filteredStatusUpdates->isEmpty()) {
+            return 0;
+        }
 
         for ($i = 0; $i < count($filteredStatusUpdates); $i++) {
             if (
@@ -312,11 +347,16 @@ class Ticket extends Model
         // Visto che si deve calcolare l'attesa, prendo solo gli stati in cui è cambiato lo stato di is_sla_pause
         $filteredStatusUpdates = $statusUpdates->filter(function ($update) {
             return TicketStage::find($update->new_stage_id)?->is_sla_pause != TicketStage::find($update->old_stage_id)?->is_sla_pause;
-        });
+        })->values(); // Reindicizza la collection per evitare errori di accesso agli indici
 
         $hasBeenWaiting = false;
         $waitingRecords = [];
         $waitingEndingRecords = [];
+
+        // Verifica che ci siano aggiornamenti di stato da processare
+        if ($filteredStatusUpdates->isEmpty()) {
+            return 0;
+        }
 
         for ($i = 0; $i < count($filteredStatusUpdates); $i++) {
             if (
