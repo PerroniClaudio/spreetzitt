@@ -165,6 +165,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/companies/{company}/brands', [CompanyController::class, 'brands']);
     Route::get('/companies/{company}/frontend-logo', [CompanyController::class, 'getFrontendLogoUrl']);
     Route::get('/companies/{company}/tickets', [CompanyController::class, 'tickets']);
+    Route::get('/companies/{company}/projects', [CompanyController::class, 'projects']);
     Route::get('/companies/{company}/weekly-times', [CompanyController::class, 'getWeeklyTimes']);
     Route::get('/companies/{company}/master-tickets', [CompanyController::class, 'getMasterTickets']);
     Route::post('/companies/{company}/weekly-times', [CompanyController::class, 'editWeeklyTime']);
@@ -286,7 +287,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-type/custom-groups', [App\Http\Controllers\TicketTypeController::class, 'removeCustomGroup']);
     Route::get('/ticket-type/{ticketType}/available-custom-groups', [App\Http\Controllers\TicketTypeController::class, 'getAvailableCustomGroups']);
     Route::post('/ticket-type/{ticketType}/custom-group-exclusive', [App\Http\Controllers\TicketTypeController::class, 'setCustomGroupExclusive']);
-    
+
     // Slaves
 
     Route::get('/ticket-type/{ticketType}/slaves', [App\Http\Controllers\TicketTypeController::class, 'getSlaveTypes']);
@@ -308,6 +309,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/user-ticket-report/export', [App\Http\Controllers\TicketReportExportController::class, 'userExport']);
     Route::get('/ticket-report/user-stats', [App\Http\Controllers\TicketStatsController::class, 'statsForCompany']);
 
+    // Ticket PDF Report Routes
+
     Route::post('/ticket-pdf-report/update', [App\Http\Controllers\TicketReportPdfExportController::class, 'update']);
     Route::post('/ticket-pdf-report/regenerate/', [App\Http\Controllers\TicketReportPdfExportController::class, 'regenerate']);
     Route::delete('/ticket-pdf-report/delete/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'destroy']);
@@ -316,6 +319,17 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/approved-ticket-pdf-report/list/{company}', [App\Http\Controllers\TicketReportPdfExportController::class, 'approvedPdfCompany']);
     Route::get('/ticket-pdf-report/preview/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfPreview']);
     Route::get('/ticket-pdf-report/download/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfDownload']);
+
+    // Project PDF Report Routes
+
+    Route::post('/project-pdf-report/update', [App\Http\Controllers\ProjectReportPdfExportController::class, 'update']);
+    Route::post('/project-pdf-report/regenerate/', [App\Http\Controllers\ProjectReportPdfExportController::class, 'regenerate']);
+    Route::delete('/project-pdf-report/delete/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'destroy']);
+    Route::post('/project-pdf-report/export', [App\Http\Controllers\ProjectReportPdfExportController::class, 'storeProjectPdfExport']);
+    Route::get('/project-pdf-report/list/{project}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'pdfProject']);
+    Route::get('/approved-project-pdf-report/list/{company}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'approvedProjectPdfCompany']);
+    Route::get('/project-pdf-report/preview/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfPreview']);
+    Route::get('/project-pdf-report/download/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfDownload']);
 
     // Ticket reminder Routes
 

@@ -25,6 +25,21 @@ class ProjectReportPdfExport extends Model
         'send_email',
     ];
 
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::saving(function ($report) {
+            // Validazione: se c'è un project_id, il company_id deve coincidere
+            if ($report->project_id) {
+                $project = Ticket::find($report->project_id);
+                if ($project && $project->company_id !== $report->company_id) {
+                    throw new \InvalidArgumentException('Company ID mismatch with project company');
+                }
+            }
+        });
+    }
+
     // Crea l'identificativo del report PDF da utilizzare come riferimento in fattura.
     public function generatePdfIdentificationString()
     {

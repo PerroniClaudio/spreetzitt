@@ -26,15 +26,19 @@ return new class extends Migration
             $table->boolean('is_approved_billing')->default(false); // Per indicare se è stato approvato per l'utilizzo come "bolletta" mensile o quello che è
             $table->string('approved_billing_identification')->nullable();
             $table->unique('approved_billing_identification', 'proj_rep_billing_id_unique'); // Nome personalizzato per evitare il limite di 64 caratteri
+            $table->boolean('send_email')->default(false);
 
             $table->unsignedBigInteger('company_id');
             $table->foreign('company_id')->references('id')->on('companies');
-            
+
             $table->unsignedBigInteger('project_id')->nullable();
             $table->foreign('project_id')->references('id')->on('tickets');
 
             $table->unsignedBigInteger('user_id')->nullable();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('set null');
+
+            // Indice composto per migliorare le performance delle query per azienda e progetto
+            $table->index(['company_id', 'project_id']);
         });
     }
 

@@ -278,22 +278,23 @@ class CompanyController extends Controller
         } else {
             $ticketTypesQuery->where('is_massive_enabled', 0);
         }
-        
-        if($isNewTicket) {
-            if($authUser->can_open_scheduling == false) {
+
+        if ($isNewTicket) {
+            if ($authUser->can_open_scheduling == false) {
                 $ticketTypesQuery->where('is_scheduling', 0);
             }
-            if($authUser->can_open_project == false) {
+            if ($authUser->can_open_project == false) {
                 $ticketTypesQuery->where('is_project', 0);
             }
         }
 
         $ticketTypesQuery->with(['category', 'slaveTypes']);
-    
+
         $ticketTypes = $ticketTypesQuery->get();
         if ($authUser->is_superadmin == false) {
             $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
         }
+
         return response([
             'companyTicketTypes' => $ticketTypes,
         ], 200);
@@ -408,6 +409,29 @@ class CompanyController extends Controller
 
         return response([
             'tickets' => $tickets,
+        ], 200);
+    }
+
+    public function projects(Company $company, Request $request)
+    {
+        $user = $request->user();
+        if ($user['is_admin'] != 1 && ! $user->companies()->where('companies.id', $company['id'])->exists()) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $projects = $company->projects()->with(['ticketType'])->orderBy('created_at', 'desc')->get();
+
+        if ($user['is_admin'] != 1) {
+            foreach ($projects as $project) {
+                $project->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+            }
+        }
+
+        // I progetti sono sempre ticket, con ticket_type.is_project = true
+        return response([
+            'projects' => $projects,
         ], 200);
     }
 

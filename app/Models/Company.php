@@ -59,6 +59,7 @@ class Company extends Model
         return $this->hasMany(TicketType::class);
     }
 
+    // Tutti i ticket dell'azienda
     public function tickets()
     {
         return $this->hasMany(Ticket::class)->with([
@@ -67,6 +68,21 @@ class Company extends Model
             },
             'user.companies:id,name',
         ]);
+    }
+
+    // Tutti i progetti (ticket di tipo progetto) dell'azienda
+    public function projects()
+    {
+        return $this->hasMany(Ticket::class)
+            ->whereHas('ticketType', function ($query) {
+                $query->where('is_project', true);
+            })
+            ->with([
+                'user' => function ($query) {
+                    $query->select(['id', 'name', 'surname', 'is_admin', 'is_company_admin', 'is_deleted']); // Specify the columns you want to include
+                },
+                'user.companies:id,name',
+            ]);
     }
 
     public function offices()

@@ -2612,7 +2612,11 @@ class TicketController extends Controller
 
             $oldProjectId = $ticket->project_id;
 
-            $ticketIdsByProjectId = [$oldProjectId => [$ticket->id]];
+            // Inizializza l'array per tracciare i ticket da loggare, solo se oldProjectId non è null
+            $ticketIdsByProjectId = [];
+            if ($oldProjectId !== null) {
+                $ticketIdsByProjectId[$oldProjectId] = [$ticket->id];
+            }
 
             // Assegna il ticket al progetto
             $ticket->update(['project_id' => $projectTicket->id]);
@@ -2642,6 +2646,10 @@ class TicketController extends Controller
                         
                         // Crea un log per questo gruppo di slave (se almeno uno è stato modificato)
                         if ($hasChanges) {
+                            // Assicurati che la chiave esista nell'array prima di fare il merge
+                            if (!isset($ticketIdsByProjectId[$currentProjectId])) {
+                                $ticketIdsByProjectId[$currentProjectId] = [];
+                            }
                             $ticketIdsByProjectId[$currentProjectId] = array_merge($ticketIdsByProjectId[$currentProjectId], $slaveIds);
                         }
                     }
@@ -2669,7 +2677,15 @@ class TicketController extends Controller
                     if ($allSlavesAssociatedToSameProject) {
                         $oldMasterProjectId = $masterTicket->project_id;
                         $masterTicket->update(['project_id' => $projectTicket->id]);
-                        $ticketIdsByProjectId[$oldMasterProjectId] = array_merge($ticketIdsByProjectId[$oldMasterProjectId], [$masterTicket->id]);
+                        
+                        // Assicurati che la chiave esista nell'array prima di fare il merge
+                        if ($oldMasterProjectId !== null) {
+                            if (!isset($ticketIdsByProjectId[$oldMasterProjectId])) {
+                                $ticketIdsByProjectId[$oldMasterProjectId] = [];
+                            }
+                            $ticketIdsByProjectId[$oldMasterProjectId] = array_merge($ticketIdsByProjectId[$oldMasterProjectId], [$masterTicket->id]);
+                        }
+                        
                         $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. Poiché tutti i ticket associati sono collegati allo stesso progetto, anche l'operazione strutturata è stata collegata automaticamente a tale progetto. ";
                     }
 
@@ -2686,8 +2702,15 @@ class TicketController extends Controller
             }
 
             foreach ($ticketIdsByProjectId as $projectId => $ticketIds) {
-                // Crea un log per ogni project id coinvolto
-                $this->createEditProjectLog($projectId, $projectTicket->id, $ticketIds, $user->id);
+                // Crea un log per ogni project id coinvolto (solo se projectId non è null)
+                if ($projectId !== null) {
+                    $this->createEditProjectLog($projectId, $projectTicket->id, $ticketIds, $user->id);
+                }
+            }
+
+            // Se il ticket principale non aveva un progetto precedente, crea un log per la nuova associazione
+            if ($oldProjectId === null) {
+                $this->createEditProjectLog(null, $projectTicket->id, [$ticket->id], $user->id);
             }
 
             DB::commit();
