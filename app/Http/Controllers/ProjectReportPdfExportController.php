@@ -113,7 +113,7 @@ class ProjectReportPdfExportController extends Controller
             }
 
             // è company admin
-            if (! $user->companies()->where('companies.id', $project->company_id)->exists()) {
+            if (!$user['is_admin'] && !$user->companies()->where('companies.id', $project->company_id)->exists()) {
                 return response([
                     'message' => 'You can only request reports for your company.',
                 ], 401);
