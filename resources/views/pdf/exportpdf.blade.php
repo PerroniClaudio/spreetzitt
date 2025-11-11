@@ -22,10 +22,8 @@
                 $imgData = !empty($logo_url) ? @file_get_contents($logo_url) : false;
             @endphp
             @if ($imgData !== false)
-                <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="iftlogo"
+                <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="logo"
                     style="width: auto; height: 38px; position: absolute; top: 0; left: 0;">
-            @else
-                <span>Immagine non disponibile</span>
             @endif
         </div>
 

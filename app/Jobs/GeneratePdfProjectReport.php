@@ -137,6 +137,7 @@ class GeneratePdfProjectReport implements ShouldQueue
                 'created_at' => \Carbon\Carbon::parse($project->created_at)->format('d/m/Y H:i'),
                 'status' => $project->stage_id == $closedStageId ? 'Chiuso' : 'Aperto',
                 'total_tickets' => $allTickets->count(),
+                'company_logo' => $company->getLogoUrl(),
             ];
 
             // === CALCOLI STATISTICHE ===
@@ -151,6 +152,8 @@ class GeneratePdfProjectReport implements ShouldQueue
                 'unbillable_time' => $selectedPeriodTickets->where('is_billable', 0)->sum('actual_processing_time'),
                 'remote_tickets' => $selectedPeriodTickets->where('work_mode', 'remote')->count(),
                 'onsite_tickets' => $selectedPeriodTickets->where('work_mode', 'on_site')->count(),
+                'remote_tickets_time' => $selectedPeriodTickets->where('work_mode', 'remote')->sum('actual_processing_time'),
+                'onsite_tickets_time' => $selectedPeriodTickets->where('work_mode', 'on_site')->sum('actual_processing_time'),
                 'incidents' => $selectedPeriodTickets->filter(function ($t) {
                     return $t->ticketType->category->is_problem == 1;
                 })->count(),
@@ -167,11 +170,16 @@ class GeneratePdfProjectReport implements ShouldQueue
                 'total_time' => $beforePeriodTickets->sum('actual_processing_time'),
                 'billable_time' => $beforePeriodTickets->where('is_billable', 1)->sum('actual_processing_time'),
                 'unbillable_time' => $beforePeriodTickets->where('is_billable', 0)->sum('actual_processing_time'),
+                'remote_tickets' => $beforePeriodTickets->where('work_mode', 'remote')->count(),
+                'onsite_tickets' => $beforePeriodTickets->where('work_mode', 'on_site')->count(),
+                'remote_tickets_time' => $beforePeriodTickets->where('work_mode', 'remote')->sum('actual_processing_time'),
+                'onsite_tickets_time' => $beforePeriodTickets->where('work_mode', 'on_site')->sum('actual_processing_time'),
             ];
 
             // Statistiche ticket ancora aperti
             $stillOpenStats = [
                 'total_tickets' => $stillOpenTickets->count(),
+                'current_total_time' => $stillOpenTickets->sum('actual_processing_time'),
                 'created_in_period' => $stillOpenTickets->filter(function ($t) use ($report) {
                     return \Carbon\Carbon::parse($t->created_at)->gte(\Carbon\Carbon::parse($report->start_date));
                 })->count(),
@@ -316,178 +324,110 @@ class GeneratePdfProjectReport implements ShouldQueue
 
             // === GRAFICI PER IL REPORT ===
             $charts_base_url = 'https://quickchart.io/chart?c=';
-            $base_incident_color = '#ff6f6a';
-            $base_request_color = '#9bbed0';
-            $base_project_color = '#4CAF50';
-
             $charts = [];
 
-            // 1. Distribuzione ticket per periodo
-            $periodDistributionData = [
-                'type' => 'doughnut',
-                'data' => [
-                    'labels' => ['Periodo Selezionato', 'Periodo Precedente', 'Ancora Aperti'],
-                    'datasets' => [[
-                        'data' => [
-                            $selectedPeriodStats['total_tickets'],
-                            $beforePeriodStats['total_tickets'],
-                            $stillOpenStats['total_tickets'],
-                        ],
-                        'backgroundColor' => $this->getColorShades(3, false, true, false, 'blue'),
-                    ]],
-                ],
-                'options' => [
-                    'title' => ['display' => true, 'text' => 'Distribuzione Ticket per Periodo'],
-                    'legend' => ['display' => true, 'position' => 'bottom'],
-                ],
-            ];
-            $charts['period_distribution'] = $charts_base_url.urlencode(json_encode($periodDistributionData));
+            // Calcolo dei tempi in ore per il grafico principale
+            $timeBeforePeriodHours = round($beforePeriodStats['total_time'] / 60, 1);
+            $timeSelectedPeriodHours = round($selectedPeriodStats['total_time'] / 60, 1);
+            $estimatedTimeHours = round(($project->project_expected_duration ?? 0) / 60, 1);
 
-            // 2. Tempo fatturabile vs non fatturabile (periodo selezionato)
-            if ($selectedPeriodStats['total_time'] > 0) {
-                $billabilityData = [
-                    'type' => 'bar',
+            // 1. GRAFICO TEMPO PROGETTO (Orizzontale)
+            // Tempo previsto vs tempo effettivamente impiegato
+            if ($estimatedTimeHours > 0 || $timeBeforePeriodHours > 0 || $timeSelectedPeriodHours > 0) {
+                $projectTimeData = [
+                    'type' => 'horizontalBar',
                     'data' => [
-                        'labels' => ['Tempo Fatturabile', 'Tempo Non Fatturabile'],
-                        'datasets' => [[
-                            'label' => 'Ore',
-                            'data' => [
-                                round($selectedPeriodStats['billable_time'] / 60, 2),
-                                round($selectedPeriodStats['unbillable_time'] / 60, 2),
+                        'labels' => ['Tempo Previsto', 'Tempo Effettivo'],
+                        'datasets' => [
+                            [
+                                'label' => 'Periodo Precedente',
+                                'data' => [0, $timeBeforePeriodHours],
+                                'backgroundColor' => '#ff9800',
+                                'borderColor' => '#ff9800',
+                                'maxBarThickness' => 40,
                             ],
-                            'backgroundColor' => $this->getColorShades(2, false, true, false, 'green'),
-                        ]],
+                            [
+                                'label' => 'Periodo Selezionato', 
+                                'data' => [0, $timeSelectedPeriodHours],
+                                'backgroundColor' => '#4CAF50',
+                                'borderColor' => '#4CAF50',
+                                'maxBarThickness' => 40,
+                            ],
+                            [
+                                'label' => 'Tempo Previsto Totale',
+                                'data' => [$estimatedTimeHours, 0],
+                                'backgroundColor' => '#2196F3',
+                                'borderColor' => '#2196F3',
+                                'maxBarThickness' => 40,
+                            ]
+                        ]
                     ],
                     'options' => [
-                        'title' => ['display' => true, 'text' => 'Tempo Fatturabile vs Non Fatturabile (Ore)'],
-                        'legend' => ['display' => false],
-                        'scales' => [
-                            'yAxes' => [[
-                                'ticks' => ['beginAtZero' => true],
-                            ]],
-                        ],
-                    ],
-                ];
-                $charts['billability'] = $charts_base_url.urlencode(json_encode($billabilityData));
-            }
-
-            // 3. Distribuzione Incident vs Request (periodo selezionato)
-            if ($selectedPeriodStats['incidents'] + $selectedPeriodStats['requests'] > 0) {
-                $incidentRequestData = [
-                    'type' => 'pie',
-                    'data' => [
-                        'labels' => ['Incident', 'Request'],
-                        'datasets' => [[
-                            'data' => [
-                                $selectedPeriodStats['incidents'],
-                                $selectedPeriodStats['requests'],
-                            ],
-                            'backgroundColor' => [$base_incident_color, $base_request_color],
-                        ]],
-                    ],
-                    'options' => [
-                        'title' => ['display' => true, 'text' => 'Incident vs Request - Periodo Selezionato'],
+                        'title' => ['display' => true, 'text' => 'Confronto Tempo Previsto vs Effettivo (Ore)', 'fontSize' => 14],
                         'legend' => ['display' => true, 'position' => 'bottom'],
-                    ],
+                        'plugins' => [
+                            'datalabels' => [
+                                'display' => true,
+                                'color' => '#ffffff',
+                                'font' => ['weight' => 'bold', 'size' => 12],
+                                'formatter' => "(value, context) => { return value > 0 ? value + 'h' : ''; }",
+                                'anchor' => 'center',
+                                'align' => 'center'
+                            ]
+                        ],
+                        'scales' => [
+                            'xAxes' => [[
+                                'stacked' => true,
+                                'ticks' => ['beginAtZero' => true],
+                                'scaleLabel' => ['display' => true, 'labelString' => 'Ore']
+                            ]],
+                            'yAxes' => [[
+                                'stacked' => true
+                            ]]
+                        ],
+                        'responsive' => true,
+                        'maintainAspectRatio' => false
+                    ]
                 ];
-                $charts['incident_request'] = $charts_base_url.urlencode(json_encode($incidentRequestData));
+                $charts['project_time'] = $charts_base_url.urlencode(json_encode($projectTimeData));
             }
 
-            // 4. Modalità di lavoro (periodo selezionato)
+            // 2. GRAFICO MODALITÀ DI GESTIONE (Periodo Selezionato)
+            // Ticket gestiti da remoto vs in sede
             if ($selectedPeriodStats['remote_tickets'] + $selectedPeriodStats['onsite_tickets'] > 0) {
                 $workModeData = [
                     'type' => 'doughnut',
                     'data' => [
-                        'labels' => ['Remoto', 'In Sede'],
+                        'labels' => ['Gestione Remota', 'Gestione In Sede'],
                         'datasets' => [[
                             'data' => [
                                 $selectedPeriodStats['remote_tickets'],
-                                $selectedPeriodStats['onsite_tickets'],
+                                $selectedPeriodStats['onsite_tickets']
                             ],
-                            'backgroundColor' => $this->getColorShadesForUsers(2, true),
-                        ]],
+                            'backgroundColor' => ['#36A2EB', '#FF9763'],
+                            'borderColor' => ['#36A2EB', '#FF8a63'],
+                            'borderWidth' => 2
+                        ]]
                     ],
                     'options' => [
-                        'title' => ['display' => true, 'text' => 'Modalità di Lavoro - Periodo Selezionato'],
+                        'title' => ['display' => true, 'text' => 'Modalità di Gestione - Periodo Selezionato', 'fontSize' => 14],
                         'legend' => ['display' => true, 'position' => 'bottom'],
-                    ],
+                        'plugins' => [
+                            'datalabels' => [
+                                'display' => true,
+                                'color' => '#ffffff',
+                                'font' => ['weight' => 'bold', 'size' => 12],
+                                'formatter' => "(value, context) => { return value > 0 ? value : ''; }",
+                                'anchor' => 'center',
+                                'align' => 'center'
+                            ]
+                        ],
+                        'responsive' => true,
+                        'maintainAspectRatio' => false
+                    ]
                 ];
                 $charts['work_mode'] = $charts_base_url.urlencode(json_encode($workModeData));
             }
-
-            // 5. Timeline ticket nel periodo (solo se ci sono abbastanza ticket)
-            if ($selectedPeriodTickets->count() > 0) {
-                $ticketsByDay = [];
-                $startDate = \Carbon\Carbon::parse($report->start_date);
-                $endDate = \Carbon\Carbon::parse($report->end_date);
-
-                // Inizializza tutti i giorni con 0
-                for ($date = $startDate->copy(); $date <= $endDate; $date->addDay()) {
-                    $ticketsByDay[$date->format('Y-m-d')] = 0;
-                }
-
-                // Conta ticket per giorno di chiusura
-                foreach ($selectedPeriodTickets as $ticket) {
-                    $closingUpdate = $ticket->statusUpdates()->where('type', 'closing')->first();
-                    if ($closingUpdate) {
-                        $closingDate = \Carbon\Carbon::parse($closingUpdate->created_at)->format('Y-m-d');
-                        if (isset($ticketsByDay[$closingDate])) {
-                            $ticketsByDay[$closingDate]++;
-                        }
-                    }
-                }
-
-                $timelineData = [
-                    'type' => 'line',
-                    'data' => [
-                        'labels' => array_keys($ticketsByDay),
-                        'datasets' => [[
-                            'label' => 'Ticket Chiusi',
-                            'data' => array_values($ticketsByDay),
-                            'borderColor' => $base_project_color,
-                            'fill' => false,
-                            'tension' => 0.1,
-                        ]],
-                    ],
-                    'options' => [
-                        'title' => ['display' => true, 'text' => 'Timeline Chiusura Ticket'],
-                        'legend' => ['display' => true],
-                        'scales' => [
-                            'yAxes' => [[
-                                'ticks' => ['beginAtZero' => true, 'stepSize' => 1],
-                            ]],
-                        ],
-                    ],
-                ];
-                $charts['timeline'] = $charts_base_url.urlencode(json_encode($timelineData));
-            }
-
-            // 6. Riepilogo generale (numeri principali)
-            $summaryData = [
-                'type' => 'bar',
-                'data' => [
-                    'labels' => ['Periodo Selezionato', 'Periodo Precedente', 'Ancora Aperti'],
-                    'datasets' => [[
-                        'label' => 'Numero Ticket',
-                        'data' => [
-                            $selectedPeriodStats['total_tickets'],
-                            $beforePeriodStats['total_tickets'],
-                            $stillOpenStats['total_tickets'],
-                        ],
-                        'backgroundColor' => $this->getColorShades(3, true, true, false, 'red'),
-                    ]],
-                ],
-                'options' => [
-                    'title' => ['display' => true, 'text' => 'Riepilogo Ticket per Periodo'],
-                    'legend' => ['display' => false],
-                    'scales' => [
-                        'yAxes' => [[
-                            'ticks' => ['beginAtZero' => true, 'stepSize' => 1],
-                        ]],
-                    ],
-                ],
-            ];
-            $charts['summary'] = $charts_base_url.urlencode(json_encode($summaryData));
 
             // === STRUTTURA DATI FINALE ===
             $reportData = [

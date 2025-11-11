@@ -24,9 +24,11 @@
             @endif
         </div>
 
-        <h1 class="main-header">
-            Report Progetto
+        <h1>
+            <b>Report Progetto</b>
         </h1>
+
+        <div class="spacer"></div>
 
         <div class="card">
             <h2 class="sub-header">
@@ -60,33 +62,33 @@
         
                 <table class="project-info-table">
             <tr>
-                <td class="font-semibold table-cell">ID Progetto:</td>
-                <td class="table-cell">{{ $project_data['id'] }}</td>
-                <td class="font-semibold table-cell">Stato:</td>
-                <td class="table-cell">
+                <td><b>ID Progetto:</b></td>
+                <td>{{ $project_data['id'] }}</td>
+                <td><b>Stato:</b></td>
+                <td>
                     <span>
                         {{ $project_data['status'] }}
                     </span>
                 </td>
             </tr>
             <tr>
-                <td class="font-semibold">Nome:</td>
+                <td><b>Nome:</b></td>
                 <td colspan="3">{{ $project_data['name'] }}</td>
             </tr>
             <tr>
-                <td class="font-semibold">Categoria:</td>
+                <td><span><b>Categoria:</b></span></td>
                 <td>{{ $project_data['category'] ?? 'Non specificata' }}</td>
-                <td class="font-semibold">Tipologia:</td>
+                <td><b>Tipologia:</b></td>
                 <td>{{ $project_data['type'] ?? 'Non specificata' }}</td>
             </tr>
             <tr>
-                <td class="font-semibold">Data Inizio:</td>
+                <td><b>Data Inizio:</b></td>
                 <td>{{ $project_data['start_date'] ?? 'Non specificata' }}</td>
-                <td class="font-semibold">Data Fine:</td>
+                <td><b>Data Fine:</b></td>
                 <td>{{ $project_data['end_date'] ?? 'Non specificata' }}</td>
             </tr>
             <tr>
-                <td class="font-semibold">Durata Prevista:</td>
+                <td><b>Durata Prevista:</b></td>
                 <td>
                     @if ($project_data['expected_duration'])
                         @php
@@ -104,11 +106,11 @@
                         Non specificata
                     @endif
                 </td>
-                <td class="font-semibold">Tot. Ticket:</td>
-                <td class="font-semibold">{{ $project_data['total_tickets'] }}</td>
+                <td><b>Tot. Ticket:</b></td>
+                <td><b>{{ $project_data['total_tickets'] }}</b></td>
             </tr>
             <tr>
-                <td class="font-semibold">Creato il:</td>
+                <td><b>Creato il:</b></td>
                 <td colspan="3">{{ $project_data['created_at'] }}</td>
             </tr>
         </table>
@@ -120,159 +122,167 @@
     @if (!empty($charts))
     <div class="card">
         <h3 class="section-header">
-            Analisi Generale del Progetto
+            Analisi Progetto
         </h3>
         
         <div class="charts-container">
-            @if (isset($charts['period_distribution']))
+            @if (isset($charts['project_time']))
                 <div class="chart-item">
-                    <img src="{{ $charts['period_distribution'] }}" alt="Distribuzione per Periodo" 
-                         class="chart-image">
-                </div>
-            @endif
-            
-            @if (isset($charts['summary']))
-                <div class="chart-item">
-                    <img src="{{ $charts['summary'] }}" alt="Riepilogo Generale" 
-                         class="chart-image">
-                </div>
-            @endif
-        </div>
-    </div>
-    <div class="spacer"></div>
-    @endif
-
-    <!-- SEZIONE 3: PERIODO SELEZIONATO -->
-    <div class="card">
-        <h3 class="section-header">
-            Ticket del Periodo Selezionato ({{ $report_info['start_date'] }} - {{ $report_info['end_date'] }})
-        </h3>
-        
-        <!-- Statistiche periodo selezionato -->
-        <div class="stats-container">
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div class="stat-label">Totale Ticket</div>
-                    <div class="stat-value primary">{{ $period_stats['total_tickets'] }}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Fatturabili</div>
-                    <div class="stat-value success">{{ $period_stats['billable_tickets'] }}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Non Fatturabili</div>
-                    <div class="stat-value danger">{{ $period_stats['unbillable_tickets'] }}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Tempo Totale</div>
-                    <div class="stat-value primary">{{ round($period_stats['total_time'] / 60, 1) }}h</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Incidents</div>
-                    <div class="stat-value danger">{{ $period_stats['incidents'] }}</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Requests</div>
-                    <div class="stat-value info">{{ $period_stats['requests'] }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Grafici periodo selezionato -->
-        @if (!empty($charts))
-        <div class="charts-container mb-4">
-            @if (isset($charts['billability']))
-                <div class="chart-item">
-                    <img src="{{ $charts['billability'] }}" alt="Fatturabilità" 
-                         class="chart-image">
-                </div>
-            @endif
-            
-            @if (isset($charts['incident_request']))
-                <div class="chart-item">
-                    <img src="{{ $charts['incident_request'] }}" alt="Incident vs Request" 
-                         class="chart-image">
+                    @php
+                        $imgData = @file_get_contents($charts['project_time']);
+                    @endphp
+                    @if ($imgData !== false)
+                        <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="Confronto Tempo Progetto" 
+                             class="chart-image">
+                    @else
+                        <p>Grafico tempo progetto non disponibile</p>
+                    @endif
                 </div>
             @endif
             
             @if (isset($charts['work_mode']))
-                <div class="chart-item mt-4">
-                    <img src="{{ $charts['work_mode'] }}" alt="Modalità di Lavoro" 
-                         class="chart-image">
+                <div class="chart-item">
+                    @php
+                        $imgData = @file_get_contents($charts['work_mode']);
+                    @endphp
+                    @if ($imgData !== false)
+                        <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="Modalità di Gestione" 
+                             class="chart-image">
+                    @else
+                        <p>Grafico modalità di gestione non disponibile</p>
+                    @endif
                 </div>
             @endif
+        </div>
+        <div style="clear: both;"></div>
+    </div>
+    <div class="spacer"></div>
+    @endif
+
+    <div class="page-break"></div>
+
+    <div class="card">
+        <!-- SEZIONE 3: PERIODO SELEZIONATO -->
+        <div>
+            <h3 class="section-header">
+                Ticket del Periodo Selezionato ({{ $report_info['start_date'] }} - {{ $report_info['end_date'] }})
+            </h3>
             
-            @if (isset($charts['timeline']))
-                <div class="chart-item mt-4">
-                    <img src="{{ $charts['timeline'] }}" alt="Timeline" 
-                         class="chart-image">
-                </div>
-            @endif
+            <!-- Statistiche periodo selezionato -->
+            <div class="stats-summary-container">
+                <table style="width: 100%; border: none;">
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Totale Ticket</b></div>
+                            <div class="stat-value-small">{{ $period_stats['total_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo Totale</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['total_time'], 60), $period_stats['total_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket on site</b></div>
+                            <div class="stat-value-small">{{ $period_stats['onsite_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo on site</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['onsite_tickets_time'], 60), $period_stats['onsite_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket da remoto</b></div>
+                            <div class="stat-value-small">{{ $period_stats['remote_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo da remoto</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['remote_tickets_time'], 60), $period_stats['remote_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- SEZIONE 4: PERIODO PRECEDENTE -->
+        @if ($before_period_stats['total_tickets'] > 0)
+        <div>
+            <h3 class="section-header">
+                Ticket Chiusi in Precedenza
+            </h3>
+            
+            <div class="stats-summary-container">
+                <table style="width: 100%; border: none;">
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Totale Ticket</b></div>
+                            <div class="stat-value-small">{{ $before_period_stats['total_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo totale</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($before_period_stats['total_time'], 60), $before_period_stats['total_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket on site</b></div>
+                            <div class="stat-value-small green">{{ $before_period_stats['onsite_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo on site</b></div>
+                            <div class="stat-value-small green">{{ sprintf('%02d:%02d', intdiv($before_period_stats['onsite_tickets_time'], 60), $before_period_stats['onsite_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket da remoto</b></div>
+                            <div class="stat-value-small red">{{ $before_period_stats['remote_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo da remoto</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($before_period_stats['remote_tickets_time'], 60), $before_period_stats['remote_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        @endif
+
+        <!-- SEZIONE 5: TICKET ANCORA APERTI -->
+        @if ($still_open_stats['total_tickets'] > 0)
+        <div>
+            <h3 class="section-header">
+                Ticket Ancora Aperti
+            </h3>
+            
+            <div class="stats-summary-container">
+                <table style="width: 100%; border: none;">
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Totale Aperti</b></div>
+                            <div class="stat-value-small">{{ $still_open_stats['total_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo corrente (potrebbe non essere accurato)</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($still_open_stats['current_total_time'], 60), $still_open_stats['current_total_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Creati nel Periodo</b></div>
+                            <div class="stat-value-small">{{ $still_open_stats['created_in_period'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Creati Prima</b></div>
+                            <div class="stat-value-small">{{ $still_open_stats['created_before_period'] }}</div>
+                        </td>
+                    </tr>
+                </table>
+            </div>
         </div>
         @endif
     </div>
-
-    <div class="spacer"></div>
-
-    <!-- SEZIONE 4: PERIODO PRECEDENTE -->
-    @if ($before_period_stats['total_tickets'] > 0)
-    <div class="card">
-        <h3 class="section-header">
-            Ticket Chiusi in Precedenza
-        </h3>
-        
-        <div class="stats-summary-container">
-            <div class="stats-summary-grid">
-                <div class="summary-item">
-                    <div class="summary-label">Totale Ticket</div>
-                    <div class="summary-value">{{ $before_period_stats['total_tickets'] }}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Fatturabili</div>
-                    <div class="summary-value green">{{ $before_period_stats['billable_tickets'] }}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Non Fatturabili</div>
-                    <div class="summary-value red">{{ $before_period_stats['unbillable_tickets'] }}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Tempo Totale</div>
-                    <div class="summary-value">{{ round($before_period_stats['total_time'] / 60, 1) }}h</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="spacer"></div>
-    @endif
-
-    <!-- SEZIONE 5: TICKET ANCORA APERTI -->
-    @if ($still_open_stats['total_tickets'] > 0)
-    <div class="card">
-        <h3 class="section-header">
-            Ticket Ancora Aperti
-        </h3>
-        
-        <div class="stats-summary-container">
-            <div class="stats-summary-grid">
-                <div class="summary-item">
-                    <div class="summary-label">Totale Aperti</div>
-                    <div class="summary-value red">{{ $still_open_stats['total_tickets'] }}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Creati nel Periodo</div>
-                    <div class="summary-value orange">{{ $still_open_stats['created_in_period'] }}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-label">Creati Prima</div>
-                    <div class="summary-value gray">{{ $still_open_stats['created_before_period'] }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="spacer"></div>
-    @endif
 
     <!-- NUOVA PAGINA PER TABELLA TICKET -->
     <div class="page-break"></div>
@@ -376,7 +386,7 @@
             <table style="width:100%">
                 <tr>
                     <td style="vertical-align: middle;">
-                        <h1 class="main-header">Ticket #{{ $ticket['ticket_data']['id'] ?? $ticket['id'] ?? 'N/A' }}</h1>
+                        <h1 ><b>Ticket #{{ $ticket['ticket_data']['id'] ?? $ticket['id'] ?? 'N/A' }}</b></h1>
                     </td>
                     <td style="vertical-align: middle;">
                         @php
