@@ -818,45 +818,84 @@ class HardwareController extends Controller
 
     public function fakeHardwareField(Request $request)
     {
-
-        $faker = Faker::create();
-
+        // Dati fittizi statici per test
         $fakeCompany = (object) [
             'id' => 1,
-            'name' => $faker->word,
+            'name' => 'TestCompany',
         ];
 
         // Genera dati fittizi per HardwareType
-        $fakeHardwareTypes = collect(range(1, 5))->map(function ($index) use ($faker) {
-            return (object) [
-                'id' => $index,
-                'name' => $faker->word,
-            ];
-        });
+        $fakeHardwareTypes = collect([
+            (object) ['id' => 1, 'name' => 'Laptop'],
+            (object) ['id' => 2, 'name' => 'Desktop'],
+            (object) ['id' => 3, 'name' => 'Server'],
+            (object) ['id' => 4, 'name' => 'Network'],
+            (object) ['id' => 5, 'name' => 'Printer'],
+        ]);
 
         // Genera dati fittizi per Hardware
-        $fakeHardwareList = collect(range(1, 5))->map(function ($index) use ($faker, $fakeCompany, $fakeHardwareTypes) {
-            $type = $fakeHardwareTypes->random();
-
-            return [
-                'id' => $index,
-                'make' => $faker->word,
-                'model' => $faker->word,
-                'serial_number' => $faker->uuid,
+        $fakeHardwareList = collect([
+            [
+                'id' => 1,
+                'make' => 'Dell',
+                'model' => 'Latitude',
+                'serial_number' => 'TEST-001',
                 'company_id' => 1,
-                'hardware_type_id' => $type->id,
+                'hardware_type_id' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
-                'hardwareType' => [
-                    'id' => $type->id,
-                    'name' => $type->name,
-                ],
-                'company' => [
-                    'id' => $fakeCompany->id,
-                    'name' => $fakeCompany->name,
-                ],
-            ];
-        });
+                'hardwareType' => ['id' => 1, 'name' => 'Laptop'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 2,
+                'make' => 'HP',
+                'model' => 'EliteBook',
+                'serial_number' => 'TEST-002',
+                'company_id' => 1,
+                'hardware_type_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'hardwareType' => ['id' => 1, 'name' => 'Laptop'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 3,
+                'make' => 'Lenovo',
+                'model' => 'ThinkPad',
+                'serial_number' => 'TEST-003',
+                'company_id' => 1,
+                'hardware_type_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'hardwareType' => ['id' => 1, 'name' => 'Laptop'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 4,
+                'make' => 'Apple',
+                'model' => 'MacBook',
+                'serial_number' => 'TEST-004',
+                'company_id' => 1,
+                'hardware_type_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'hardwareType' => ['id' => 1, 'name' => 'Laptop'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 5,
+                'make' => 'Asus',
+                'model' => 'VivoBook',
+                'serial_number' => 'TEST-005',
+                'company_id' => 1,
+                'hardware_type_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'hardwareType' => ['id' => 1, 'name' => 'Laptop'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+        ]);
 
         return response([
             'company' => $fakeCompany,
