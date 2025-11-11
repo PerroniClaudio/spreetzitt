@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\GeneratePdfProjectReport;
 use App\Models\Company;
 use App\Models\ProjectReportPdfExport;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -40,10 +41,29 @@ class ProjectReportPdfExportController extends Controller
         ], 200);
     }
 
+    public function pdfProject(Ticket $project, Request $request)
+    {
+        $user = $request->user();
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $reports = ProjectReportPdfExport::where('project_id', $project->id)
+            // ->where('is_generated', true)
+            ->orderBy('start_date', 'DESC')
+            ->get();
+
+        return response([
+            'reports' => $reports,
+        ], 200);
+    }
+
     /**
      * Lista approvati per azienda singola
      */
-    public function approvedPdfCompany(Company $company, Request $request)
+    public function approvedProjectPdfCompany(Company $company, Request $request)
     {
         $user = $request->user();
         if ($user['is_admin'] != 1 && ($user['is_company_admin'] != 1 || ! $user->companies()->where('companies.id', $company->id)->exists())) {
@@ -53,9 +73,9 @@ class ProjectReportPdfExportController extends Controller
         }
 
         $reports = ProjectReportPdfExport::where([
-                'company_id' => $company->id,
-                'is_approved_billing' => true,
-            ])
+            'company_id' => $company->id,
+            'is_approved_billing' => true,
+        ])
             ->orderBy('start_date', 'DESC')
             ->get();
 
@@ -69,11 +89,12 @@ class ProjectReportPdfExportController extends Controller
     /**
      * Nuovo report
      */
-    public function storePdfExport(Request $request)
+    public function storeProjectPdfExport(Request $request)
     {
 
         try {
             $user = $request->user();
+
             if ($user['is_admin'] != 1) {
                 // non è admin
                 if ($user['is_company_admin'] != 1) {
@@ -82,41 +103,50 @@ class ProjectReportPdfExportController extends Controller
                         'message' => 'The user must be at least company admin.',
                     ], 401);
                 }
-                // è company admin
-                if (! $user->companies()->where('companies.id', $request->company_id)->exists()) {
-                    return response([
-                        'message' => 'You can only request reports for your company.',
-                    ], 401);
-                }
             }
 
-            $company = Company::find($request->company_id);
-            
+            $project = Ticket::find($request->project_id);
+            if (! $project) {
+                return response([
+                    'message' => 'Project not found.',
+                ], 404);
+            }
+
+            // è company admin
+            if (! $user->companies()->where('companies.id', $project->company_id)->exists()) {
+                return response([
+                    'message' => 'You can only request reports for your company.',
+                ], 401);
+            }
+
+            $company = $project->company;
+
             $companyName = preg_replace('/[^a-zA-Z0-9]/', '', $company->name);
             $optionalParamsText = '';
             if (isset($request->optional_parameters)) {
-            // Decodifica se è una stringa JSON, altrimenti usa direttamente
-            $optionalParameters = is_string($request->optional_parameters) 
-                ? json_decode($request->optional_parameters, true) 
-                : (array) $request->optional_parameters;
-            
+                // Decodifica se è una stringa JSON, altrimenti usa direttamente
+                $optionalParameters = is_string($request->optional_parameters)
+                    ? json_decode($request->optional_parameters, true)
+                    : (array) $request->optional_parameters;
+
                 if (isset($optionalParameters['type'])) {
                     $reqOptParType = $optionalParameters['type'];
                     $optionalParamsText .= $reqOptParType == 'all' ? 'Tutti' : ($reqOptParType == 'request' ? 'Request' : ($reqOptParType == 'incident' ? 'Incident' : ''));
                 }
             }
-            
+
             $name = time().'_'.$companyName.'_'.$request->start_date.'_'.$request->end_date.'_'.$optionalParamsText.'.pdf';
 
             $report = ProjectReportPdfExport::create([
                 'company_id' => $company->id,
+                'project_id' => $request->project_id,
                 'file_name' => $name,
-                'file_path' => 'pdf_project_exports/'.$request->company_id.'/'.$name,
+                'file_path' => 'pdf_project_exports/'.$project->id.'/'.$name,
                 'start_date' => $request->start_date,
                 'end_date' => $request->end_date,
                 'optional_parameters' => json_encode($request->optional_parameters),
                 'user_id' => $user->id,
-                'send_email' => $request->send_email,
+                'send_email' => $request->send_email ?? 0,
             ]);
 
             dispatch(new GeneratePdfProjectReport($report));
@@ -136,7 +166,7 @@ class ProjectReportPdfExportController extends Controller
     /**
      * Preview (restituisce il link generato da google cloud storage)
      */
-    public function pdfPreview(ProjectReportPdfExport $projectReportPdfExport, Request $request)
+    public function projectPdfPreview(ProjectReportPdfExport $projectReportPdfExport, Request $request)
     {
 
         $user = $request->user();
@@ -158,6 +188,24 @@ class ProjectReportPdfExportController extends Controller
             }
         }
 
+        // Verifica se il report è stato generato con successo
+        if (! $projectReportPdfExport->is_generated) {
+            return response([
+                'message' => 'Report not generated yet or generation failed.',
+                'status' => $projectReportPdfExport->is_failed ? 'failed' : 'pending',
+                'error' => $projectReportPdfExport->error_message,
+            ], 422);
+        }
+
+        // Verifica se il file esiste effettivamente nel storage
+        $disk = FileUploadController::getStorageDisk();
+        if (! Storage::disk($disk)->exists($projectReportPdfExport->file_path)) {
+            return response([
+                'message' => 'Report file not found in storage.',
+                'file_path' => $projectReportPdfExport->file_path,
+            ], 404);
+        }
+
         $url = $this->generatedSignedUrlForFile($projectReportPdfExport->file_path);
 
         return response([
@@ -169,7 +217,7 @@ class ProjectReportPdfExportController extends Controller
     /**
      * Download (restituisce il file)
      */
-    public function pdfDownload(ProjectReportPdfExport $projectReportPdfExport, Request $request)
+    public function projectPdfDownload(ProjectReportPdfExport $projectReportPdfExport, Request $request)
     {
 
         $user = $request->user();
@@ -192,13 +240,26 @@ class ProjectReportPdfExportController extends Controller
             }
         }
 
-        $filePath = $projectReportPdfExport->file_path;
+        // Verifica se il report è stato generato con successo
+        if (! $projectReportPdfExport->is_generated) {
+            return response()->json([
+                'message' => 'Report not generated yet or generation failed.',
+                'status' => $projectReportPdfExport->is_failed ? 'failed' : 'pending',
+                'error' => $projectReportPdfExport->error_message,
+            ], 422);
+        }
 
+        $filePath = $projectReportPdfExport->file_path;
         $disk = FileUploadController::getStorageDisk();
 
         if (! Storage::disk($disk)->exists($filePath)) {
-            return response()->json(['message' => 'File not found.'], 404);
+            return response()->json([
+                'message' => 'File not found in storage.',
+                'file_path' => $filePath,
+                'disk' => $disk,
+            ], 404);
         }
+
         $fileContent = Storage::disk($disk)->get($filePath);
         $fileName = $projectReportPdfExport->file_name;
 
