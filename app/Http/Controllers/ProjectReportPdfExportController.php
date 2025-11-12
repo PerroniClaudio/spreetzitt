@@ -61,21 +61,26 @@ class ProjectReportPdfExportController extends Controller
     }
 
     /**
-     * Lista approvati per azienda singola
+     * Lista approvati per progetto singolo
      */
-    public function approvedProjectPdfCompany(Company $company, Request $request)
+    public function approvedProjectPdf(Ticket $project, Request $request)
     {
+        // Verifica che il progetto esista
+        if (!$project) {
+            return response([
+                'message' => 'Project not found',
+            ], 404);
+        }
+
         $user = $request->user();
-        if ($user['is_admin'] != 1 && ($user['is_company_admin'] != 1 || ! $user->companies()->where('companies.id', $company->id)->exists())) {
+        if ($user['is_admin'] != 1 && ($user['is_company_admin'] != 1 || ! $user->companies()->where('companies.id', $project->company_id)->exists())) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
 
-        $reports = ProjectReportPdfExport::where([
-            'company_id' => $company->id,
-            'is_approved_billing' => true,
-        ])
+        $reports = ProjectReportPdfExport::where('company_id', $project->company_id)
+            ->where('is_approved_billing', true)
             ->orderBy('start_date', 'DESC')
             ->get();
 

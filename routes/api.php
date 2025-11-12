@@ -327,7 +327,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/project-pdf-report/delete/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'destroy']);
     Route::post('/project-pdf-report/export', [App\Http\Controllers\ProjectReportPdfExportController::class, 'storeProjectPdfExport']);
     Route::get('/project-pdf-report/list/{project}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'pdfProject']);
-    Route::get('/approved-project-pdf-report/list/{company}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'approvedProjectPdfCompany']);
+    Route::get('/approved-project-pdf-report/list/{project}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'approvedProjectPdf']);
     Route::get('/project-pdf-report/preview/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfPreview']);
     Route::get('/project-pdf-report/download/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfDownload']);
 
