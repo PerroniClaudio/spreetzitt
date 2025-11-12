@@ -69,14 +69,17 @@ class Ticket extends Model
 
     public function toSearchableArray()
     {
-        return [
-            'description' => $this->description,
-            // 'status' => $this->status,
-            'stage_id' => $this->stage_id,
-            'user_name' => optional($this->user)->name,
-            'user_surname' => optional($this->user)->surname,
-            'company' => optional($this->company)->name,
-        ];
+
+        if($this->user) {
+            return [
+                'description' => $this->description,
+                // 'status' => $this->status,
+                'stage_id' => $this->stage_id,
+                'user_name' => $this->user->name,
+                'user_surname' => $this->user->surname,
+                'company' => $this->company->name,
+            ];
+        }
     }
 
     protected static function booted()
