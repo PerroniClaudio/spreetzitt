@@ -73,9 +73,9 @@ class Ticket extends Model
             'description' => $this->description,
             // 'status' => $this->status,
             'stage_id' => $this->stage_id,
-            'user_name' => $this->user->name,
-            'user_surname' => $this->user->surname,
-            'company' => $this->company->name,
+            'user_name' => optional($this->user)->name,
+            'user_surname' => optional($this->user)->surname,
+            'company' => optional($this->company)->name,
         ];
     }
 
