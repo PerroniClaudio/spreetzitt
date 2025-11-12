@@ -124,6 +124,9 @@ class GeneratePdfProjectReport implements ShouldQueue
             $ticketSources = config('app.ticket_sources');
             $optional_parameters = json_decode($report->optional_parameters ?? '{}');
 
+            $brand = $company->brands()->first();
+            $google_url = $brand->withGUrl()->logo_url;
+
             // === DATI DEL PROGETTO ===
             $projectData = [
                 'id' => $project->id,
@@ -137,7 +140,7 @@ class GeneratePdfProjectReport implements ShouldQueue
                 'created_at' => \Carbon\Carbon::parse($project->created_at)->format('d/m/Y H:i'),
                 'status' => $project->stage_id == $closedStageId ? 'Chiuso' : 'Aperto',
                 'total_tickets' => $allTickets->count(),
-                'company_logo' => $company->getLogoUrl(),
+                'logo_url' => $google_url,
             ];
 
             // === CALCOLI STATISTICHE ===

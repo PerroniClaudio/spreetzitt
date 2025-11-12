@@ -13,9 +13,9 @@
     <!-- Header con logo e titolo -->
     <div class="center-align">
         <div>
-            @if (!empty($project_data['company_logo']))
+            @if (!empty($project_data['logo_url']))
                 @php
-                    $imgData = @file_get_contents($project_data['company_logo']);
+                    $imgData = @file_get_contents($project_data['logo_url']);
                 @endphp
                 @if ($imgData !== false)
                     <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="logo"
@@ -170,6 +170,38 @@
             
             <!-- Statistiche periodo selezionato -->
             <div class="stats-summary-container">
+                {{-- <table style="width: 100%; border: none;">
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Totale Ticket</b></div>
+                            <div class="stat-value-small">{{ $period_stats['total_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo Totale</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['total_time'], 60), $period_stats['total_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket on site</b></div>
+                            <div class="stat-value-small">{{ $period_stats['onsite_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo on site</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['onsite_tickets_time'], 60), $period_stats['onsite_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Ticket da remoto</b></div>
+                            <div class="stat-value-small">{{ $period_stats['remote_tickets'] }}</div>
+                        </td>
+                        <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
+                            <div><b>Tempo da remoto</b></div>
+                            <div class="stat-value-small">{{ sprintf('%02d:%02d', intdiv($period_stats['remote_tickets_time'], 60), $period_stats['remote_tickets_time'] % 60) }}</div>
+                        </td>
+                    </tr>
+                </table> --}}
                 <table style="width: 100%; border: none;">
                     <tr>
                         <td style="width: 50%; text-align: center; padding: 0.5rem; border: none;">
@@ -253,7 +285,7 @@
         @if ($still_open_stats['total_tickets'] > 0)
         <div>
             <h3 class="section-header">
-                Ticket Ancora Aperti
+                Ticket Ancora Aperti al {{ $report_info['end_date'] }}
             </h3>
             
             <div class="stats-summary-container">
