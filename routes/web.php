@@ -43,3 +43,15 @@ Route::middleware(['throttle:5,1', 'auth:sanctum'])->group(function () {
 Route::get('/test', function () {
     return response()->json(['message' => 'Test route is working']);
 });
+
+Route::get('/debug/tickets-missing-user', function () {
+    return \App\Models\Ticket::with('user')
+        ->where(function ($query) {
+            $query->whereNull('user_id')
+                ->orWhereDoesntHave('user')
+                ->orWhereHas('user', function ($userQuery) {
+                    $userQuery->whereNull('name');
+                });
+        })
+        ->get(['id', 'user_id']);
+});
