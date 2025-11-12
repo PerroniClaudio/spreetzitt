@@ -86,7 +86,7 @@ class Ticket extends Model
                 'stage_id' => $this->stage_id,
                 'user_name' => '',
                 'user_surname' => '',
-                'company' => $this->company->name,
+                'company' => '',
             ];
         }
     }
