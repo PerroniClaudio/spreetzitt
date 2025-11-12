@@ -19,7 +19,7 @@ use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\TicketType;
 use App\Models\User;
-use Illuminate\Contracts\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache; // Otherwise no redis connection :)
 use Illuminate\Support\Facades\DB;
@@ -3313,27 +3313,44 @@ class TicketController extends Controller
     public function search(Request $request)
     {
 
-        $search = $request->query('q');
+        $search = trim((string) $request->query('q', ''));
 
-        $tickets = Ticket::query()->when($search, function (Builder $q, $value) {
-            /**
-             * @disregard Intelephense non rileva il metodo whereIn
-             */
-            return $q->whereIn('id', Ticket::search($value)->keys());
-        })->with(['messages', 'company'])->get();
+        $tickets = Ticket::query()
+            ->with(['messages', 'company', 'user'])
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $like = '%'.$search.'%';
 
-        $tickets_messages = TicketMessage::query()->when($search, function (Builder $q, $value) {
-            /**
-             * @disregard Intelephense non rileva il metodo whereIn
-             */
-            return $q->whereIn('id', TicketMessage::search($value)->keys());
-        })->get();
+                $query->where(function (Builder $subQuery) use ($like) {
+                    $subQuery->where('description', 'like', $like)
+                        ->orWhere('stage_id', 'like', $like)
+                        ->orWhereHas('user', function (Builder $userQuery) use ($like) {
+                            $userQuery->where('name', 'like', $like)
+                                ->orWhere('surname', 'like', $like);
+                        })
+                        ->orWhereHas('company', function (Builder $companyQuery) use ($like) {
+                            $companyQuery->where('name', 'like', $like);
+                        });
+                });
+            })
+            ->get();
+
+        $tickets_messages = TicketMessage::query()
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $query->where('message', 'like', '%'.$search.'%');
+            })
+            ->get();
 
         $ticket_ids_with_messages = $tickets_messages->pluck('ticket_id')->unique();
-        $tickets_with_messages = Ticket::whereIn('id', $ticket_ids_with_messages)->with(['messages', 'company'])->get();
+        $tickets_with_messages = Ticket::whereIn('id', $ticket_ids_with_messages)
+            ->with(['messages', 'company', 'user'])
+            ->get();
         $tickets = $tickets->merge($tickets_with_messages);
 
         $tickets = $tickets->map(function ($ticket) {
+
+            $user = $ticket->user;
+            $openedBy = $user ? trim($user->name.' '.$user->surname) : null;
+            $companyName = optional($ticket->company)->name;
 
             $messages_map = $ticket->messages->map(function ($message) {
                 return [
@@ -3344,8 +3361,8 @@ class TicketController extends Controller
 
             return [
                 'id' => $ticket->id,
-                'ticket_opened_by' => $ticket->user->name.' '.$ticket->user->surname,
-                'company' => $ticket->company->name,
+                'ticket_opened_by' => $openedBy,
+                'company' => $companyName,
                 'description' => $ticket->description,
                 'messages' => $messages_map,
             ];

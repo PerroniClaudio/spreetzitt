@@ -70,7 +70,7 @@ class Ticket extends Model
     public function toSearchableArray()
     {
 
-        if($this->user) {
+        
             return [
                 'description' => $this->description,
                 // 'status' => $this->status,
@@ -79,16 +79,7 @@ class Ticket extends Model
                 'user_surname' => $this->user->surname,
                 'company' => $this->company->name,
             ];
-        } else {
-            return [
-                'description' => $this->description,
-                // 'status' => $this->status,
-                'stage_id' => $this->stage_id,
-                'user_name' => '',
-                'user_surname' => '',
-                'company' => '',
-            ];
-        }
+        
     }
 
     protected static function booted()
