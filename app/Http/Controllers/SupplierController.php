@@ -76,19 +76,18 @@ class SupplierController extends Controller
 
     public function uploadLogo($id, Request $request)
     {
-
         if ($request->file('file') != null) {
 
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
 
-            $path = 'supplier/'.$id.'/logo/'.$file_name;
+            $path = 'supplier/'.$id.'/logo';
 
-            $file->storeAs($path);
+            $file_path = FileUploadController::storeFile($file, $path, $file_name);
 
             $supplier = Supplier::find($id);
             $supplier->update([
-                'logo_url' => $path,
+                'logo_url' => $file_path,
             ]);
 
             return response()->json([

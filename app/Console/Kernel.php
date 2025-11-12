@@ -33,8 +33,8 @@ class Kernel extends ConsoleKernel
         // Check hourly cost expiration weekly (every Monday at 08:00)
         $schedule->job(new \App\Jobs\CheckHourlyCostExpiration)->weeklyOn(1, '08:00');
             
-        // Esegui FetchNewsForSource per ogni NewsSource ogni giorno alle 6:00
-        $schedule->job(new \App\Jobs\FetchNewsForAllSources)->dailyAt('06:00');
+        // Esegui FetchNewsForSource per ogni NewsSource ogni giorno alle 6:00 - Da Fixare
+        // $schedule->job(new \App\Jobs\FetchNewsForAllSources)->dailyAt('06:00');
     }
 
     /**
