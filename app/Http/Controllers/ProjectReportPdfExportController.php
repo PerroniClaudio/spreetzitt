@@ -79,7 +79,8 @@ class ProjectReportPdfExportController extends Controller
             ], 401);
         }
 
-        $reports = ProjectReportPdfExport::where('company_id', $project->company_id)
+        $reports = ProjectReportPdfExport::where('project_id', $project->id)
+            ->where('company_id', $project->company_id)
             ->where('is_approved_billing', true)
             ->orderBy('start_date', 'DESC')
             ->get();
