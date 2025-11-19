@@ -259,29 +259,48 @@ class UserController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id, Request $request)
+    public function destroy($id, Request $request) // Va aggiunto il log (tabella users_logs da creare)
     {
-        //Solo gli admin possono eliminare (disabilitare) le utenze
+        //Solo gli admin e i company_admin possono eliminare (disabilitare) le utenze
         $req_user = $request->user();
 
-        if ($req_user['is_admin'] == 1 && $id) {
-            // In ogni caso si disabilita l'utente, senza eliminarlo.
-            $user = User::where('id', $id)->first();
-            if($user->is_superadmin == 1){
-                if($req_user->is_superadmin != 1){
-                    return response([
-                        'message' => 'Unauthorized',
-                    ], 401);
-                }
-                // Se c'è solo un utente superadmin non si può disabilitare
-                $superadminCount = User::where('is_superadmin', 1)->count();
-                if ($superadminCount <= 1) {
-                    return response([
-                        'message' => 'There must be at least one superadmin',
-                    ], 400);
-                }
-            }
+        if(!$id){
+            return response([
+                'message' => 'Error, missing id',
+            ], 404);
+        }
+        if( $req_user['is_admin'] != 1 && $req_user['is_company_admin'] != 1 ){
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
 
+        $user = User::where('id', $id)->first();
+
+        if($user->is_superadmin == 1){
+            if($req_user->is_superadmin != 1){
+                return response([
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+            // Se c'è solo un utente superadmin non si può disabilitare
+            $superadminCount = User::where('is_superadmin', 1)->count();
+            if ($superadminCount <= 1) {
+                return response([
+                    'message' => 'There must be at least one superadmin',
+                ], 400);
+            }
+        }
+        if($user->is_admin == 1){
+            if($req_user->is_admin != 1){
+                return response([
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+        }
+
+        if ($req_user['is_admin'] == 1) {
+            // In ogni caso si disabilita l'utente, senza eliminarlo.
             $disabled = $user->update([
                 'is_deleted' => true,
             ]);
@@ -290,11 +309,41 @@ class UserController extends Controller
                     'deleted_user' => $id,
                 ], 200);
             }
-
-            return response([
-                'message' => 'Error',
-            ], 400);
+        } else {
+            // Parte per il company_admin
+            $selectedCompanyId = $req_user->selectedCompany() ? $req_user->selectedCompany()->id : null;
+            if (! $selectedCompanyId || ! $user->hasCompany($selectedCompanyId)) {
+                return response([
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+            // Se il richiedente non è nella stessa compagnia allora non è autorizzato
+            if(!$user->hasCompany($selectedCompanyId)){
+                return response([
+                    'message' => 'Unauthorized',
+                ], 401);
+            }
+            if($user->companies()->count() > 1){
+                // Se l'utente appartiene a più compagnie allora si stacca solo dalla compagnia del company_admin
+                $user->companies()->detach($selectedCompanyId); 
+                return response([
+                    'deleted_user' => $id,
+                ], 200);
+            } else {
+                // Altrimenti si disabilita l'utente
+                $disabled = $user->update([
+                    'is_deleted' => true,
+                ]);
+                if ($disabled) {
+                    return response([
+                        'deleted_user' => $id,
+                    ], 200);
+                }
+            }
         }
+        return response([
+            'message' => 'Error',
+        ], 400);
     }
 
     // Riabilitare utente disabilitato
