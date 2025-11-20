@@ -8,7 +8,6 @@ use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\TicketStatusUpdateController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-use Laravel\Pennant\Feature;
 
 /*
 |--------------------------------------------------------------------------
@@ -78,6 +77,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/user/{id}/companies', [App\Http\Controllers\UserController::class, 'companiesForUser']);
     Route::delete('/user/{id}/companies/{company}', [App\Http\Controllers\UserController::class, 'deleteCompaniesForUser']);
     Route::get('/user/{id}', [App\Http\Controllers\UserController::class, 'show']);
+    Route::get('/user-logs/{user}/export', [App\Http\Controllers\UserController::class, 'userLogsExport']);
+    Route::get('/user-logs/{user}', [App\Http\Controllers\UserController::class, 'getUserLog']);
 
     // Ticket Routes
 

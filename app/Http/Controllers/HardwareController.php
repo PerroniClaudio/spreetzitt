@@ -1244,8 +1244,15 @@ class HardwareController extends Controller
         ], 200);
     }
 
-    public function hardwareLogsExport($hardwareId)
+    public function hardwareLogsExport($hardwareId, Request $request)
     {
+        $authUser = $request->user();
+        if (! $authUser->is_admin) {
+            return response([
+                'message' => 'You are not allowed to export this hardware log',
+            ], 403);
+        }
+
         $name = 'hardware_'.$hardwareId.'_logs_'.time().'.xlsx';
 
         return Excel::download(new HardwareLogsExport($hardwareId), $name);

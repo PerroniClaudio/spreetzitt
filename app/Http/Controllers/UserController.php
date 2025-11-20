@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\UserLogsExport;
 use App\Exports\UserTemplateExport;
 use App\Imports\UsersImport;
 use App\Jobs\SendWelcomeEmail;
@@ -9,6 +10,7 @@ use App\Models\ActivationToken;
 use App\Models\Company;
 use App\Models\Supplier;
 use App\Models\User;
+use App\Models\UserLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -69,6 +71,23 @@ class UserController extends Controller
         ]);
 
         $newUser->companies()->attach($fields['company_id']);
+
+        // Log creazione utente
+        UserLog::create([
+            'modified_by' => $requestUser->id,
+            'user_id' => $newUser->id,
+            'old_data' => null,
+            'new_data' => json_encode([
+                'name' => $newUser->name,
+                'surname' => $newUser->surname,
+                'email' => $newUser->email,
+                'phone' => $newUser->phone,
+                'is_company_admin' => $newUser->is_company_admin,
+                'companies' => $newUser->companies()->pluck('id')->toArray(),
+            ]),
+            'log_subject' => 'user',
+            'log_type' => 'create',
+        ]);
 
         $activation_token = ActivationToken::create([
             // 'token' => Hash::make(Str::random(32)),
@@ -248,8 +267,41 @@ class UserController extends Controller
             ], 401);
         }
 
+        // Salva i dati vecchi prima dell'aggiornamento
+        $oldData = [
+            'name' => $user->name,
+            'surname' => $user->surname,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'is_admin' => $user->is_admin,
+            'is_company_admin' => $user->is_company_admin,
+            'is_superadmin' => $user->is_superadmin,
+            'can_open_scheduling' => $user->can_open_scheduling,
+            'can_open_project' => $user->can_open_project,
+        ];
+
         // Aggiorna solo i campi fillable presenti nella request
         $user->update($request->only($user->getFillable()));
+
+        // Log modifica utente
+        UserLog::create([
+            'modified_by' => $req_user->id,
+            'user_id' => $user->id,
+            'old_data' => json_encode($oldData),
+            'new_data' => json_encode([
+                'name' => $user->name,
+                'surname' => $user->surname,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'is_admin' => $user->is_admin,
+                'is_company_admin' => $user->is_company_admin,
+                'is_superadmin' => $user->is_superadmin,
+                'can_open_scheduling' => $user->can_open_scheduling,
+                'can_open_project' => $user->can_open_project,
+            ]),
+            'log_subject' => 'user',
+            'log_type' => 'update',
+        ]);
 
         return response([
             'user' => $user,
@@ -305,6 +357,21 @@ class UserController extends Controller
                 'is_deleted' => true,
             ]);
             if ($disabled) {
+                // Log disabilitazione utente
+                UserLog::create([
+                    'modified_by' => $req_user->id,
+                    'user_id' => $user->id,
+                    'old_data' => json_encode([
+                        'is_deleted' => 0,
+                        'companies' => $user->companies()->pluck('companies.id')->toArray(),
+                    ]),
+                    'new_data' => json_encode([
+                        'is_deleted' => 1,
+                        'companies' => $user->companies()->pluck('companies.id')->toArray(),
+                    ]),
+                    'log_subject' => 'user',
+                    'log_type' => 'delete',
+                ]);
                 return response([
                     'deleted_user' => $id,
                 ], 200);
@@ -325,7 +392,23 @@ class UserController extends Controller
             }
             if($user->companies()->count() > 1){
                 // Se l'utente appartiene a più compagnie allora si stacca solo dalla compagnia del company_admin
-                $user->companies()->detach($selectedCompanyId); 
+                $oldCompanies = $user->companies()->pluck('companies.id')->toArray();
+                $user->companies()->detach($selectedCompanyId);
+                
+                // Log rimozione associazione company
+                UserLog::create([
+                    'modified_by' => $req_user->id,
+                    'user_id' => $user->id,
+                    'old_data' => json_encode([
+                        'companies' => $oldCompanies,
+                    ]),
+                    'new_data' => json_encode([
+                        'companies' => $user->companies()->pluck('companies.id')->toArray(),
+                    ]),
+                    'log_subject' => 'user_company',
+                    'log_type' => 'delete',
+                ]);
+                
                 return response([
                     'deleted_user' => $id,
                 ], 200);
@@ -335,6 +418,21 @@ class UserController extends Controller
                     'is_deleted' => true,
                 ]);
                 if ($disabled) {
+                    // Log disabilitazione utente
+                    UserLog::create([
+                        'modified_by' => $req_user->id,
+                        'user_id' => $user->id,
+                        'old_data' => json_encode([
+                            'is_deleted' => 0,
+                            'companies' => $user->companies()->pluck('companies.id')->toArray(),
+                        ]),
+                        'new_data' => json_encode([
+                            'is_deleted' => 1,
+                            'companies' => $user->companies()->pluck('companies.id')->toArray(),
+                        ]),
+                        'log_subject' => 'user',
+                        'log_type' => 'delete',
+                    ]);
                     return response([
                         'deleted_user' => $id,
                     ], 200);
@@ -378,6 +476,22 @@ class UserController extends Controller
                 'message' => 'Error',
             ], 404);
         }
+
+        // Log riabilitazione utente
+        UserLog::create([
+            'modified_by' => $req_user->id,
+            'user_id' => $user->id,
+            'old_data' => json_encode([
+                'is_deleted' => 1,
+                'companies' => $user->companies()->pluck('companies.id')->toArray(),
+            ]),
+            'new_data' => json_encode([
+                'is_deleted' => 0,
+                'companies' => $user->companies()->pluck('companies.id')->toArray(),
+            ]),
+            'log_subject' => 'user',
+            'log_type' => 'update',
+        ]);
 
         return response([
             'enabled_user' => $id,
@@ -798,7 +912,23 @@ class UserController extends Controller
             'company_id' => 'required|integer|exists:companies,id',
         ]);
 
+        $oldCompanies = $user->companies()->pluck('companies.id')->toArray();
         $user->companies()->syncWithoutDetaching($fields['company_id']);
+        $newCompanies = $user->companies()->pluck('companies.id')->toArray();
+
+        // Log aggiunta associazione company
+        UserLog::create([
+            'modified_by' => $authUser->id,
+            'user_id' => $user->id,
+            'old_data' => json_encode([
+                'companies' => $oldCompanies,
+            ]),
+            'new_data' => json_encode([
+                'companies' => $newCompanies,
+            ]),
+            'log_subject' => 'user_company',
+            'log_type' => 'create',
+        ]);
 
         return response([
             'message' => 'Companies added successfully',
@@ -826,12 +956,68 @@ class UserController extends Controller
             ], 404);
         }
 
+        $oldCompanies = $user->companies()->pluck('companies.id')->toArray();
         $user->companies()->detach($company->id);
+        $newCompanies = $user->companies()->pluck('companies.id')->toArray();
+
+        // Log rimozione associazione company
+        UserLog::create([
+            'modified_by' => $authUser->id,
+            'user_id' => $user->id,
+            'old_data' => json_encode([
+                'companies' => $oldCompanies,
+            ]),
+            'new_data' => json_encode([
+                'companies' => $newCompanies,
+            ]),
+            'log_subject' => 'user_company',
+            'log_type' => 'delete',
+        ]);
 
         return response([
             'message' => 'Companies deleted successfully',
             'success' => true,
             'companies' => $user->companies()->get(),
         ], 200);
+    }
+
+    /**
+     * Get user logs
+     */
+    public function getUserLog($userId, Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser->is_admin) {
+            return response([
+                'message' => 'You are not allowed to view this user log',
+            ], 403);
+        }
+
+        $logs = UserLog::where('user_id', $userId)
+            ->orWhere('modified_by', $userId)
+            ->with(['author', 'affectedUser'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response([
+            'logs' => $logs,
+        ], 200);
+    }
+
+    /**
+     * Export user logs
+     */
+    public function userLogsExport($userId, Request $request)
+    {
+        $authUser = $request->user();
+        if (! $authUser->is_admin) {
+            return response([
+                'message' => 'You are not allowed to export this user log',
+            ], 403);
+        }
+
+        $name = 'user_'.$userId.'_logs_'.time().'.xlsx';
+
+        return Excel::download(new UserLogsExport($userId), $name);
     }
 }
