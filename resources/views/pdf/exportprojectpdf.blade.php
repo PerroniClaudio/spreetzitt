@@ -27,6 +27,7 @@
         <h1>
             <b>Report Progetto</b>
         </h1>
+        <h2><b>{{ $project_data['name'] }}</b></h2>
 
         <div class="spacer"></div>
 
@@ -88,7 +89,13 @@
                 <td>{{ $project_data['end_date'] ?? 'Non specificata' }}</td>
             </tr>
             <tr>
-                <td><b>Durata Prevista:</b></td>
+                <td><b>Creato il:</b></td>
+                <td>{{ $project_data['created_at'] }}</td>
+                <td><b>Tot. Ticket:</b></td>
+                <td><b>{{ $project_data['total_tickets'] }}</b></td>
+            </tr>
+            <tr>
+                <td><b>Durata prevista:</b></td>
                 <td>
                     @if ($project_data['expected_duration'])
                         @php
@@ -106,12 +113,74 @@
                         Non specificata
                     @endif
                 </td>
-                <td><b>Tot. Ticket:</b></td>
-                <td><b>{{ $project_data['total_tickets'] }}</b></td>
+                <td><b>Durata totale (chiusi al {{ $report_info['end_date'] }}):</b></td>
+                <td>
+                    {{-- {{ $project_data['total_closed_time'] }} --}}
+                        @php
+                            // $hours = floor($project_data['total_closed_time'] / 60);
+                            // $minutes = $project_data['total_closed_time'] % 60;
+                            $hours = floor($total_closed_time / 60);
+                            $minutes = $total_closed_time % 60;
+                        @endphp
+                        @if ($hours > 0 && $minutes > 0)
+                            {{ $hours }} ore e {{ $minutes }} minuti
+                        @elseif ($hours > 0)
+                            {{ $hours }} ore
+                        @else
+                            {{ $minutes }} minuti
+                        @endif
+                </td>
             </tr>
             <tr>
-                <td><b>Creato il:</b></td>
-                <td colspan="3">{{ $project_data['created_at'] }}</td>
+                <td><b>Differenza:</b></td>
+                <td>
+                    @if ($project_data['expected_duration'])
+                        @php
+                            // $difference = $project_data['total_closed_time'] - $project_data['expected_duration'];
+                            $difference = $project_data['expected_duration'] - $total_closed_time;
+                            $absDifference = abs($difference);
+                            $hours = floor($absDifference / 60);
+                            $minutes = $absDifference % 60;
+                        @endphp
+                        @if($difference != 0)
+                            @if($difference > 0)
+                                Rimanente 
+                            @else
+                                Sforato di 
+                            @endif
+                            @if ($hours > 0 && $minutes > 0)
+                                {{ $hours }} ore e {{ $minutes }} minuti
+                            @elseif ($hours > 0)
+                                {{ $hours }} ore
+                            @else
+                                {{ $minutes }} minuti
+                            @endif
+                        @else
+                            0
+                        @endif
+                            
+                    @else
+                        Non specificata
+                    @endif
+                </td>
+                <td><b>Ancora aperti al {{ $report_info['end_date'] }} <br>(tempo non preciso):</b></td>
+                <td>
+                    @if ($still_open_stats['current_total_time'] > 0)
+                        @php
+                            $hours = floor($still_open_stats['current_total_time'] / 60);
+                            $minutes = $still_open_stats['current_total_time'] % 60;
+                        @endphp
+                        @if ($hours > 0 && $minutes > 0)
+                            {{ $hours }} ore e {{ $minutes }} minuti
+                        @elseif ($hours > 0)
+                            {{ $hours }} ore
+                        @else
+                            {{ $minutes }} minuti
+                        @endif
+                    @else
+                        0
+                    @endif
+                </td>
             </tr>
         </table>
     </div>

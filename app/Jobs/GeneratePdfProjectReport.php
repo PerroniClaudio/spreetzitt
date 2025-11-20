@@ -443,6 +443,7 @@ class GeneratePdfProjectReport implements ShouldQueue
                 'project_data' => $projectData,
                 'period_stats' => $selectedPeriodStats,
                 'before_period_stats' => $beforePeriodStats,
+                'total_closed_time' => $beforePeriodStats['total_time'] + $selectedPeriodStats['total_time'],
                 'still_open_stats' => $stillOpenStats,
                 'charts' => $charts,
                 'tickets_table' => $ticketsForTable,
