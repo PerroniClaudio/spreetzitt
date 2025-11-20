@@ -83,7 +83,7 @@ class UserController extends Controller
                 'email' => $newUser->email,
                 'phone' => $newUser->phone,
                 'is_company_admin' => $newUser->is_company_admin,
-                'companies' => $newUser->companies()->pluck('id')->toArray(),
+                'companies' => $newUser->companies()->pluck('companies.id')->toArray(),
             ]),
             'log_subject' => 'user',
             'log_type' => 'create',
