@@ -334,6 +334,131 @@ class GeneratePdfProjectReport implements ShouldQueue
             $timeSelectedPeriodHours = round($selectedPeriodStats['total_time'] / 60, 1);
             $estimatedTimeHours = round(($project->project_expected_duration ?? 0) / 60, 1);
 
+            // === GRAFICO ANDAMENTO CHIUSURE ===
+            // Determina l'arco temporale e la granularità
+            $projectStartDate = $project->project_start ? \Carbon\Carbon::parse($project->project_start) : \Carbon\Carbon::parse($project->created_at);
+            $projectEndDate = \Carbon\Carbon::parse($queryTo);
+            $daysDiff = $projectStartDate->diffInDays($projectEndDate);
+            
+            $trendLabels = [];
+            $trendData = [];
+            
+            if ($daysDiff <= 14) {
+                // Suddivisione per giorno
+                $currentDate = $projectStartDate->copy();
+                while ($currentDate->lte($projectEndDate)) {
+                    $trendLabels[] = $currentDate->format('d/m');
+                    
+                    // Conta i ticket chiusi in questo giorno
+                    $closedInDay = $allTickets->filter(function($ticket) use ($currentDate) {
+                        $closingUpdate = $ticket->statusUpdates()->where('type', 'closing')->first();
+                        if (!$closingUpdate) return false;
+                        
+                        $closingDate = \Carbon\Carbon::parse($closingUpdate->created_at);
+                        return $closingDate->isSameDay($currentDate);
+                    })->count();
+                    
+                    $trendData[] = $closedInDay;
+                    $currentDate->addDay();
+                }
+                $periodLabel = 'Giornaliero';
+            } elseif ($daysDiff <= 90) {
+                // Suddivisione per settimana
+                $currentDate = $projectStartDate->copy()->startOfWeek();
+                while ($currentDate->lte($projectEndDate)) {
+                    $weekEnd = $currentDate->copy()->endOfWeek();
+                    if ($weekEnd->gt($projectEndDate)) {
+                        $weekEnd = $projectEndDate->copy();
+                    }
+                    
+                    $trendLabels[] = $currentDate->format('d/m') . '-' . $weekEnd->format('d/m');
+                    
+                    // Conta i ticket chiusi in questa settimana
+                    $closedInWeek = $allTickets->filter(function($ticket) use ($currentDate, $weekEnd) {
+                        $closingUpdate = $ticket->statusUpdates()->where('type', 'closing')->first();
+                        if (!$closingUpdate) return false;
+                        
+                        $closingDate = \Carbon\Carbon::parse($closingUpdate->created_at);
+                        return $closingDate->gte($currentDate) && $closingDate->lte($weekEnd);
+                    })->count();
+                    
+                    $trendData[] = $closedInWeek;
+                    $currentDate->addWeek();
+                }
+                $periodLabel = 'Settimanale';
+            } else {
+                // Suddivisione per mese
+                $currentDate = $projectStartDate->copy()->startOfMonth();
+                while ($currentDate->lte($projectEndDate)) {
+                    $monthEnd = $currentDate->copy()->endOfMonth();
+                    if ($monthEnd->gt($projectEndDate)) {
+                        $monthEnd = $projectEndDate->copy();
+                    }
+                    
+                    $trendLabels[] = $currentDate->format('M Y');
+                    
+                    // Conta i ticket chiusi in questo mese
+                    $closedInMonth = $allTickets->filter(function($ticket) use ($currentDate, $monthEnd) {
+                        $closingUpdate = $ticket->statusUpdates()->where('type', 'closing')->first();
+                        if (!$closingUpdate) return false;
+                        
+                        $closingDate = \Carbon\Carbon::parse($closingUpdate->created_at);
+                        return $closingDate->gte($currentDate) && $closingDate->lte($monthEnd);
+                    })->count();
+                    
+                    $trendData[] = $closedInMonth;
+                    $currentDate->addMonth();
+                }
+                $periodLabel = 'Mensile';
+            }
+            
+            // Genera grafico andamento solo se ci sono dati
+            if (!empty($trendData) && array_sum($trendData) > 0) {
+                $trendChartData = [
+                    'type' => 'line',
+                    'data' => [
+                        'labels' => $trendLabels,
+                        'datasets' => [[
+                            'label' => 'Ticket Chiusi',
+                            'data' => $trendData,
+                            'backgroundColor' => 'rgba(75, 192, 192, 0.2)',
+                            'borderColor' => '#4BC0C0',
+                            'borderWidth' => 2,
+                            'fill' => true,
+                            'tension' => 0.1,
+                            'pointRadius' => 4,
+                            'pointBackgroundColor' => '#4BC0C0'
+                        ]]
+                    ],
+                    'options' => [
+                        'title' => ['display' => true, 'text' => 'Andamento Chiusure - ' . $periodLabel, 'fontSize' => 14],
+                        'legend' => ['display' => true, 'position' => 'bottom'],
+                        'plugins' => [
+                            'datalabels' => [
+                                'display' => true,
+                                'color' => '#333',
+                                'font' => ['weight' => 'bold', 'size' => 10],
+                                'formatter' => "(value, context) => { return value > 0 ? value : ''; }",
+                                'anchor' => 'end',
+                                'align' => 'top'
+                            ]
+                        ],
+                        'scales' => [
+                            'xAxes' => [[
+                                'scaleLabel' => ['display' => true, 'labelString' => 'Periodo']
+                            ]],
+                            'yAxes' => [[
+                                'ticks' => ['beginAtZero' => true, 'stepSize' => 1],
+                                'scaleLabel' => ['display' => true, 'labelString' => 'N° Ticket']
+                            ]]
+                        ],
+                        'responsive' => true,
+                        'maintainAspectRatio' => false
+                    ]
+                ];
+                $charts['trend'] = $charts_base_url . urlencode(json_encode($trendChartData));
+            }
+
             // 1. GRAFICO TEMPO PROGETTO (Orizzontale)
             // Tempo previsto vs tempo effettivamente impiegato
             if ($estimatedTimeHours > 0 || $timeBeforePeriodHours > 0 || $timeSelectedPeriodHours > 0) {
@@ -407,8 +532,8 @@ class GeneratePdfProjectReport implements ShouldQueue
                                 $selectedPeriodStats['remote_tickets'],
                                 $selectedPeriodStats['onsite_tickets']
                             ],
-                            'backgroundColor' => ['#36A2EB', '#FF9763'],
-                            'borderColor' => ['#36A2EB', '#FF8a63'],
+                            'backgroundColor' => ['#2196F3', '#CC3825'],
+                            'borderColor' => ['#2196F3', '#CC3825'],
                             'borderWidth' => 2
                         ]]
                     ],

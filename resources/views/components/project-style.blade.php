@@ -57,6 +57,11 @@
         vertical-align: top;
     }
     
+    /* Section header - rimuove margine superiore per aderire al padding della card */
+    .no-margin-top {
+        margin-top: 0;
+    }
+    
     /* Box statistiche */
     .stats-container {
         background-color: #f8f9fa;

@@ -24,17 +24,15 @@
             @endif
         </div>
 
-        <h1>
+        <h2>
             <b>Report Progetto</b>
-        </h1>
-        <h2><b>{{ $project_data['name'] }}</b></h2>
-
-        <div class="spacer"></div>
+        </h2>
+        <h3><b>{{ $project_data['name'] }}</b></h3>
 
         <div class="card">
-            <h2 class="sub-header">
+            <h3 class="sub-header no-margin-top">
                 {{ $project_data['company'] }}
-            </h2>
+            </h3>
 
             <div class="date-info-table">
                 <table>
@@ -57,7 +55,7 @@
 
     <!-- SEZIONE 1: INFORMAZIONI DEL PROGETTO -->
     <div class="card">
-        <h3 class="section-header">
+        <h3 class="section-header no-margin-top">
             Informazioni Progetto
         </h3>
         
@@ -190,7 +188,7 @@
     <!-- SEZIONE 2: GRAFICI GENERALI -->
     @if (!empty($charts))
     <div class="card">
-        <h3 class="section-header">
+        <h3 class="section-header no-margin-top">
             Analisi Progetto
         </h3>
         
@@ -223,6 +221,21 @@
                 </div>
             @endif
         </div>
+        <div class="charts-container">
+            @if (isset($charts['trend']))
+                <div class="chart-item">
+                    @php
+                        $imgData = @file_get_contents($charts['trend']);
+                    @endphp
+                    @if ($imgData !== false)
+                        <img src="data:image/png;base64,{{ base64_encode($imgData) }}" alt="Andamento Tempo Progetto" 
+                             class="chart-image">
+                    @else
+                        <p>Grafico andamento tempo progetto non disponibile</p>
+                    @endif
+                </div>
+            @endif
+        </div>
         <div style="clear: both;"></div>
     </div>
     <div class="spacer"></div>
@@ -233,7 +246,7 @@
     <div class="card">
         <!-- SEZIONE 3: PERIODO SELEZIONATO -->
         <div>
-            <h3 class="section-header">
+            <h3 class="section-header no-margin-top">
                 Ticket del Periodo Selezionato ({{ $report_info['start_date'] }} - {{ $report_info['end_date'] }})
             </h3>
             

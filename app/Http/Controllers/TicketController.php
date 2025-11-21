@@ -195,7 +195,7 @@ class TicketController extends Controller
                         'message' => 'Non si hanno i permessi per aprire un ticket di tipo progetto',
                     ], 403);
                 }
-                if(!$request->projectExpectedDuration || !$request->projectName ) {
+                if(!$request->projectExpectedDuration || !$request->projectName || !$request->projectStartDate || !$request->projectEndDate) {
                     return response([
                         'message' => 'Nome e durata pianificata sono obbligatori per questo tipo di ticket',
                     ], 400);
