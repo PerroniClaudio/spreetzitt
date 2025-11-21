@@ -218,6 +218,7 @@ return [
         'billing' => 'Fatturazione',
         'time' => 'Tempo esecuzione',
         'work_mode' => 'Modalità di lavoro',
+        'project_update' => 'Modifica progetto',
     ],
 
     /*

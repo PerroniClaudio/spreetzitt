@@ -708,9 +708,13 @@ class TicketController extends Controller
         $this->addVirtualFields($ticket);
 
         // Aggiungere alla fine i dati che servono solo nella risposta e non vanno salvati nel DB
-        if($ticket->ticketType->is_master == 1 && $user->is_master == 1){
+        if($ticket->ticketType->is_master == 1){
             // Usa setAttribute invece di assegnazione diretta per evitare che venga considerato "dirty"
             $ticket->setAttribute('slavesActualProcessingTimesSum', $ticket->slaves()->sum('actual_processing_time') ?? 0);
+        }
+
+        if($ticket->ticketType->is_project == 1){
+            $ticket->setAttribute('projectSlavesActualProcessingTimesSum', $ticket->projectTickets()->sum('actual_processing_time') ?? 0);
         }
 
         return response([
@@ -2485,6 +2489,79 @@ class TicketController extends Controller
             'recap_data' => $recapData,
         ], 200);
 
+    }
+
+    public function updateProject(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        if ($ticket->ticketType->is_project != 1) {
+            return response([
+                'message' => 'This is not a project ticket.',
+            ], 400);
+        }
+
+        $fields = $request->validate([
+            'project_name' => 'required|string|max:255',
+            'project_start' => 'required|date',
+            'project_end' => 'required|date|after_or_equal:project_start',
+            'project_expected_duration' => 'required|integer|min:120',
+        ]);
+
+        // Salva i valori precedenti per il log
+        $previousName = $ticket->project_name;
+        $previousStartDateText = $ticket->project_start ? date('d/m/Y', strtotime($ticket->project_start)) : "N/A";
+        $previousEndDateText = $ticket->project_end ? date('d/m/Y', strtotime($ticket->project_end)) : "N/A";
+        $previousDuration = $ticket->project_expected_duration ?? 0;
+
+        // Aggiorna tutti i campi del progetto
+        $ticket->update($fields);
+
+        // Prepara il messaggio di log con le modifiche
+        $changes = [];
+        
+        if ($previousName !== $fields['project_name']) {
+            $changes[] = 'Nome: "'.$previousName.'" -> "'.$fields['project_name'].'"';
+        }
+        
+        $newStartDateText = date('d/m/Y', strtotime($ticket->project_start));
+        $newEndDateText = date('d/m/Y', strtotime($ticket->project_end));
+        
+        if ($previousStartDateText !== $newStartDateText || $previousEndDateText !== $newEndDateText) {
+            $changes[] = 'Date: '.$previousStartDateText.' - '.$previousEndDateText.' -> '.$newStartDateText.' - '.$newEndDateText;
+        }
+        
+        if ($previousDuration !== $fields['project_expected_duration']) {
+            $prevHours = floor($previousDuration / 60);
+            $prevMinutes = $previousDuration % 60;
+            $newHours = floor($fields['project_expected_duration'] / 60);
+            $newMinutes = $fields['project_expected_duration'] % 60;
+            $changes[] = 'Durata prevista: '.$prevHours.'h '.$prevMinutes.'m -> '.$newHours.'h '.$newMinutes.'m';
+        }
+
+        $logContent = 'Progetto aggiornato. ' . implode('; ', $changes);
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'content' => $logContent,
+            'type' => 'project_update',
+        ]);
+
+        // Invalida la cache per chi ha creato il ticket e per i referenti
+        $ticket->invalidateCache();
+
+        dispatch(new SendUpdateEmail($update));
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
     }
     
 

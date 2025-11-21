@@ -133,6 +133,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/connect-to-project', [App\Http\Controllers\TicketController::class, 'connectToProjectTicket']);
     Route::post('/ticket/{ticket}/remove-project-connection', [App\Http\Controllers\TicketController::class, 'removeProjectConnection']);
     Route::get('/ticket/{ticket}/project-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getProjectTicketRecapData']);
+    Route::post('/ticket/{ticket}/project-update', [App\Http\Controllers\TicketController::class, 'updateProject']);
 
     // Assegnazione ticket
 
