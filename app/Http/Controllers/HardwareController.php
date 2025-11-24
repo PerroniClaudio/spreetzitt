@@ -369,6 +369,7 @@ class HardwareController extends Controller
             ], 403);
         }
 
+        $allowedStatusesAtPurchase = array_keys(config('app.hardware_statuses_at_purchase'));
         $allowedStatuses = array_keys(config('app.hardware_statuses'));
         $allowedPositions = array_keys(config('app.hardware_positions'));
 
@@ -377,6 +378,7 @@ class HardwareController extends Controller
             'model' => 'required|string',
             'serial_number' => 'required|string',
             'is_exclusive_use' => 'required|boolean',
+            'status_at_purchase' => 'required|string|in:'.implode(',', $allowedStatusesAtPurchase),
             'status' => 'required|string|in:'.implode(',', $allowedStatuses),
             'position' => 'required|string|in:'.implode(',', $allowedPositions),
             'company_asset_number' => 'nullable|string',
@@ -1355,15 +1357,17 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Verifica permessi
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
-            // User normale: può vedere solo se l'hardware è assegnato a lui
-            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        } elseif ($authUser->is_company_admin) {
-            // Company admin: può vedere solo hardware della sua azienda
-            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
-                return response(['message' => 'Unauthorized'], 403);
+        if (!$authUser->is_admin) {
+            if ($authUser->is_company_admin) {
+                // Company admin: può vedere solo hardware della sua azienda
+                if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
+                    return response(['message' => 'Unauthorized'], 403);
+                }
+            } else {
+                // User normale: può vedere solo se l'hardware è assegnato a lui
+                if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
+                    return response(['message' => 'Unauthorized'], 403);
+                }
             }
         }
 
