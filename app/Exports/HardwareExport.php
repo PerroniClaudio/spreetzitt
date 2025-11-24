@@ -15,6 +15,7 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
     protected $companyId;
     protected $userId;
     protected $includeTrashed;
+    protected $allowedStatusesAtPurchase;
     protected $allowedStatuses;
     protected $allowedPositions;
     protected $hardwareOwnershipTypes;
@@ -25,6 +26,7 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
         $this->userId = $userId;
         $this->includeTrashed = $includeTrashed;
 
+        $this->allowedStatusesAtPurchase = config('app.hardware_statuses_at_purchase');
         $this->allowedStatuses = config('app.hardware_statuses');
         $this->allowedPositions = config('app.hardware_positions');
         $this->hardwareOwnershipTypes = config('app.hardware_ownership_types');
@@ -63,7 +65,8 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'Numero di serie',
             'Cespite aziendale',
             'Identificativo (se non c\'è il cespite)',
-            'Stato',
+            'Condizioni all\'acquisto',
+            'Condizioni attuali',
             'Posizione',
             'Uso esclusivo',
             'Data di acquisto',
@@ -88,6 +91,7 @@ class HardwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $hardware->serial_number,
             $hardware->company_asset_number,
             $hardware->support_label,
+            $this->allowedStatusesAtPurchase[$hardware->status_at_purchase] ?? $hardware->status_at_purchase,
             $this->allowedStatuses[$hardware->status] ?? $hardware->status,
             $this->allowedPositions[$hardware->position] ?? $hardware->position,
             $hardware->is_exclusive_use ? 'Si' : 'No',
