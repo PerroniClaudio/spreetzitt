@@ -26,6 +26,7 @@ class Hardware extends Model
         'ownership_type_note',
         'notes',
         'is_exclusive_use',
+        'status_at_purchase',
         'status',
         'position',
     ];
@@ -144,5 +145,13 @@ class Hardware extends Model
     public function tickets()
     {
         return $this->belongsToMany(Ticket::class);
+    }
+
+    /**
+     * Relazione con allegati
+     */
+    public function attachments()
+    {
+        return $this->hasMany(HardwareAttachment::class);
     }
 }

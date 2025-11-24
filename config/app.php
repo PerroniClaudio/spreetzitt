@@ -263,11 +263,18 @@ return [
         'hardware_company' => 'Associazione con azienda',
     ],
 
-    'hardware_statuses' => [
+    'hardware_statuses_at_purchase' => [
         'new' => 'Nuovo',
         'used' => 'Usato',
+        'refurbished' => 'Ricondizionato',
+    ],
+
+    'hardware_statuses' => [
+        'new' => 'Nuovo',
         'repaired' => 'Riparato',
+        'refurbished' => 'Ricondizionato',
         'broken' => 'Guasto',
+        'damaged' => 'Danneggiato',
         'repairing' => 'In riparazione',
         'to_be_dismissed' => 'Da dismettere',
         'dismissed' => 'Dismesso',

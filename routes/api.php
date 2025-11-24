@@ -389,6 +389,17 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/hardware-logs/{hardware}/export', [App\Http\Controllers\HardwareController::class, 'hardwareLogsExport']);
     Route::get('/hardware-logs/{hardware}', [App\Http\Controllers\HardwareController::class, 'getHardwareLog']);
 
+    // Hardware Attachments Routes
+    Route::get('/hardware/{hardware}/attachments', [App\Http\Controllers\HardwareController::class, 'getAttachments']);
+    Route::post('/hardware/{hardware}/attachments', [App\Http\Controllers\HardwareController::class, 'uploadAttachment']);
+    Route::post('/hardware/{hardware}/attachments/multiple', [App\Http\Controllers\HardwareController::class, 'uploadAttachments']);
+    Route::patch('/hardware/{hardware}/attachments/{attachment}', [App\Http\Controllers\HardwareController::class, 'updateAttachment']);
+    Route::delete('/hardware/{hardware}/attachments/{attachment}', [App\Http\Controllers\HardwareController::class, 'deleteAttachment']);
+    Route::post('/hardware/{hardware}/attachments/{attachment}/restore', [App\Http\Controllers\HardwareController::class, 'restoreAttachment']);
+    Route::delete('/hardware/{hardware}/attachments/{attachment}/force', [App\Http\Controllers\HardwareController::class, 'forceDeleteAttachment']);
+    Route::get('/hardware/{hardware}/attachments/{attachment}/download', [App\Http\Controllers\HardwareController::class, 'getDownloadUrl']);
+    Route::get('/hardware/{hardware}/attachments/{attachment}/preview', [App\Http\Controllers\HardwareController::class, 'getPreviewUrl']);
+
     // Property Routes
     Route::get('/properties', [App\Http\Controllers\PropertyController::class, 'index']);
     Route::get('/properties/{property}', [App\Http\Controllers\PropertyController::class, 'show']);

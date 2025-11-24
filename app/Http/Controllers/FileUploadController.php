@@ -39,7 +39,7 @@ class FileUploadController extends Controller
      * Genera un URL temporaneo per scaricare un file
      * basandosi sul disco configurato
      */
-    public static function generateSignedUrlForFile(string $filePath, int $minutesValid = 65): string
+    public static function generateSignedUrlForFile(string $filePath, int $minutesValid = 65, array $options = []): string
     {
         $disk = self::getStorageDisk();
 
@@ -48,13 +48,13 @@ class FileUploadController extends Controller
             /**
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
-            return Storage::disk('gcs')->temporaryUrl($filePath, now()->addMinutes($minutesValid));
+            return Storage::disk('gcs')->temporaryUrl($filePath, now()->addMinutes($minutesValid), $options);
         } elseif ($disk === 'private' || $disk === 's3') {
-            // Per Cloudflare R2 o AWS S3, usa temporaryUrl
+            // Per Cloudflare R2 o AWS S3, usa temporaryUrl con options
             /**
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
-            return Storage::disk($disk)->temporaryUrl($filePath, now()->addMinutes($minutesValid));
+            return Storage::disk($disk)->temporaryUrl($filePath, now()->addMinutes($minutesValid), $options);
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa

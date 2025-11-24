@@ -12,14 +12,17 @@ use App\Imports\HardwareDeletionsImport;
 use App\Imports\HardwareImport;
 use App\Models\Company;
 use App\Models\Hardware;
+use App\Models\HardwareAttachment;
 use App\Models\HardwareAuditLog;
 use App\Models\HardwareType;
 use App\Models\TypeFormFields;
 use App\Models\User;
+use App\Http\Controllers\FileUploadController;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 use function PHPUnit\Framework\isEmpty;
@@ -205,12 +208,14 @@ class HardwareController extends Controller
 
         $allowedStatuses = array_keys(config('app.hardware_statuses'));
         $allowedPositions = array_keys(config('app.hardware_positions'));
+        $allowedStatusesAtPurchase = array_keys(config('app.hardware_statuses_at_purchase'));
 
         $data = $request->validate([
             'make' => 'required|string',
             'model' => 'required|string',
             'serial_number' => 'required|string',
             'is_exclusive_use' => 'required|boolean',
+            'status_at_purchase' => 'required|string|in:'.implode(',', $allowedStatusesAtPurchase),
             'status' => 'required|string|in:'.implode(',', $allowedStatuses),
             'position' => 'required|string|in:'.implode(',', $allowedPositions),
             'company_asset_number' => 'nullable|string',
@@ -1340,5 +1345,462 @@ class HardwareController extends Controller
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
 
         return Excel::download(new HardwareExport(null, $user->id, $includeTrashed), $name);
+    }
+
+    /**
+     * Get all attachments for hardware
+     */
+    public function getAttachments(Hardware $hardware, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Verifica permessi
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            // User normale: può vedere solo se l'hardware è assegnato a lui
+            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        } elseif ($authUser->is_company_admin) {
+            // Company admin: può vedere solo hardware della sua azienda
+            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        }
+
+        // Admin vede tutti gli allegati (anche soft deleted)
+        // User e Company Admin vedono solo quelli non eliminati
+        if ($authUser->is_admin) {
+            $attachments = $hardware->attachments()->withTrashed()->with('uploader')->get();
+        } else {
+            $attachments = $hardware->attachments()->with('uploader')->get();
+        }
+
+        return response(['attachments' => $attachments], 200);
+    }
+
+    /**
+     * Upload attachment for hardware
+     */
+    public function uploadAttachment(Hardware $hardware, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin e company admin possono caricare allegati
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($authUser->is_company_admin && $hardware->company_id !== $authUser->selectedCompany()?->id) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        $fields = $request->validate([
+            'file' => 'required|file|max:10240', // Max 10MB
+            'display_name' => 'nullable|string|max:255',
+        ]);
+
+        $file = $request->file('file');
+        
+        // Genera nome file univoco
+        $extension = $file->getClientOriginalExtension();
+        $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
+        $path = 'hardware/' . $hardware->id;
+
+        // Upload usando FileUploadController
+        $filePath = FileUploadController::storeFile($file, $path, $uniqueName);
+
+        // Crea record nel database
+        $attachment = HardwareAttachment::create([
+            'hardware_id' => $hardware->id,
+            'file_path' => $filePath,
+            'original_filename' => $file->getClientOriginalName(),
+            'display_name' => $fields['display_name'] ?? null,
+            'file_extension' => $extension,
+            'mime_type' => $file->getMimeType(),
+            'file_size' => $file->getSize(),
+            'uploaded_by' => $authUser->id,
+        ]);
+
+        // Log audit
+        HardwareAuditLog::create([
+            'log_subject' => 'hardware_attachment',
+            'log_type' => 'create',
+            'modified_by' => $authUser->id,
+            'hardware_id' => $hardware->id,
+            'old_data' => null,
+            'new_data' => json_encode([
+                'attachment_id' => $attachment->id,
+                'filename' => $attachment->downloadFilename(),
+            ]),
+        ]);
+
+        return response([
+            'attachment' => $attachment->load('uploader'),
+            'message' => 'File caricato con successo',
+        ], 201);
+    }
+
+    /**
+     * Upload multiple attachments for hardware
+     */
+    public function uploadAttachments(Hardware $hardware, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin e company admin possono caricare allegati
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($authUser->is_company_admin && $hardware->company_id !== $authUser->selectedCompany()?->id) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        if (!$request->hasFile('files')) {
+            return response(['message' => 'No files uploaded'], 400);
+        }
+
+        $files = $request->file('files');
+        $uploadedAttachments = [];
+        $count = 0;
+
+        if (is_array($files)) {
+            foreach ($files as $file) {
+                if ($file->isValid()) {
+                    // Genera nome file univoco
+                    $extension = $file->getClientOriginalExtension();
+                    $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
+                    $basePath = 'hardware/' . $hardware->id;
+
+                    // Upload usando FileUploadController
+                    $filePath = FileUploadController::storeFile($file, $basePath, $uniqueName);
+
+                    // Crea record nel database
+                    // display_name viene dal nome originale del file (senza estensione)
+                    $originalFilename = $file->getClientOriginalName();
+                    $displayName = pathinfo($originalFilename, PATHINFO_FILENAME);
+
+                    $attachment = HardwareAttachment::create([
+                        'hardware_id' => $hardware->id,
+                        'file_path' => $filePath,
+                        'original_filename' => $originalFilename,
+                        'display_name' => $displayName,
+                        'file_extension' => $extension,
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                        'uploaded_by' => $authUser->id,
+                    ]);
+
+                    $uploadedAttachments[] = $attachment;
+                    $count++;
+                }
+            }
+        } else {
+            // Singolo file
+            if ($files->isValid()) {
+                $extension = $files->getClientOriginalExtension();
+                $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
+                $basePath = 'hardware/' . $hardware->id;
+
+                $filePath = FileUploadController::storeFile($files, $basePath, $uniqueName);
+
+                $originalFilename = $files->getClientOriginalName();
+                $displayName = pathinfo($originalFilename, PATHINFO_FILENAME);
+
+                $attachment = HardwareAttachment::create([
+                    'hardware_id' => $hardware->id,
+                    'file_path' => $filePath,
+                    'original_filename' => $originalFilename,
+                    'display_name' => $displayName,
+                    'file_extension' => $extension,
+                    'mime_type' => $files->getMimeType(),
+                    'file_size' => $files->getSize(),
+                    'uploaded_by' => $authUser->id,
+                ]);
+
+                $uploadedAttachments[] = $attachment;
+                $count++;
+            }
+        }
+
+        // Log audit (uno solo per l'operazione multipla)
+        if ($count > 0) {
+            HardwareAuditLog::create([
+                'log_subject' => 'hardware_attachment',
+                'log_type' => 'create',
+                'modified_by' => $authUser->id,
+                'hardware_id' => $hardware->id,
+                'old_data' => null,
+                'new_data' => json_encode([
+                    'files_count' => $count,
+                    'attachment_ids' => array_map(fn($a) => $a->id, $uploadedAttachments),
+                ]),
+            ]);
+        }
+
+        return response([
+            'attachments' => $uploadedAttachments,
+            'filesCount' => $count,
+            'message' => $count . ' file caricati con successo',
+        ], 201);
+    }
+
+    /**
+     * Update attachment display name
+     */
+    public function updateAttachment(Hardware $hardware, HardwareAttachment $attachment, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin e company admin possono modificare
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($authUser->is_company_admin && $hardware->company_id !== $authUser->selectedCompany()?->id) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        // Verifica che l'allegato appartenga all'hardware
+        if ($attachment->hardware_id !== $hardware->id) {
+            return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        $fields = $request->validate([
+            'display_name' => 'required|string|max:255',
+        ]);
+
+        $oldName = $attachment->display_name;
+        $attachment->update(['display_name' => $fields['display_name']]);
+
+        // Log audit
+        HardwareAuditLog::create([
+            'log_subject' => 'hardware_attachment',
+            'log_type' => 'update',
+            'modified_by' => $authUser->id,
+            'hardware_id' => $hardware->id,
+            'old_data' => json_encode(['display_name' => $oldName]),
+            'new_data' => json_encode(['display_name' => $fields['display_name']]),
+        ]);
+
+        return response([
+            'attachment' => $attachment,
+            'message' => 'Nome allegato aggiornato',
+        ], 200);
+    }
+
+    /**
+     * Delete attachment (soft delete)
+     */
+    public function deleteAttachment(Hardware $hardware, HardwareAttachment $attachment, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin e company admin possono eliminare
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($authUser->is_company_admin && $hardware->company_id !== $authUser->selectedCompany()?->id) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        // Verifica che l'allegato appartenga all'hardware
+        if ($attachment->hardware_id !== $hardware->id) {
+            return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        $attachmentData = [
+            'id' => $attachment->id,
+            'filename' => $attachment->downloadFilename(),
+        ];
+
+        // Soft delete (il file rimane su GCS)
+        $attachment->delete();
+
+        // Log audit
+        HardwareAuditLog::create([
+            'log_subject' => 'hardware_attachment',
+            'log_type' => 'soft_delete',
+            'modified_by' => $authUser->id,
+            'hardware_id' => $hardware->id,
+            'old_data' => json_encode($attachmentData),
+            'new_data' => null,
+        ]);
+
+        return response(['message' => 'Allegato eliminato'], 200);
+    }
+
+    /**
+     * Restore soft deleted attachment (solo admin)
+     */
+    public function restoreAttachment(Hardware $hardware, $attachmentId, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin può ripristinare
+        if (!$authUser->is_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        // Trova l'allegato soft deleted
+        $attachment = HardwareAttachment::withTrashed()
+            ->where('id', $attachmentId)
+            ->where('hardware_id', $hardware->id)
+            ->first();
+
+        if (!$attachment) {
+            return response(['message' => 'Attachment not found'], 404);
+        }
+
+        if (!$attachment->trashed()) {
+            return response(['message' => 'Attachment is not deleted'], 400);
+        }
+
+        $attachment->restore();
+
+        // Log audit
+        HardwareAuditLog::create([
+            'log_subject' => 'hardware_attachment',
+            'log_type' => 'restore',
+            'modified_by' => $authUser->id,
+            'hardware_id' => $hardware->id,
+            'old_data' => null,
+            'new_data' => json_encode([
+                'id' => $attachment->id,
+                'filename' => $attachment->downloadFilename(),
+            ]),
+        ]);
+
+        return response([
+            'attachment' => $attachment->load('uploader'),
+            'message' => 'Allegato ripristinato',
+        ], 200);
+    }
+
+    /**
+     * Force delete attachment (solo admin - elimina definitivamente file da GCS)
+     */
+    public function forceDeleteAttachment(Hardware $hardware, $attachmentId, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo admin può eliminare definitivamente
+        if (!$authUser->is_admin) {
+            return response(['message' => 'Unauthorized'], 403);
+        }
+
+        // Trova l'allegato soft deleted
+        $attachment = HardwareAttachment::withTrashed()
+            ->where('id', $attachmentId)
+            ->where('hardware_id', $hardware->id)
+            ->first();
+
+        if (!$attachment) {
+            return response(['message' => 'Attachment not found'], 404);
+        }
+
+        $attachmentData = [
+            'id' => $attachment->id,
+            'filename' => $attachment->downloadFilename(),
+            'file_path' => $attachment->file_path,
+        ];
+
+        // Force delete (elimina file da GCS tramite boot del model)
+        $attachment->forceDelete();
+
+        // Log audit
+        HardwareAuditLog::create([
+            'log_subject' => 'hardware_attachment',
+            'log_type' => 'force_delete',
+            'modified_by' => $authUser->id,
+            'hardware_id' => $hardware->id,
+            'old_data' => json_encode($attachmentData),
+            'new_data' => null,
+        ]);
+
+        return response(['message' => 'Allegato eliminato definitivamente'], 200);
+    }
+
+    /**
+     * Get download URL for attachment
+     */
+    public function getDownloadUrl(Hardware $hardware, $attachmentId, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Verifica permessi
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        } elseif ($authUser->is_company_admin) {
+            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        }
+
+        // Admin può scaricare anche file soft deleted
+        $attachment = $authUser->is_admin 
+            ? HardwareAttachment::withTrashed()->find($attachmentId)
+            : HardwareAttachment::find($attachmentId);
+
+        if (!$attachment) {
+            return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Verifica che l'allegato appartenga all'hardware
+        if ($attachment->hardware_id !== $hardware->id) {
+            return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        $url = $attachment->getDownloadUrl();
+
+        return response([
+            'url' => $url,
+            'filename' => $attachment->downloadFilename(),
+        ], 200);
+    }
+
+    /**
+     * Get preview URL for attachment
+     */
+    public function getPreviewUrl(Hardware $hardware, $attachmentId, Request $request)
+    {
+        $authUser = $request->user();
+
+        // Verifica permessi
+        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        } elseif ($authUser->is_company_admin) {
+            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
+                return response(['message' => 'Unauthorized'], 403);
+            }
+        }
+
+        // Admin può vedere preview anche di file soft deleted
+        $attachment = $authUser->is_admin 
+            ? HardwareAttachment::withTrashed()->find($attachmentId)
+            : HardwareAttachment::find($attachmentId);
+
+        if (!$attachment) {
+            return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Verifica che l'allegato appartenga all'hardware
+        if ($attachment->hardware_id !== $hardware->id) {
+            return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        $url = $attachment->getPreviewUrl();
+
+        return response([
+            'url' => $url,
+            'filename' => $attachment->downloadFilename(),
+            'is_image' => $attachment->isImage(),
+            'is_pdf' => $attachment->isPdf(),
+        ], 200);
     }
 }
