@@ -23,6 +23,10 @@ class TicketCauseController extends Controller
 
     public function store(Request $request)
     {
+        $authUser = $request->user();
+        if(!$authUser->is_superadmin) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         $validated = $request->validate([
             'name' => 'required|string|max:255',
         ]);
@@ -39,6 +43,10 @@ class TicketCauseController extends Controller
 
     public function update(Request $request, TicketCause $ticketCause)
     {
+        $authUser = $request->user();
+        if(!$authUser->is_superadmin) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         $validated = $request->validate([
             'name' => 'required|string|max:255',
         ]);
@@ -48,23 +56,35 @@ class TicketCauseController extends Controller
         return response()->json($ticketCause);
     }
 
-    public function destroy(TicketCause $ticketCause)
+    public function destroy(Request $request, TicketCause $ticketCause)
     {
+        $authUser = $request->user();
+        if(!$authUser->is_superadmin) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         $ticketCause->delete();
 
         return response()->json(['message' => 'Ticket cause soft deleted'], 200);
     }
 
-    public function forceDestroy($id)
+    public function forceDestroy(Request $request, $id)
     {
+        $authUser = $request->user();
+        if(!$authUser->is_superadmin) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         $ticketCause = TicketCause::withTrashed()->findOrFail($id);
         $ticketCause->forceDelete();
 
         return response()->json(null, 204);
     }
 
-    public function restore($id)
+    public function restore(Request $request, $id)
     {
+        $authUser = $request->user();
+        if(!$authUser->is_superadmin) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         $ticketCause = TicketCause::withTrashed()->findOrFail($id);
         $ticketCause->restore();
 
