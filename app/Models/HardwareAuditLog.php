@@ -26,28 +26,28 @@ class HardwareAuditLog extends Model
         return $this->belongsTo(User::class, 'modified_by');
     }
 
-    public function user()
-    {
-        if ($this->log_subject !== 'hardware_user') {
-            return null;
-        }
-        if ($this->log_type === 'delete') {
-            $oldData = $this->old_data();
-            $userId = $oldData['user_id'];
-            $user = User::find($userId);
+    // public function user()
+    // {
+    //     if ($this->log_subject !== 'hardware_user') {
+    //         return null;
+    //     }
+    //     if ($this->log_type === 'delete') {
+    //         $oldData = $this->old_data();
+    //         $userId = $oldData['user_id'];
+    //         $user = User::find($userId);
 
-            return $user;
-        }
-        if ($this->log_type === 'create') {
-            $newData = $this->new_data();
-            $userId = $newData['user_id'];
-            $user = User::find($userId);
+    //         return $user;
+    //     }
+    //     if ($this->log_type === 'create') {
+    //         $newData = $this->new_data();
+    //         $userId = $newData['user_id'];
+    //         $user = User::find($userId);
 
-            return $user;
-        }
+    //         return $user;
+    //     }
 
-        return null;
-    }
+    //     return null;
+    // }
 
     public function hardware()
     {

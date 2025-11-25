@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Features\HardwareFeatures;
 use App\Features\PropertyFeatures;
+use App\Features\SoftwareFeatures;
 use App\Features\TicketFeatures;
 use Laravel\Pennant\Feature;
 
@@ -28,6 +29,7 @@ class FeatureFlagController extends Controller
         $features = [
             'tickets' => $this->getEnabledFeaturesForScope($currentTenant, 'ticket', TicketFeatures::getFeatures()),
             'hardware' => $this->getEnabledFeaturesForScope($currentTenant, 'hardware', HardwareFeatures::getFeatures()),
+            'software' => $this->getEnabledFeaturesForScope($currentTenant, 'software', SoftwareFeatures::getFeatures()),
             'properties' => $this->getEnabledFeaturesForScope($currentTenant, 'property', PropertyFeatures::getFeatures()),
 
             // Feature legacy mantenute per compatibilità (solo ticket_types per ora)

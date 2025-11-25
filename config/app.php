@@ -263,6 +263,25 @@ return [
         'hardware_company' => 'Associazione con azienda',
     ],
 
+    'software_audit_log_actions' => [
+        'update' => 'Aggiornato',
+        'updated' => 'Aggiornato',
+        'create' => 'Creato',
+        'created' => 'Creato',
+        'delete' => 'Eliminato',
+        'deleted' => 'Eliminato',
+        'restore' => 'Ripristinato',
+        'restored' => 'Ripristinato',
+        'permanent-delete' => 'Eliminato definitivamente',
+    ],
+
+    'software_audit_log_subjects' => [
+        'software' => 'Software',
+        'software_user' => 'Associazione con utente',
+        'software_ticket' => 'Associazione con ticket',
+        'software_company' => 'Associazione con azienda',
+    ],
+
     'hardware_statuses_at_purchase' => [
         'new' => 'Nuovo',
         'used' => 'Usato',

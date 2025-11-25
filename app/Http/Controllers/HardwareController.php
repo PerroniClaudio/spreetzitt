@@ -564,11 +564,6 @@ class HardwareController extends Controller
         ], 200);
     }
 
-    public function getHardwareTypes()
-    {
-        return HardwareType::all();
-    }
-
     /**
      * Update the assigned users of the single hardware
      */

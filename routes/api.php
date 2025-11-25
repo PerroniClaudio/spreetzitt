@@ -414,6 +414,41 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/hardware/{hardware}/attachments/{attachment}/download', [App\Http\Controllers\HardwareController::class, 'getDownloadUrl']);
     Route::get('/hardware/{hardware}/attachments/{attachment}/preview', [App\Http\Controllers\HardwareController::class, 'getPreviewUrl']);
 
+    // Software Routes
+
+    Route::get('/software-types', [App\Http\Controllers\SoftwareTypeController::class, 'index']);
+    Route::post('/software-types', [App\Http\Controllers\SoftwareTypeController::class, 'store']);
+    Route::patch('/software-types/{softwareType}', [App\Http\Controllers\SoftwareTypeController::class, 'update']);
+    Route::delete('/software-types/{softwareType}', [App\Http\Controllers\SoftwareTypeController::class, 'destroy']);
+    Route::get('/software-list', [App\Http\Controllers\SoftwareController::class, 'index']);
+    Route::get('/company-software-list/{company}', [App\Http\Controllers\SoftwareController::class, 'companySoftwareList']);
+    Route::get('/user-companies-software-list/{user}', [App\Http\Controllers\SoftwareController::class, 'userCompaniesSoftwareList']);
+    Route::get('/form-field-software-list/{typeFormField}', [App\Http\Controllers\SoftwareController::class, 'formFieldSoftwareList']);
+    Route::get('/software-list-full', [App\Http\Controllers\SoftwareController::class, 'softwareListWithTrashed']);
+    Route::post('/software', [App\Http\Controllers\SoftwareController::class, 'store']);
+    Route::get('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'show']);
+    Route::patch('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'update']);
+    Route::patch('/software-users/{software}', [App\Http\Controllers\SoftwareController::class, 'updateSoftwareUsers']);
+    Route::delete('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'destroy']);
+    Route::post('/software-restore/{software}', [App\Http\Controllers\SoftwareController::class, 'restoreTrashed']);
+    Route::delete('/software-trashed/{software}', [App\Http\Controllers\SoftwareController::class, 'destroyTrashed']);
+    Route::get('/software-logs/{software}', [App\Http\Controllers\SoftwareController::class, 'getSoftwareLog']);
+    Route::get('/software-logs-export/{software}', [App\Http\Controllers\SoftwareController::class, 'softwareLogsExport']);
+    Route::get('/software-export-all', [App\Http\Controllers\SoftwareController::class, 'exportAllSoftware']);
+    Route::get('/software-export-company/{company}', [App\Http\Controllers\SoftwareController::class, 'exportCompanySoftware']);
+    Route::get('/software-export-user/{user}', [App\Http\Controllers\SoftwareController::class, 'exportUserSoftware']);
+
+    // Software Attachments Routes
+    Route::get('/software/{software}/attachments', [App\Http\Controllers\SoftwareController::class, 'getAttachments']);
+    Route::post('/software/{software}/attachments', [App\Http\Controllers\SoftwareController::class, 'uploadAttachment']);
+    Route::post('/software/{software}/attachments/multiple', [App\Http\Controllers\SoftwareController::class, 'uploadAttachments']);
+    Route::patch('/software/{software}/attachments/{attachment}', [App\Http\Controllers\SoftwareController::class, 'updateAttachment']);
+    Route::delete('/software/{software}/attachments/{attachment}', [App\Http\Controllers\SoftwareController::class, 'deleteAttachment']);
+    Route::post('/software/{software}/attachments/{attachment}/restore', [App\Http\Controllers\SoftwareController::class, 'restoreAttachment']);
+    Route::delete('/software/{software}/attachments/{attachment}/force', [App\Http\Controllers\SoftwareController::class, 'forceDeleteAttachment']);
+    Route::get('/software/{software}/attachments/{attachment}/download', [App\Http\Controllers\SoftwareController::class, 'getDownloadUrl']);
+    Route::get('/software/{software}/attachments/{attachment}/preview', [App\Http\Controllers\SoftwareController::class, 'getPreviewUrl']);
+
     // Property Routes
     Route::get('/properties', [App\Http\Controllers\PropertyController::class, 'index']);
     Route::get('/properties/{property}', [App\Http\Controllers\PropertyController::class, 'show']);

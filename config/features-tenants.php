@@ -17,6 +17,11 @@ return [
             'spreetzit',
         ],
     ],
+    'software' => [
+        'allowed_tenants' => [
+            'spreetzit',
+        ],
+    ],
     'properties' => [
         'allowed_tenants' => [
             'domustart',

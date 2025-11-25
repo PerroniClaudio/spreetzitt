@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Features\HardwareFeatures;
 use App\Features\PropertyFeatures;
+use App\Features\SoftwareFeatures;
 use App\Features\TicketFeatures;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Pennant\Feature;
@@ -53,6 +54,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->registerFeaturesFromClass('ticket', TicketFeatures::class);
         $this->registerFeaturesFromClass('hardware', HardwareFeatures::class);
+        $this->registerFeaturesFromClass('software', SoftwareFeatures::class);
         $this->registerFeaturesFromClass('property', PropertyFeatures::class);
         // Qui potrai aggiungere altre classi come:
         // $this->registerFeaturesFromClass('hardware', HardwareFeatures::class);

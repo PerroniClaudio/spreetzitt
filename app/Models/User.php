@@ -222,6 +222,12 @@ class User extends Authenticatable
             ->withPivot('created_by', 'responsible_user_id', 'created_at', 'updated_at');
     }
 
+    public function software()
+    {
+        return $this->belongsToMany(Software::class, 'software_user', 'user_id', 'software_id')
+            ->withPivot('created_at', 'updated_at');
+    }
+
     public function createOtp()
     {
         // $otp = Otp::create([
