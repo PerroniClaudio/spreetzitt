@@ -12,6 +12,7 @@ use App\Models\Hardware;
 use App\Models\HardwareAuditLog;
 use App\Models\Ticket;
 use App\Models\TicketAssignmentHistoryRecord;
+use App\Models\TicketCause;
 use App\Models\TicketFile;
 use App\Models\TicketLog;
 use App\Models\TicketMessage;
@@ -1155,6 +1156,7 @@ class TicketController extends Controller
             'is_form_correct' => $ticket['is_form_correct'],
             'was_user_self_sufficient' => $ticket['was_user_self_sufficient'],
             'is_user_error_problem' => $ticket['is_user_error_problem'],
+            'ticket_cause_id' => $ticket['ticket_cause_id'],
         ], 200);
     }
 
@@ -1165,6 +1167,7 @@ class TicketController extends Controller
             'was_user_self_sufficient' => 'required|boolean',
             'is_form_correct' => 'required|boolean',
             'is_user_error_problem' => 'boolean',
+            'ticket_cause_id' => 'nullable|exists:ticket_causes,id',
         ]);
 
         if ($request->user()['is_admin'] != 1) {
@@ -1199,6 +1202,15 @@ class TicketController extends Controller
                 case 'is_user_error_problem':
                     $propertyText = 'Responsabilità del problema assegnata a: ';
                     $newValue = $value ? 'Cliente' : 'Supporto';
+                    break;
+                case 'ticket_cause_id':
+                    $propertyText = 'Causa del ticket impostata su: ';
+                    if ($value) {
+                        $ticketCause = TicketCause::find($value);
+                        $newValue = $ticketCause ? $ticketCause->name : 'Non definita';
+                    } else {
+                        $newValue = 'Nessuna causa';
+                    }
                     break;
                 default:
                     'Errore';

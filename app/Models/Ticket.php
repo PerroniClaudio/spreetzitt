@@ -23,6 +23,7 @@ class Ticket extends Model
         'group_id',
         'due_date',
         'type_id',
+        'ticket_cause_id',
         'sla_take',
         'sla_solve',
         'priority',
@@ -107,6 +108,11 @@ class Ticket extends Model
     public function group()
     {
         return $this->belongsTo(Group::class);
+    }
+
+    public function ticketCause()
+    {
+        return $this->belongsTo(TicketCause::class);
     }
 
     /* get the handler */

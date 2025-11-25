@@ -4,6 +4,7 @@ use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\GroupController;
 use App\Http\Controllers\SupplierController;
+use App\Http\Controllers\TicketCauseController;
 use App\Http\Controllers\TicketMessageController;
 use App\Http\Controllers\TicketStatusUpdateController;
 use Illuminate\Http\Request;
@@ -86,6 +87,19 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket/{ticket_id}/messages', [TicketMessageController::class, 'index']);
     Route::post('/ticket/{ticket_id}/status-updates', [TicketStatusUpdateController::class, 'store']);
     Route::get('/ticket/{ticket_id}/status-updates', [TicketStatusUpdateController::class, 'index']);
+
+    // Ticket Causes Routes
+    Route::get('/ticket-causes', [TicketCauseController::class, 'index']);
+    Route::get('/all-ticket-causes', [TicketCauseController::class, 'all']);
+    Route::post('/ticket-causes', [TicketCauseController::class, 'store']);
+    Route::get('/ticket-causes/{ticketCause}', [TicketCauseController::class, 'show']);
+    Route::put('/ticket-causes/{ticketCause}', [TicketCauseController::class, 'update']);
+    Route::delete('/ticket-causes/{ticketCause}', [TicketCauseController::class, 'destroy']);
+    Route::delete('/ticket-causes/{id}/force', [TicketCauseController::class, 'forceDestroy']);
+    Route::post('/ticket-causes/{id}/restore', [TicketCauseController::class, 'restore']);
+
+
+
     Route::resource('ticket', App\Http\Controllers\TicketController::class);
     Route::get('/old-ticket-search', [App\Http\Controllers\OldTicketController::class, 'search']);
     Route::get('/ticket-search', [App\Http\Controllers\TicketController::class, 'search']);
