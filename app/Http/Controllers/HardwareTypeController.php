@@ -61,6 +61,8 @@ class HardwareTypeController extends Controller
             'name' => 'required|string',
         ]);
 
+        $data['name'] = strtoupper($data['name']);
+
         $hardwareType = HardwareType::create($data);
 
         return response([
@@ -100,6 +102,8 @@ class HardwareTypeController extends Controller
         $data = $request->validate([
             'name' => 'required|string',
         ]);
+        
+        $data['name'] = strtoupper($data['name']);
 
         $hardwareType->name = $data['name'];
         $hardwareType->save();

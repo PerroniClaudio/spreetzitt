@@ -49,6 +49,8 @@ class SoftwareTypeController extends Controller
             'name' => 'required|string',
         ]);
 
+        $data['name'] = strtoupper($data['name']);
+
         $softwareType = SoftwareType::create($data);
 
         return response([
@@ -73,7 +75,7 @@ class SoftwareTypeController extends Controller
             'name' => 'required|string',
         ]);
 
-        $softwareType->name = $data['name'];
+        $softwareType->name = strtoupper($data['name']);
         $softwareType->save();
 
         return response([
