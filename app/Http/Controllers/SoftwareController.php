@@ -35,7 +35,13 @@ class SoftwareController extends Controller
         $authUser = $request->user();
         
         if ($authUser->is_admin) {
-            $softwareList = Software::with(['softwareType', 'company'])->get();
+            $softwareList = Software::with([
+                'softwareType', 
+                'company', 
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
+                },
+            ])->get();
 
             return response([
                 'softwareList' => $softwareList,
@@ -45,7 +51,13 @@ class SoftwareController extends Controller
         if ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
             $softwareList = $selectedCompany 
-                ? Software::where('company_id', $selectedCompany->id)->with(['softwareType', 'company'])->get() 
+                ? Software::where('company_id', $selectedCompany->id)->with([
+                    'softwareType', 
+                    'company', 
+                    'users' => function ($query) {
+                        $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
+                    },
+                ])->get() 
                 : collect();
 
             return response([
@@ -57,7 +69,13 @@ class SoftwareController extends Controller
         $softwareList = $selectedCompany 
             ? Software::where('company_id', $selectedCompany->id)->whereHas('users', function ($query) use ($authUser) {
                 $query->where('user_id', $authUser->id);
-            })->with(['softwareType', 'company'])->get() 
+            })->with([
+                'softwareType', 
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
+                },
+            ])->get() 
             : collect();
 
         return response([
