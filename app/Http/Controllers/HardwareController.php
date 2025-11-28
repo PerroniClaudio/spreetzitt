@@ -276,6 +276,8 @@ class HardwareController extends Controller
 
             foreach ($data['users'] as $userId) {
                 $hardware->users()->attach($userId, [
+                    'created_by' => $authUser->id,
+                    'responsible_user_id' => $authUser->id,
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now(),
                 ]);
@@ -447,9 +449,10 @@ class HardwareController extends Controller
 
         foreach ($usersToAdd as $userId) {
             $hardware->users()->attach($userId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
-                // Qui si potrebbe aggiungere il campo responsible_user_id ma bisogna creare il frontend per settarlo
             ]);
         }
 
@@ -641,6 +644,8 @@ class HardwareController extends Controller
 
         foreach ($usersToAdd as $userId) {
             $hardware->users()->attach($userId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
@@ -740,6 +745,8 @@ class HardwareController extends Controller
 
         foreach ($hardwareToAdd as $hardwareId) {
             $user->hardware()->attach($hardwareId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);

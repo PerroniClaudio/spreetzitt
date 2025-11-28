@@ -63,6 +63,7 @@ class SoftwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             'Data di scadenza',
             'Scadenza supporto',
             'Stato',
+            'Note',
             'Azienda',
             'Tipo di software',
             'Utenti assegnati',
@@ -88,6 +89,7 @@ class SoftwareExport implements FromCollection, WithHeadings, WithMapping, Shoul
             $this->formatDate($software->expiration_date),
             $this->formatDate($software->support_expiration_date),
             $software->status,
+            $software->notes,
             $software->company ? $software->company->name : '',
             $software->softwareType ? $software->softwareType->name : '',
             $software->users->map(function ($user) {

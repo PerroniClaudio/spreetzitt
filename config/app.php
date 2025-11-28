@@ -282,6 +282,16 @@ return [
         'software_company' => 'Associazione con azienda',
     ],
 
+    'software_statuses' => [
+        'active' => 'In uso',
+        'inactive' => 'Non in uso',
+        'expired' => 'Scaduta',
+        'archived' => 'Archiviato',
+        'pending' => 'In attesa',
+        'maintenance' => 'Manutenzione',
+        'revoked' => 'Revocata',
+    ],
+
     'hardware_statuses_at_purchase' => [
         'new' => 'Nuovo',
         'used' => 'Usato',

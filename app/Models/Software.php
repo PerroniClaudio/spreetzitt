@@ -25,6 +25,7 @@ class Software extends Model
         'expiration_date',
         'support_expiration_date',
         'status',
+        'notes',
         'company_id',
         'software_type_id',
     ];

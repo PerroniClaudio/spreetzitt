@@ -121,43 +121,42 @@ class SoftwareController extends Controller
         ], 200);
     }
 
-    // Al momento non usiamo l'associazione diretta software ticket. nè tramite campo del webform nè in  altro modo.
-    // public function formFieldSoftwareList(Request $request, TypeFormFields $typeFormField)
-    // {
-    //     $authUser = $request->user();
+    public function formFieldSoftwareList(Request $request, TypeFormFields $typeFormField)
+    {
+        $authUser = $request->user();
 
-    //     if (!$typeFormField) {
-    //         return response([
-    //             'message' => 'Type form field not found',
-    //         ], 404);
-    //     }
+        if (!$typeFormField) {
+            return response([
+                'message' => 'Type form field not found',
+            ], 404);
+        }
 
-    //     $company = $typeFormField->ticketType->company;
-    //     if (!$authUser->is_admin && !((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
-    //         return response([
-    //             'message' => 'You are not allowed to view this software',
-    //         ], 403);
-    //     }
+        $company = $typeFormField->ticketType->company;
+        if (!$authUser->is_admin && !((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+            return response([
+                'message' => 'You are not allowed to view this software',
+            ], 403);
+        }
 
-    //     $softwareList = [];
+        $softwareList = [];
 
-    //     // Costruisci la query di base
-    //     if ($authUser->is_admin || $authUser->is_company_admin) {
-    //         $query = Software::where('company_id', $company->id);
-    //     } else {
-    //         $query = $authUser->software();
-    //     }
+        // Costruisci la query di base
+        if ($authUser->is_admin || $authUser->is_company_admin) {
+            $query = Software::where('company_id', $company->id);
+        } else {
+            $query = $authUser->software();
+        }
         
-    //     // Aggiungi le relazioni
-    //     $query->with(['softwareType', 'company']);
+        // Aggiungi le relazioni
+        $query->with(['softwareType', 'company']);
 
-    //     // Esegui la query
-    //     $softwareList = $query->get();
+        // Esegui la query
+        $softwareList = $query->get();
 
-    //     return response([
-    //         'softwareList' => $softwareList,
-    //     ], 200);
-    // }
+        return response([
+            'softwareList' => $softwareList,
+        ], 200);
+    }
 
     public function softwareListWithTrashed(Request $request)
     {
@@ -201,7 +200,8 @@ class SoftwareController extends Controller
             'purchase_date' => 'nullable|date',
             'expiration_date' => 'nullable|date',
             'support_expiration_date' => 'nullable|date',
-            'status' => 'required|string',
+            'status' => 'required|string|in:' . implode(',', array_keys(config('app.software_statuses'))),
+            'notes' => 'nullable|string',
             'company_id' => 'nullable|int|exists:companies,id',
             'software_type_id' => 'nullable|int|exists:software_types,id',
             'users' => 'nullable|array',
@@ -229,6 +229,8 @@ class SoftwareController extends Controller
         // Associare gli utenti
         if (!empty($users)) {
             $software->users()->attach($users, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
@@ -309,7 +311,8 @@ class SoftwareController extends Controller
             'purchase_date' => 'nullable|date',
             'expiration_date' => 'nullable|date',
             'support_expiration_date' => 'nullable|date',
-            'status' => 'required|string',
+            'status' => 'required|string|in:' . implode(',', array_keys(config('app.software_statuses'))),
+            'notes' => 'nullable|string',
             'company_id' => 'nullable|int|exists:companies,id',
             'software_type_id' => 'nullable|int|exists:software_types,id',
             'users' => 'nullable|array',
@@ -362,6 +365,8 @@ class SoftwareController extends Controller
 
         foreach ($usersToAdd as $userId) {
             $software->users()->attach($userId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
@@ -451,6 +456,8 @@ class SoftwareController extends Controller
 
         foreach ($usersToAdd as $userId) {
             $software->users()->attach($userId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
@@ -549,6 +556,8 @@ class SoftwareController extends Controller
 
         foreach ($softwareToAdd as $softwareId) {
             $user->software()->attach($softwareId, [
+                'created_by' => $authUser->id,
+                'responsible_user_id' => $authUser->id,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
@@ -625,203 +634,201 @@ class SoftwareController extends Controller
         ], 200);
     }
 
-    // Per ora nei webform non usiamo campi software legati al modello
-    // public function fakeSoftwareField(Request $request)
-    // {
-    //     // Dati fittizi statici per test
-    //     $fakeCompany = (object) [
-    //         'id' => 1,
-    //         'name' => 'TestCompany',
-    //     ];
+    public function fakeSoftwareField(Request $request)
+    {
+        // Dati fittizi statici per test
+        $fakeCompany = (object) [
+            'id' => 1,
+            'name' => 'TestCompany',
+        ];
 
-    //     // Genera dati fittizi per SoftwareType
-    //     $fakeSoftwareTypes = collect([
-    //         (object) ['id' => 1, 'name' => 'Operating System'],
-    //         (object) ['id' => 2, 'name' => 'Antivirus'],
-    //         (object) ['id' => 3, 'name' => 'Office Suite'],
-    //         (object) ['id' => 4, 'name' => 'Design Tool'],
-    //         (object) ['id' => 5, 'name' => 'Development Tool'],
-    //     ]);
+        // Genera dati fittizi per SoftwareType
+        $fakeSoftwareTypes = collect([
+            (object) ['id' => 1, 'name' => 'Operating System'],
+            (object) ['id' => 2, 'name' => 'Antivirus'],
+            (object) ['id' => 3, 'name' => 'Office Suite'],
+            (object) ['id' => 4, 'name' => 'Design Tool'],
+            (object) ['id' => 5, 'name' => 'Development Tool'],
+        ]);
 
-    //     // Genera dati fittizi per Software
-    //     $fakeSoftwareList = collect([
-    //         [
-    //             'id' => 1,
-    //             'vendor' => 'Microsoft',
-    //             'product_name' => 'Windows 11 Pro',
-    //             'version' => '23H2',
-    //             'company_id' => 1,
-    //             'software_type_id' => 1,
-    //             'created_at' => now(),
-    //             'updated_at' => now(),
-    //             'softwareType' => ['id' => 1, 'name' => 'Operating System'],
-    //             'company' => ['id' => 1, 'name' => 'TestCompany'],
-    //         ],
-    //         [
-    //             'id' => 2,
-    //             'vendor' => 'Microsoft',
-    //             'product_name' => 'Office 365',
-    //             'version' => 'E3',
-    //             'company_id' => 1,
-    //             'software_type_id' => 3,
-    //             'created_at' => now(),
-    //             'updated_at' => now(),
-    //             'softwareType' => ['id' => 3, 'name' => 'Office Suite'],
-    //             'company' => ['id' => 1, 'name' => 'TestCompany'],
-    //         ],
-    //         [
-    //             'id' => 3,
-    //             'vendor' => 'Adobe',
-    //             'product_name' => 'Creative Cloud',
-    //             'version' => '2024',
-    //             'company_id' => 1,
-    //             'software_type_id' => 4,
-    //             'created_at' => now(),
-    //             'updated_at' => now(),
-    //             'softwareType' => ['id' => 4, 'name' => 'Design Tool'],
-    //             'company' => ['id' => 1, 'name' => 'TestCompany'],
-    //         ],
-    //         [
-    //             'id' => 4,
-    //             'vendor' => 'JetBrains',
-    //             'product_name' => 'PhpStorm',
-    //             'version' => '2024.1',
-    //             'company_id' => 1,
-    //             'software_type_id' => 5,
-    //             'created_at' => now(),
-    //             'updated_at' => now(),
-    //             'softwareType' => ['id' => 5, 'name' => 'Development Tool'],
-    //             'company' => ['id' => 1, 'name' => 'TestCompany'],
-    //         ],
-    //         [
-    //             'id' => 5,
-    //             'vendor' => 'Kaspersky',
-    //             'product_name' => 'Endpoint Security',
-    //             'version' => '12.0',
-    //             'company_id' => 1,
-    //             'software_type_id' => 2,
-    //             'created_at' => now(),
-    //             'updated_at' => now(),
-    //             'softwareType' => ['id' => 2, 'name' => 'Antivirus'],
-    //             'company' => ['id' => 1, 'name' => 'TestCompany'],
-    //         ],
-    //     ]);
+        // Genera dati fittizi per Software
+        $fakeSoftwareList = collect([
+            [
+                'id' => 1,
+                'vendor' => 'Microsoft',
+                'product_name' => 'Windows 11 Pro',
+                'version' => '23H2',
+                'company_id' => 1,
+                'software_type_id' => 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'softwareType' => ['id' => 1, 'name' => 'Operating System'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 2,
+                'vendor' => 'Microsoft',
+                'product_name' => 'Office 365',
+                'version' => 'E3',
+                'company_id' => 1,
+                'software_type_id' => 3,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'softwareType' => ['id' => 3, 'name' => 'Office Suite'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 3,
+                'vendor' => 'Adobe',
+                'product_name' => 'Creative Cloud',
+                'version' => '2024',
+                'company_id' => 1,
+                'software_type_id' => 4,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'softwareType' => ['id' => 4, 'name' => 'Design Tool'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 4,
+                'vendor' => 'JetBrains',
+                'product_name' => 'PhpStorm',
+                'version' => '2024.1',
+                'company_id' => 1,
+                'software_type_id' => 5,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'softwareType' => ['id' => 5, 'name' => 'Development Tool'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+            [
+                'id' => 5,
+                'vendor' => 'Kaspersky',
+                'product_name' => 'Endpoint Security',
+                'version' => '12.0',
+                'company_id' => 1,
+                'software_type_id' => 2,
+                'created_at' => now(),
+                'updated_at' => now(),
+                'softwareType' => ['id' => 2, 'name' => 'Antivirus'],
+                'company' => ['id' => 1, 'name' => 'TestCompany'],
+            ],
+        ]);
 
-    //     return response([
-    //         'company' => $fakeCompany,
-    //         'softwareTypes' => $fakeSoftwareTypes,
-    //         'software' => $fakeSoftwareList,
-    //     ], 200);
-    // }
+        return response([
+            'company' => $fakeCompany,
+            'softwareTypes' => $fakeSoftwareTypes,
+            'software' => $fakeSoftwareList,
+        ], 200);
+    }
 
-    // Al momento non associamo software e ticket.
-    // public function softwareTickets(Request $request, Software $software)
-    // {
-    //     $authUser = $request->user();
-    //     if (
-    //         !$authUser->is_admin
-    //         && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
-    //         && !($software->users->contains($authUser))
-    //     ) {
-    //         return response([
-    //             'message' => 'You are not allowed to view this software tickets',
-    //         ], 403);
-    //     }
+    public function softwareTickets(Request $request, Software $software)
+    {
+        $authUser = $request->user();
+        if (
+            !$authUser->is_admin
+            && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
+            && !($software->users->contains($authUser))
+        ) {
+            return response([
+                'message' => 'You are not allowed to view this software tickets',
+            ], 403);
+        }
 
-    //     if ($authUser->is_admin) {
-    //         $tickets = $software->tickets()->with([
-    //             'ticketType',
-    //             'company' => function ($query) {
-    //                 $query->select('id', 'name', 'logo_url');
-    //             },
-    //             'user' => function ($query) {
-    //                 $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                     ->with('companies:id');
-    //             },
-    //         ])->get();
+        if ($authUser->is_admin) {
+            $tickets = $software->tickets()->with([
+                'ticketType',
+                'company' => function ($query) {
+                    $query->select('id', 'name', 'logo_url');
+                },
+                'user' => function ($query) {
+                    $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                        ->with('companies:id');
+                },
+            ])->get();
 
-    //         return response([
-    //             'tickets' => $tickets,
-    //         ], 200);
-    //     }
+            return response([
+                'tickets' => $tickets,
+            ], 200);
+        }
 
-    //     // Non sappiamo se il software può passare da un'azienda all'altra.
-    //     if ($authUser->is_company_admin) {
-    //         $tickets = $software->tickets()->where('company_id', $software->company_id)->with([
-    //             'ticketType',
-    //             'company' => function ($query) {
-    //                 $query->select('id', 'name', 'logo_url');
-    //             },
-    //             'user' => function ($query) {
-    //                 $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                     ->with('companies:id');
-    //             },
-    //             'referer' => function ($query) {
-    //                 $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                     ->with('companies:id');
-    //             },
-    //             'refererIt' => function ($query) {
-    //                 $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                     ->with('companies:id');
-    //             },
-    //         ])->get();
+        // Non sappiamo se il software può passare da un'azienda all'altra.
+        if ($authUser->is_company_admin) {
+            $tickets = $software->tickets()->where('company_id', $software->company_id)->with([
+                'ticketType',
+                'company' => function ($query) {
+                    $query->select('id', 'name', 'logo_url');
+                },
+                'user' => function ($query) {
+                    $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                        ->with('companies:id');
+                },
+                'referer' => function ($query) {
+                    $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                        ->with('companies:id');
+                },
+                'refererIt' => function ($query) {
+                    $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                        ->with('companies:id');
+                },
+            ])->get();
 
-    //         foreach ($tickets as $ticket) {
-    //             // Nascondere i dati utente se è stato aperto dal supporto
-    //             if ($ticket->user->is_admin) {
-    //                 $ticket->user->id = 1;
-    //                 $ticket->user->name = 'Supporto';
-    //                 $ticket->user->surname = '';
-    //                 $ticket->user->email = 'Supporto';
-    //             }
-    //         }
+            foreach ($tickets as $ticket) {
+                // Nascondere i dati utente se è stato aperto dal supporto
+                if ($ticket->user->is_admin) {
+                    $ticket->user->id = 1;
+                    $ticket->user->name = 'Supporto';
+                    $ticket->user->surname = '';
+                    $ticket->user->email = 'Supporto';
+                }
+            }
 
-    //         return response([
-    //             'tickets' => $tickets,
-    //         ], 200);
-    //     }
+            return response([
+                'tickets' => $tickets,
+            ], 200);
+        }
 
-    //     // Qui devono vedersi tutti i ticket collegati a questo software, aperti dall'utente o in cui è associato come utente interessato (referer)
-    //     if ($software->users->contains($authUser)) {
-    //         $tickets = $software->tickets()
-    //             ->where('user_id', $authUser->id)
-    //             ->orWhere('referer_id', $authUser->id)
-    //             ->with([
-    //                 'ticketType',
-    //                 'company' => function ($query) {
-    //                     $query->select('id', 'name', 'logo_url');
-    //                 },
-    //                 'user' => function ($query) {
-    //                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                         ->with('companies:id');
-    //                 },
-    //                 'referer' => function ($query) {
-    //                     $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
-    //                         ->with('companies:id');
-    //                 },
-    //             ])->get();
+        // Qui devono vedersi tutti i ticket collegati a questo software, aperti dall'utente o in cui è associato come utente interessato (referer)
+        if ($software->users->contains($authUser)) {
+            $tickets = $software->tickets()
+                ->where('user_id', $authUser->id)
+                ->orWhere('referer_id', $authUser->id)
+                ->with([
+                    'ticketType',
+                    'company' => function ($query) {
+                        $query->select('id', 'name', 'logo_url');
+                    },
+                    'user' => function ($query) {
+                        $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                            ->with('companies:id');
+                    },
+                    'referer' => function ($query) {
+                        $query->select('id', 'name', 'surname', 'email', 'is_admin', 'is_company_admin', 'is_deleted')
+                            ->with('companies:id');
+                    },
+                ])->get();
 
-    //         foreach ($tickets as $ticket) {
-    //             // Nascondere i dati utente se è stato aperto dal supporto
-    //             if ($ticket->user->is_admin) {
-    //                 $ticket->user->id = 1;
-    //                 $ticket->user->name = 'Supporto';
-    //                 $ticket->user->surname = '';
-    //                 $ticket->user->email = 'Supporto';
-    //             }
-    //         }
+            foreach ($tickets as $ticket) {
+                // Nascondere i dati utente se è stato aperto dal supporto
+                if ($ticket->user->is_admin) {
+                    $ticket->user->id = 1;
+                    $ticket->user->name = 'Supporto';
+                    $ticket->user->surname = '';
+                    $ticket->user->email = 'Supporto';
+                }
+            }
 
-    //         $tickets = $tickets->values()->toArray();
+            $tickets = $tickets->values()->toArray();
 
-    //         return response([
-    //             'tickets' => $tickets,
-    //         ], 200);
-    //     }
+            return response([
+                'tickets' => $tickets,
+            ], 200);
+        }
 
-    //     return response([
-    //         'message' => 'You are not allowed to view this software tickets',
-    //     ], 403);
-    // }
+        return response([
+            'message' => 'You are not allowed to view this software tickets',
+        ], 403);
+    }
 
     public function exportTemplate()
     {

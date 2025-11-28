@@ -28,10 +28,11 @@ class SoftwareImport implements ToCollection
     // 9 "Data scadenza supporto (gg/mm/aaaa)",
     // 10 "Uso esclusivo (Si/No, Se manca viene impostato su No)",
     // 11 "Stato (testo, preso tra le opzioni nel gestionale, Se manca viene impostato su 'active')",
-    // 12 "ID Azienda",
-    // 13 "ID Tipo software",
-    // 14 "ID utenti (separati da virgola)",
-    // 15 "ID utente responsabile dell'assegnazione (deve essere admin o del supporto)"
+    // 12 "Note",
+    // 13 "ID Azienda",
+    // 14 "ID Tipo software",
+    // 15 "ID utenti (separati da virgola)",
+    // 16 "ID utente responsabile dell'assegnazione (deve essere admin o del supporto)"
 
     protected $authUser;
 
@@ -45,6 +46,9 @@ class SoftwareImport implements ToCollection
         DB::beginTransaction();
 
         try {
+            $statuses = config('app.software_statuses');
+            $normalizedStatuses = array_map('strtolower', $statuses);
+
             foreach ($rows as $row) {
                 // Deve saltare la prima riga contentente i titoli
                 if (strpos(strtolower($row[0]), 'fornitore') !== false) {
@@ -67,16 +71,16 @@ class SoftwareImport implements ToCollection
                 }
 
                 // Verifica tipo software
-                if (!empty($row[13])) {
-                    $softwareType = SoftwareType::find($row[13]);
+                if (!empty($row[14])) {
+                    $softwareType = SoftwareType::find($row[14]);
                     if (!$softwareType) {
                         throw new \Exception('Tipo software non trovato per il software '.$row[1]);
                     }
                 }
 
                 // Verifica azienda
-                if (!empty($row[12])) {
-                    $isCompanyPresent = Company::find($row[12]);
+                if (!empty($row[13])) {
+                    $isCompanyPresent = Company::find($row[13]);
                     if (!$isCompanyPresent) {
                         throw new \Exception('ID Azienda errato per il software '.$row[1]);
                     }
@@ -126,7 +130,13 @@ class SoftwareImport implements ToCollection
                 $licenseType = !empty($row[5]) ? trim($row[5]) : null;
 
                 // Stato (default: active)
-                $status = !empty($row[11]) ? trim($row[11]) : 'active';
+                // $status = !empty($row[11]) ? trim($row[11]) : 'active';
+                // Stato
+                $inputStatus = strtolower(trim($row[11] ?? ''));
+                $statusKey = array_search($inputStatus, $normalizedStatuses);
+                if ($statusKey === false) {
+                    $statusKey = 'active'; // fallback
+                }
 
                 $software = Software::create([
                     'vendor' => $row[0],
@@ -140,9 +150,10 @@ class SoftwareImport implements ToCollection
                     'expiration_date' => $expirationDate,
                     'support_expiration_date' => $supportExpirationDate,
                     'is_exclusive_use' => strtolower($row[10]) == 'si' ? 1 : 0,
-                    'status' => $status,
-                    'company_id' => $row[12] ?? null,
-                    'software_type_id' => $row[13] ?? null,
+                    'status' => $statusKey,
+                    'notes' => $row[12] ?? null,
+                    'company_id' => $row[13] ?? null,
+                    'software_type_id' => $row[14] ?? null,
                 ]);
 
                 if (isset($software->company_id)) {
@@ -155,26 +166,26 @@ class SoftwareImport implements ToCollection
                     ]);
                 }
 
-                if ($row[14] != null) {
-                    if ($row[12] == null) {
+                if ($row[15] != null) {
+                    if ($row[13] == null) {
                         throw new \Exception('ID Azienda mancante per il software '.$row[1]);
                     }
-                    $userIds = explode(',', $row[14]);
+                    $userIds = explode(',', $row[15]);
                     $usersCount = count($userIds);
                     $isCorrect = User::whereIn('id', $userIds)
                         ->get()
                         ->filter(function ($user) use ($row) {
-                            return $user->hasCompany($row[12]);
+                            return $user->hasCompany($row[13]);
                         })
                         ->count() == $usersCount;
                     if (!$isCorrect) {
                         throw new \Exception('ID utenti errati per il software '.$row[1]);
                     }
-                    $users = explode(',', $row[14]);
+                    $users = explode(',', $row[15]);
                     if ($software->is_exclusive_use && count($users) > 1) {
                         throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per il software '.$row[1]);
                     }
-                    $responsibleUser = User::find($row[15]);
+                    $responsibleUser = User::find($row[16]);
                     if (!$responsibleUser) {
                         $responsibleUser = User::find($this->authUser->id);
                     }

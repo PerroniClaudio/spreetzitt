@@ -85,7 +85,6 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
 
     Route::post('/ticket/{ticket_id}/message', [TicketMessageController::class, 'store']);
     Route::get('/ticket/{ticket_id}/messages', [TicketMessageController::class, 'index']);
-    Route::post('/ticket/{ticket_id}/status-updates', [TicketStatusUpdateController::class, 'store']);
     Route::get('/ticket/{ticket_id}/status-updates', [TicketStatusUpdateController::class, 'index']);
 
     // Ticket Causes Routes
@@ -426,17 +425,30 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/form-field-software-list/{typeFormField}', [App\Http\Controllers\SoftwareController::class, 'formFieldSoftwareList']);
     Route::get('/software-list-full', [App\Http\Controllers\SoftwareController::class, 'softwareListWithTrashed']);
     Route::post('/software', [App\Http\Controllers\SoftwareController::class, 'store']);
+    Route::get('/software/export-template', [App\Http\Controllers\SoftwareController::class, 'exportTemplate']);
+    Route::get('/software-assign/export-template', [App\Http\Controllers\SoftwareController::class, 'exportAssignationTemplate']);
+    Route::get('/software-delete/export-template', [App\Http\Controllers\SoftwareController::class, 'exportDeletionTemplate']);
     Route::get('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'show']);
+    Route::get('/fake-software-field', [App\Http\Controllers\SoftwareController::class, 'fakeSoftwareField']);
     Route::patch('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'update']);
-    Route::patch('/software-users/{software}', [App\Http\Controllers\SoftwareController::class, 'updateSoftwareUsers']);
+    Route::patch('/software-users/{software}', [App\Http\Controllers\SoftwareController::class, 'updateSoftwareUsers']); //lato software
+    Route::delete('/software-user/{software}/{user}', [App\Http\Controllers\SoftwareController::class, 'deleteSoftwareUser']);
+    Route::get('/user-software/{user}', [App\Http\Controllers\SoftwareController::class, 'userSoftwareList']); //lato utente
+    Route::patch('/user-software/{user}', [App\Http\Controllers\SoftwareController::class, 'updateUserSoftware']);
     Route::delete('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'destroy']);
     Route::post('/software-restore/{software}', [App\Http\Controllers\SoftwareController::class, 'restoreTrashed']);
     Route::delete('/software-trashed/{software}', [App\Http\Controllers\SoftwareController::class, 'destroyTrashed']);
+    Route::post('/softwaremassive', [App\Http\Controllers\SoftwareController::class, 'importSoftware']);
+    Route::post('/software-assign-massive', [App\Http\Controllers\SoftwareController::class, 'importSoftwareAssignations']);
+    Route::post('/software-delete-massive', [App\Http\Controllers\SoftwareController::class, 'importSoftwareDeletions']);
+    Route::get('software-user/{software}/{user}/download-assignment-pdf', [App\Http\Controllers\SoftwareController::class, 'downloadUserSoftwareAssignmentPdf']);
+    Route::post('/delete-software-user', [App\Http\Controllers\SoftwareController::class, 'deleteSoftwareUser']); //rimuovi un'associazione utente-software
+    Route::get('/software-tickets/{software}', [App\Http\Controllers\SoftwareController::class, 'softwareTickets']);
     Route::get('/software-logs/{software}', [App\Http\Controllers\SoftwareController::class, 'getSoftwareLog']);
-    Route::get('/software-logs-export/{software}', [App\Http\Controllers\SoftwareController::class, 'softwareLogsExport']);
+    Route::get('/software-logs/{software}/export', [App\Http\Controllers\SoftwareController::class, 'softwareLogsExport']);
     Route::get('/software-export-all', [App\Http\Controllers\SoftwareController::class, 'exportAllSoftware']);
     Route::get('/software-export-company/{company}', [App\Http\Controllers\SoftwareController::class, 'exportCompanySoftware']);
-    Route::get('/software-export-user/{user}', [App\Http\Controllers\SoftwareController::class, 'exportUserSoftware']);
+    Route::get('/software/export-user/{user}', [App\Http\Controllers\SoftwareController::class, 'exportUserSoftware']);
 
     // Software Attachments Routes
     Route::get('/software/{software}/attachments', [App\Http\Controllers\SoftwareController::class, 'getAttachments']);

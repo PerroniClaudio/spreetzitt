@@ -59,11 +59,19 @@ class AutoAssignTicket implements ShouldQueue
                 // Invia mail di avviso che un ticket non ha un gruppo associato
                 continue;
             }
-            foreach ($groups as $group) {
-                if ($group->users->count() > 0) {
-                    $adminUser = $group->users->first();
-                    $selectedGroup = $group;
-                    break;
+            
+            if($ticket->group && $ticket->group->users->count() > 0){
+                // Se il ticket ha già un gruppo associato e quel gruppo ha utenti, usa quello
+                $selectedGroup = $ticket->group;
+                $adminUser = $selectedGroup->users->first();
+            }else{
+                // Altrimenti cerca il primo gruppo con utenti
+                foreach ($groups as $group) {
+                    if ($group->users->count() > 0) {
+                        $adminUser = $group->users->first();
+                        $selectedGroup = $group;
+                        break;
+                    }
                 }
             }
             if (! $adminUser) {

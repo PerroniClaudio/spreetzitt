@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Imports\TicketsImport;
 use App\Jobs\SendCloseTicketEmail;
+use App\Jobs\SendGroupWarningEmail;
 use App\Jobs\SendOpenTicketEmail;
 use App\Jobs\SendUpdateEmail;
 use App\Models\Domustart\DomustartTicket;
@@ -786,6 +787,7 @@ class TicketController extends Controller
 
     public function updateStatus(Ticket $ticket, Request $request)
     {
+        $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         // Controlla se lo status è presente nella richiesta e se è tra quelli validi.
@@ -845,6 +847,36 @@ class TicketController extends Controller
         ]);
 
         dispatch(new SendUpdateEmail($update));
+
+        if($ticket->stage_id != $newTicketStageId && !$ticket->handler){
+            // Se il ticket viene spostato in uno stato diverso da "Nuovo" e non ha un gestore, lo assegna all'utente che ha fatto la modifica, se è nel gruppo. Altrimenti al primo del gruppo.
+            $selectedGroup = null;
+            $adminUser = null;
+            
+            if($ticket->group && $ticket->group->users->count() > 0){
+                // Se il ticket ha già un gruppo associato e quel gruppo ha utenti, usa quello
+                $selectedGroup = $ticket->group;
+                // Se l'utente che fa la richiesta è nel gruppo, usa quello, altrimenti prendi il primo
+                $adminUser = $selectedGroup->users->where('id', $request->user()->id)->first() 
+                    ?? $selectedGroup->users->first();
+            }
+            
+            if($adminUser){
+                $ticket->admin_user_id = $adminUser->id;
+                $ticket->save();
+
+                $assignUpdate = TicketStatusUpdate::create([
+                    'ticket_id' => $ticket->id,
+                    'user_id' => $adminUser->id, // Anche se non l'ha richiesto lui, ma è obbligatorio questo campo e deve essere un utente esistente
+                    'content' => "Modifica automatica: Ticket assegnato all'utente ".$adminUser->name.' '.($adminUser->surname ?? ''),
+                    'type' => 'assign',
+                ]);
+
+                dispatch(new SendUpdateEmail($assignUpdate, true));
+                // Invia mail di avviso a tutto il gruppo che un ticket è stato assegnato automaticamente e non è detto che venga gestito da quell'utente.
+                dispatch(new SendGroupWarningEmail('auto-assign', $selectedGroup, $ticket, $assignUpdate));
+            }
+        }
 
         // Invalida la cache per chi ha creato il ticket e per i referenti.
         $ticket->invalidateCache();
