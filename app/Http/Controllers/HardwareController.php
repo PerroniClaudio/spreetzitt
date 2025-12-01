@@ -36,7 +36,13 @@ class HardwareController extends Controller
     {
         $authUser = $request->user();
         if ($authUser->is_admin) {
-            $hardwareList = Hardware::with(['hardwareType', 'company'])->get();
+            $hardwareList = Hardware::with([
+                'hardwareType',
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                }
+            ])->get();
 
             return response([
                 'hardwareList' => $hardwareList,
@@ -45,7 +51,15 @@ class HardwareController extends Controller
 
         if ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
-            $hardwareList = $selectedCompany ? Hardware::where('company_id', $selectedCompany->id)->with(['hardwareType', 'company'])->get() : collect();
+            $hardwareList = $selectedCompany 
+                ? Hardware::where('company_id', $selectedCompany->id)->with([
+                    'hardwareType',
+                    'company',
+                    'users' => function ($query) {
+                        $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                    }
+                ])->get() 
+                : collect();
 
             return response([
                 'hardwareList' => $hardwareList,
@@ -55,7 +69,13 @@ class HardwareController extends Controller
         $selectedCompany = $authUser->selectedCompany();
         $hardwareList = $selectedCompany ? Hardware::where('company_id', $selectedCompany->id)->whereHas('users', function ($query) use ($authUser) {
             $query->where('user_id', $authUser->id);
-        })->with(['hardwareType', 'company'])->get() : collect();
+        })->with([
+            'hardwareType',
+            'company',
+            'users' => function ($query) {
+                $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+            }
+        ])->get() : collect();
 
         return response([
             'hardwareList' => $hardwareList,
@@ -78,15 +98,21 @@ class HardwareController extends Controller
         }
 
         $hardwareList = $hardwareQuery->where('company_id', $company->id)
-            ->with(['hardwareType', 'company', 'users'])
+            ->with([
+                'hardwareType', 
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                }
+            ])
             ->get()
-            ->map(function ($hardware) {
-                return [
-                    ...$hardware->toArray(),
-                    'users' => $hardware->users->pluck('id')->toArray(),
-                ];
-            });
-
+            // ->map(function ($hardware) {
+            //     return [
+            //         ...$hardware->toArray(),
+            //         'users' => $hardware->users->pluck('id')->toArray(),
+            //     ];
+            // });
+                ;
         return response([
             'hardwareList' => $hardwareList,
         ], 200);
@@ -811,11 +837,23 @@ class HardwareController extends Controller
 
         // lato admin si vede tutto e lato utente si deve vedere solo quello della sua azienda
         if ($authUser->is_admin) {
-            $hardwareList = $user->hardware()->with(['hardwareType', 'company'])->get();
+            $hardwareList = $user->hardware()->with([
+                'hardwareType',
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                }
+            ])->get();
         } else {
             $hardwareList = $user->hardware()
                 ->where('company_id', $authUser->selectedCompany()->id)
-                ->with(['hardwareType', 'company'])
+                ->with([
+                    'hardwareType',
+                    'company',
+                    'users' => function ($query) {
+                        $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                    }
+                ])
                 ->get();
         }
 
@@ -1347,8 +1385,9 @@ class HardwareController extends Controller
             : ($user->name ?? $user->id);
         $name = 'user_' . $userFileName . '_hardware_export_' . time() . '.xlsx';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
+        
 
-        return Excel::download(new HardwareExport(null, $user->id, $includeTrashed), $name);
+        return Excel::download(new HardwareExport($authUser->is_admin ? null : $authUser->selectedCompany()?->id, $user->id, $includeTrashed), $name);
     }
 
     /**

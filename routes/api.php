@@ -431,9 +431,9 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'show']);
     Route::get('/fake-software-field', [App\Http\Controllers\SoftwareController::class, 'fakeSoftwareField']);
     Route::patch('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'update']);
-    Route::patch('/software-users/{software}', [App\Http\Controllers\SoftwareController::class, 'updateSoftwareUsers']); //lato software
+    Route::patch('/software-users/{software}', [App\Http\Controllers\SoftwareController::class, 'updateSoftwareUsers']); //lato dettaglio software
     Route::delete('/software-user/{software}/{user}', [App\Http\Controllers\SoftwareController::class, 'deleteSoftwareUser']);
-    Route::get('/user-software/{user}', [App\Http\Controllers\SoftwareController::class, 'userSoftwareList']); //lato utente
+    Route::get('/user-software/{user}', [App\Http\Controllers\SoftwareController::class, 'userSoftwareList']); //lato dettaglio utente
     Route::patch('/user-software/{user}', [App\Http\Controllers\SoftwareController::class, 'updateUserSoftware']);
     Route::delete('/software/{software}', [App\Http\Controllers\SoftwareController::class, 'destroy']);
     Route::post('/software-restore/{software}', [App\Http\Controllers\SoftwareController::class, 'restoreTrashed']);

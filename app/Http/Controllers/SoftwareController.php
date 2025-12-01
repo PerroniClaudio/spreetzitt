@@ -100,14 +100,14 @@ class SoftwareController extends Controller
         }
 
         $softwareList = $softwareQuery->where('company_id', $company->id)
-            ->with(['softwareType', 'company', 'users'])
-            ->get()
-            ->map(function ($software) {
-                return [
-                    ...$software->toArray(),
-                    'users' => $software->users->pluck('id')->toArray(),
-                ];
-            });
+            ->with([
+                'softwareType',
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                }
+            ])
+            ->get();
 
         return response([
             'softwareList' => $softwareList,
@@ -639,11 +639,23 @@ class SoftwareController extends Controller
 
         // lato admin si vede tutto e lato utente si deve vedere solo quello della sua azienda
         if ($authUser->is_admin) {
-            $softwareList = $user->software()->with(['softwareType', 'company'])->get();
+            $softwareList = $user->software()->with([
+                'softwareType',
+                'company',
+                'users' => function ($query) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                },
+            ])->get();
         } else {
             $softwareList = $user->software()
                 ->where('company_id', $authUser->selectedCompany()->id)
-                ->with(['softwareType', 'company'])
+                ->with([
+                    'softwareType', 
+                    'company',
+                    'users' => function ($query) {
+                        $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                    },
+                ])
                 ->get();
         }
 
@@ -1263,7 +1275,7 @@ class SoftwareController extends Controller
         $name = 'user_' . $userFileName . '_software_export_' . time() . '.xlsx';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
 
-        return Excel::download(new SoftwareExport(null, $user->id, $includeTrashed), $name);
+        return Excel::download(new SoftwareExport($authUser->is_admin ? null : $authUser->selectedCompany()?->id, $user->id, $includeTrashed), $name);
     }
 
     /**

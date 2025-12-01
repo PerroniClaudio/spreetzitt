@@ -475,7 +475,7 @@ class TicketReminderController extends Controller
      */
     private function buildEventBody(TicketReminder $reminder): string
     {
-        $ticketUrl = config('app.url').'/ticket/'.$reminder->ticket_id;
+        $ticketUrl = config('app.frontend_url').'/support/admin/ticket/'.$reminder->ticket_id;
         $reminderType = $reminder->is_ticket_deadline ? '🚨 SCADENZA TICKET' : 'Ticket Reminder';
 
         return "
