@@ -44,7 +44,7 @@ class AutoAssignTicket implements ShouldQueue
         Log::info('AutoAssignTicket job started');
         $newTicketStageId = TicketStage::where('system_key', 'new')->value('id');
         // $unassignedTickets = Ticket::where('status', 0)->get();
-        $unassignedTickets = Ticket::where('stage_id', $newTicketStageId)->whereNull('admin_user_id')->get();
+        $unassignedTickets = Ticket::where('stage_id', $newTicketStageId)->orWhereNull('admin_user_id')->get();
 
         foreach ($unassignedTickets as $ticket) {
 
