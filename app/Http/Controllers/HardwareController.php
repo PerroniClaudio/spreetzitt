@@ -167,10 +167,21 @@ class HardwareController extends Controller
             $query = $authUser->hardware();
         }
         // Aggiungi le relazioni
-        $query->with(['hardwareType', 'company']);
+        $query->with([
+            'hardwareType', 
+            'company',
+            'users' => function ($query) {
+                $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+            }
+        ]);
         // Se necessario rimuove gli hardware che non hanno il tipo associato
         if (! $typeFormField->include_no_type_hardware) {
             $query->whereNotNull('hardware_type_id');
+        }
+        if ($typeFormField->hardware_accessory_include === 'only_accessories') {
+            $query->where('is_accessory', true);
+        } elseif ($typeFormField->hardware_accessory_include === 'no_accessories') {
+            $query->where('is_accessory', false);
         }
         // Se necessario limitare a determinati tipi di hardware (tenendo conto dell'hardware che non ha un tipo associato)
         if ($typeFormField->hardwareTypes->count() > 0) {
@@ -239,7 +250,8 @@ class HardwareController extends Controller
         $data = $request->validate([
             'make' => 'required|string',
             'model' => 'required|string',
-            'serial_number' => 'required|string',
+            'serial_number' => 'required_unless:is_accessory,1|nullable|string',
+            'is_accessory' => 'sometimes|boolean',
             'is_exclusive_use' => 'required|boolean',
             'status_at_purchase' => 'required|string|in:'.implode(',', $allowedStatusesAtPurchase),
             'status' => 'required|string|in:'.implode(',', $allowedStatuses),
@@ -255,13 +267,13 @@ class HardwareController extends Controller
             'users' => 'nullable|array',
         ]);
 
-        // Controlla cha almeno uno dei due sia impostato
-        $request->validate([
-            'company_asset_number' => 'nullable|string',
-            'support_label' => 'nullable|string',
-        ], [
-            'at_least_one.required' => 'Deve essere specificato almeno uno tra company_asset_number e support_label.',
-        ]);
+        // Se non è un accessorio, controlla che almeno uno tra company_asset_number e support_label sia impostato
+        $isAccessory = isset($data['is_accessory']) ? (bool) $data['is_accessory'] : false;
+        if (! $isAccessory && empty($data['company_asset_number']) && empty($data['support_label'])) {
+            return response([
+                'message' => 'Deve essere specificato almeno uno tra company_asset_number e support_label.',
+            ], 422);
+        }
 
         if (isset($data['company_id']) && ! Company::find($data['company_id'])) {
             return response([
@@ -404,7 +416,8 @@ class HardwareController extends Controller
         $data = $request->validate([
             'make' => 'required|string',
             'model' => 'required|string',
-            'serial_number' => 'required|string',
+            'serial_number' => 'required_unless:is_accessory,1|nullable|string',
+            'is_accessory' => 'sometimes|boolean',
             'is_exclusive_use' => 'required|boolean',
             'status_at_purchase' => 'required|string|in:'.implode(',', $allowedStatusesAtPurchase),
             'status' => 'required|string|in:'.implode(',', $allowedStatuses),
@@ -424,6 +437,14 @@ class HardwareController extends Controller
             return response([
                 'message' => 'Company not found',
             ], 404);
+        }
+
+        // Se non è un accessorio, controlla che almeno uno tra company_asset_number e support_label sia impostato
+        $isAccessory = isset($data['is_accessory']) ? (bool) $data['is_accessory'] : $hardware->is_accessory;
+        if (! $isAccessory && empty($data['company_asset_number']) && empty($data['support_label'])) {
+            return response([
+                'message' => 'Deve essere specificato almeno uno tra company_asset_number e support_label.',
+            ], 422);
         }
 
         // controllare le associazioni utenti

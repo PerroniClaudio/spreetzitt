@@ -15,23 +15,25 @@ use Maatwebsite\Excel\Concerns\ToCollection;
 
 class HardwareImport implements ToCollection
 {
-    // TEMPLATE IMPORT:
+    // TEMPLATE IMPORT (INDICI):
     // 0 "Marca *",
     // 1 "Modello *",
-    // 2 "Seriale *",
+    // 2 "Seriale (* se non è un accessorio)",
     // 3 "Tipo (testo, preso dalla lista nel gestionale)",
     // 4 "Data d'acquisto (gg/mm/aaaa)",
     // 5 "Proprietà (testo, preso tra le opzioni nel gestionale)",
     // 6 "Specificare (se proprietà è Altro)",
-    // 7 "Cespite aziendale (compilare almeno uno tra cespite aziendale e identificativo)",
-    // 8 "Identificativo (compilare almeno uno tra cespite aziendale e identificativo)",
+    // 7 "Cespite aziendale (se non è un accessorio, compilare almeno uno tra cespite aziendale e identificativo)",
+    // 8 "Identificativo (se non è un accessorio, compilare almeno uno tra cespite aziendale e identificativo)",
     // 9 "Note",
     // 10 "Uso esclusivo (Si/No, Se manca viene impostato su No)",
     // 11 "ID Azienda",
     // 12 "ID utenti (separati da virgola)",
-    // 13 "ID utente responsabile dell'assegnazione (deve essere admin o del supporto)"
+    // 13 "ID utente responsabile dell'assegnazione (deve essere admin o del supporto)",
     // 14 "Posizione (testo, preso tra le opzioni nel gestionale, Se manca viene impostato su 'Azienda')",
-    // 15 "Stato (testo, preso tra le opzioni nel gestionale, Se manca viene impostato su 'Nuovo')"
+    // 15 "Stato all'acquisto (testo, preso tra le opzioni nel gestionale, Se manca viene impostato su 'Nuovo')",
+    // 16 "Stato (testo, preso tra le opzioni nel gestionale, Se manca viene impostato su 'Nuovo')",
+    // 17 'È un accessorio (Si/No, Se manca viene impostato su No)'
 
     protected $authUser;
 
@@ -51,8 +53,8 @@ class HardwareImport implements ToCollection
             $normalizedStatuses = array_map('strtolower', $statuses);
 
             foreach ($rows as $row) {
-                // Deve saltare la prima riga contentente i titoli
-                if (strpos(strtolower($row[2]), 'seriale') !== false) {
+                // Deve saltare la prima riga contentente i titoli (controlla Marca o Seriale)
+                if ((isset($row[0]) && strpos(strtolower($row[0]), 'marca') !== false) || (isset($row[2]) && strpos(strtolower($row[2]), 'seriale') !== false)) {
                     continue;
                 }
 
@@ -62,28 +64,66 @@ class HardwareImport implements ToCollection
                 if (empty($row[1])) {
                     throw new \Exception('Il campo modello è vuoto in una delle righe.');
                 }
-                if (empty($row[2])) {
-                    throw new \Exception('Il campo seriale è vuoto in una delle righe.');
+
+                // serial_number può essere vuoto per gli accessori
+                $serial = isset($row[2]) ? trim($row[2]) : null;
+                $companyAsset = isset($row[7]) ? trim($row[7]) : null;
+                $supportLabel = isset($row[8]) ? trim($row[8]) : null;
+
+                // default: accessory flag not provided -> default to false (non-accessory)
+                $isAccessory = false;
+
+                // If the template provides an explicit accessory flag (last column), parse Si/No (case-insensitive)
+                $accessoryField = isset($row[17]) ? trim($row[17]) : null;
+                if ($accessoryField !== null && $accessoryField !== '') {
+                    $lower = mb_strtolower($accessoryField);
+                    if (in_array($lower, ['si', 's', 'yes', 'y'])) {
+                        $isAccessory = true;
+                    } elseif (in_array($lower, ['no', 'n'])) {
+                        $isAccessory = false;
+                    }
                 }
 
-                $isPresent = Hardware::where('serial_number', $row[2])->first();
+                if(!$isAccessory) {
+                    if(empty($serial)){
+                        throw new \Exception('Deve essere specificato il seriale per l\'hardware non accessorio nella riga con marca '.$row[0].' e modello '.$row[1].'.');
+                    };
+                    if(empty($companyAsset) && empty($supportLabel)){
+                        throw new \Exception('Deve essere specificato il cespite aziendale o l\'identificativo per l\'hardware non accessorio nella riga con seriale '.($serial ?? '[vuoto]').'.');
+                    };
+                }
 
-                if ($isPresent) {
-                    throw new \Exception('Hardware con seriale '.$row[2].' già presente. ID: '.$isPresent->id);
-                    // continue;
+                $isPresent = null;
+                if (! empty($serial)) {
+                    $isPresent = Hardware::where('serial_number', $serial)->first();
+                    if ($isPresent) {
+                        throw new \Exception('Hardware con seriale '.$serial.' già presente. ID: '.$isPresent->id);
+                    }
+                } else {
+                    // Se seriale vuoto, proviamo a fare matching solo se company_asset_number o support_label sono presenti
+                    if (! empty($companyAsset) || ! empty($supportLabel)) {
+                        $query = Hardware::query();
+                        if (! empty($companyAsset)) {
+                            $query->where('company_asset_number', $companyAsset);
+                        }
+                        if (! empty($supportLabel)) {
+                            $query->orWhere('support_label', $supportLabel);
+                        }
+                        $isPresent = $query->first();
+                    }
                 }
 
                 if (! empty($row[3])) {
                     $hardwareType = HardwareType::whereRaw('LOWER(name) = ?', [strtolower($row[3])])->first();
                     if (! $hardwareType) {
-                        throw new \Exception('Tipo hardware non trovato per l\'hardware con seriale '.$row[2]);
+                        throw new \Exception('Tipo hardware non trovato per la riga con seriale '.($serial ?? '[vuoto]').'');
                     }
                 }
 
                 if (! empty($row[11])) {
                     $isCompanyPresent = Company::find($row[11]);
                     if (! $isCompanyPresent) {
-                        throw new \Exception('ID Azienda errato per l\'hardware con seriale '.$row[2]);
+                        throw new \Exception('ID Azienda errato per la riga con seriale '.($serial ?? '[vuoto]').'');
                     }
                 }
 
@@ -98,11 +138,11 @@ class HardwareImport implements ToCollection
                 if (! empty($row[5])) {
                     if (! (in_array(strtolower($row[5]), $lowerOwnershipTypes))
                     ) {
-                        throw new \Exception('1 - Tipo di proprietà non valido per l\'hardware con seriale '.$row[2].'valore: '.$row[5].' - Possibili valori: '.implode(', ', $lowerOwnershipTypes));
+                        throw new \Exception('1 - Tipo di proprietà non valido per la riga con seriale '.($serial ?? '[vuoto]').' valore: '.$row[5].' - Possibili valori: '.implode(', ', $lowerOwnershipTypes));
                     }
                     if (! $ownershipType
                     ) {
-                        throw new \Exception('2 - Tipo di proprietà non valido per l\'hardware con seriale '.$row[2]);
+                        throw new \Exception('2 - Tipo di proprietà non valido per la riga con seriale '.($serial ?? '[vuoto]').'');
                     }
                 }
 
@@ -117,7 +157,7 @@ class HardwareImport implements ToCollection
                             $purchaseDate = Carbon::createFromFormat('d/m/Y', $row[4]);
                         }
                     } catch (\Exception $e) {
-                        throw new \Exception('Formato data non valido per l\'hardware con seriale '.$row[2].'. Valore: '.$row[4]);
+                        throw new \Exception('Formato data non valido per la riga con seriale '.($serial ?? '[vuoto]').'. Valore: '.$row[4]);
                     }
                 }
 
@@ -128,30 +168,44 @@ class HardwareImport implements ToCollection
                     $positionKey = 'company'; // fallback
                 }
 
-                // Stato
-                $inputStatus = strtolower(trim($row[15] ?? ''));
+                // Stato all'acquisto
+                $inputStatusAtPurchase = strtolower(trim($row[15] ?? ''));
+                $statusAtPurchaseKey = array_search($inputStatusAtPurchase, $normalizedStatusesAtPurchase = array_map('strtolower', config('app.hardware_statuses_at_purchase')) );
+                if ($statusAtPurchaseKey === false) {
+                    $statusAtPurchaseKey = 'new'; // fallback
+                }
+
+                // Stato (attuale)
+                $inputStatus = strtolower(trim($row[16] ?? ''));
                 $statusKey = array_search($inputStatus, $normalizedStatuses);
                 if ($statusKey === false) {
                     $statusKey = 'new'; // fallback
                 }
 
-                // Il controllo che ci sia almeno uno tra cespite aziendale e identificativo è fatto nel boot del modello, nel metodo creating.
-                $hardware = Hardware::create([
-                    'make' => $row[0],
-                    'model' => $row[1],
-                    'serial_number' => $row[2],
-                    'hardware_type_id' => $hardwareType->id ?? null,
-                    'purchase_date' => $purchaseDate,
-                    'ownership_type' => $ownershipType ?? null,
-                    'ownership_type_note' => $row[6] ?? null,
-                    'company_asset_number' => $row[7] ?? null,
-                    'support_label' => $row[8] ?? null,
-                    'notes' => $row[9] ?? null,
-                    'is_exclusive_use' => strtolower($row[10]) == 'si' ? 1 : 0,
-                    'company_id' => $row[11] ?? null,
-                    'status' => $statusKey,
-                    'position' => $positionKey,
-                ]);
+                // Se troviamo già un record via matching (seriale, o company_asset/support_label), interrompiamo l'import per evitare aggiornamenti
+                if ($isPresent) {
+                    throw new \Exception('Record già presente (matching) per la riga con seriale '.($serial ?? '[vuoto]').'. ID esistente: '.$isPresent->id);
+                } else {
+                    // Il controllo che ci sia almeno uno tra cespite aziendale e identificativo è fatto nel boot del modello, nel metodo creating.
+                    $hardware = Hardware::create([
+                        'make' => $row[0],
+                        'model' => $row[1],
+                        'serial_number' => $serial,
+                        'is_accessory' => $isAccessory ? 1 : 0,
+                        'hardware_type_id' => $hardwareType->id ?? null,
+                        'purchase_date' => $purchaseDate,
+                        'ownership_type' => $ownershipType ?? null,
+                        'ownership_type_note' => $row[6] ?? null,
+                        'company_asset_number' => $companyAsset ?? null,
+                        'support_label' => $supportLabel ?? null,
+                        'notes' => $row[9] ?? null,
+                        'is_exclusive_use' => strtolower($row[10]) == 'si' ? 1 : 0,
+                        'company_id' => $row[11] ?? null,
+                        'status_at_purchase' => $statusAtPurchaseKey ?? null,
+                        'status' => $statusKey,
+                        'position' => $positionKey,
+                    ]);
+                }
 
                 if (isset($hardware->company_id)) {
                     HardwareAuditLog::create([

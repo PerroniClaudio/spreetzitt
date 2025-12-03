@@ -19,6 +19,7 @@ class Hardware extends Model
         'serial_number',
         'company_asset_number',
         'support_label',
+        'is_accessory',
         'purchase_date',
         'company_id',
         'hardware_type_id',
@@ -38,9 +39,13 @@ class Hardware extends Model
 
         static::creating(function ($model) {
             // Esegue controlli prima di salvare il modello.
-            // Deve esserci obbligatoriamente o il cespite aziendale o l'identificativo.
-            if (! $model->company_asset_number && ! $model->support_label) {
+            // Se non è un accessorio, deve esserci obbligatoriamente o il cespite aziendale o l'identificativo.
+            if (empty($model->is_accessory) && ! $model->company_asset_number && ! $model->support_label) {
                 throw new \Exception('Deve essere specificato il cespite aziendale o l\'identificativo.');
+            }
+            // Se non è un accessorio, serial_number è obbligatorio (gli accessori possono non avere seriale)
+            if (empty($model->is_accessory) && empty($model->serial_number)) {
+                throw new \Exception('Deve essere specificato il seriale per l\'hardware.');
             }
         });
 
@@ -66,8 +71,16 @@ class Hardware extends Model
             $originalData = $model->getOriginal();
             $updatedData = $model->toArray();
 
-            if (! $updatedData['company_asset_number'] && ! $updatedData['support_label']) {
+            // Se non è un accessorio, deve esserci obbligatoriamente o il cespite aziendale o l'identificativo.
+            $isAccessory = $updatedData['is_accessory'] ?? $model->is_accessory ?? false;
+
+            if (! $isAccessory && empty($updatedData['company_asset_number']) && empty($updatedData['support_label'])) {
                 throw new \Exception('Deve essere specificato il cespite aziendale o l\'identificativo.');
+            }
+
+            // Se non è un accessorio, serial_number è obbligatorio
+            if (! $isAccessory && empty($updatedData['serial_number'])) {
+                throw new \Exception('Deve essere specificato il seriale per l\'hardware.');
             }
 
             // Trasforma l'eventuale array di oggetti "users" in array di numeri (id). gli altri li toglie perchè non sono previsti.

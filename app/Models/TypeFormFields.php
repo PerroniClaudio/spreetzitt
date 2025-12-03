@@ -28,7 +28,29 @@ class TypeFormFields extends Model
         'property_limit',
         'include_no_type_property',
         'property_types_list',
+        'hardware_accessory_include',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $model): void {
+            // Per il tipo hardware controlla che il valore di hardware_accessory_include sia valido
+            if ($model->field_type == 'hardware') {
+                $hardware_accessory_include_values = config('app.hardware_accessory_include_values');
+                if(! $hardware_accessory_include_values) {
+                    throw new \InvalidArgumentException(
+                        'La configurazione per hardware_accessory_include_values non è definita.'
+                    );
+                }
+                $allowed = array_keys($hardware_accessory_include_values ?? []);
+                if (! in_array($model->hardware_accessory_include, $allowed, true)) {
+                    throw new \InvalidArgumentException(
+                        "Valore non valido per hardware_accessory_include: {$model->hardware_accessory_include}"
+                    );
+                }
+            }
+        });
+    }
 
     public function ticketType()
     {

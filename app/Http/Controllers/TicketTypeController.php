@@ -427,6 +427,7 @@ class TicketTypeController extends Controller
 
     public function createFormField(Request $request)
     {
+        $hardware_accessory_include_values = array_keys(config('app.hardware_accessory_include_values'));
 
         $validated = $request->validate([
             'ticket_type_id' => 'required',
@@ -437,6 +438,7 @@ class TicketTypeController extends Controller
             'placeholder' => 'required',
             'hardware_limit' => 'required_if:field_type,hardware|integer',
             'include_no_type_hardware' => 'required_if:field_type,hardware|boolean',
+            'hardware_accessory_include' => 'required_if:field_type,hardware|string|in:' . implode(',', $hardware_accessory_include_values),
             'hardware_types' => 'array|exists:hardware_types,id|nullable',
             'property_limit' => 'required_if:field_type,property|integer',
             'include_no_type_property' => 'required_if:field_type,property|boolean',

@@ -317,6 +317,12 @@ return [
         'dismissed' => 'Dismesso',
     ],
 
+    'hardware_accessory_include_values' => [
+        'only_accessories' => 'Solo accessori',
+        'no_accessories' => 'Escludi accessori',
+        'both' => 'Includi tutto',
+    ],
+    
     // Ancora non vengono usate, ma da implementare.
     // 'problem_causes' => [
     //     'user_data_entry' => 'Errore del cliente in inserimento dati',
