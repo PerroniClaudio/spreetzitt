@@ -639,13 +639,13 @@ class HardwareController extends Controller
 
         $company = $hardware->company;
 
-        if (! isEmpty($data['users']) && ! $company) {
+        if (! empty($data['users']) && ! $company) {
             return response([
                 'message' => 'Hardware must be associated with a company to add users',
             ], 404);
         }
 
-        if ($company && ! isEmpty($data['users'])) {
+        if ($company && ! empty($data['users'])) {
             // $isFail = User::whereIn('id', $data['users'])->where('company_id', '!=', $company->id)->exists();
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
@@ -738,13 +738,13 @@ class HardwareController extends Controller
 
         $userHasAtLeastOneCompany = $user->companies()->exists();
 
-        if (! isEmpty($data['hardware']) && ! $userHasAtLeastOneCompany) {
+        if (! empty($data['hardware']) && ! $userHasAtLeastOneCompany) {
             return response([
                 'message' => 'User must be associated with a company to add hardware',
             ], 404);
         }
 
-        if ($userHasAtLeastOneCompany && ! isEmpty($data['hardware'])) {
+        if ($userHasAtLeastOneCompany && ! empty($data['hardware'])) {
             // $isFail = Hardware::whereIn('id', $data['hardware'])->where('company_id', '!=', $company->id)->exists();
             $isFail = Hardware::whereIn('id', $data['hardware'])
                 ->whereNotIn('company_id', $user->companies()->pluck('companies.id'))
