@@ -447,7 +447,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/software-logs/{software}', [App\Http\Controllers\SoftwareController::class, 'getSoftwareLog']);
     Route::get('/software-logs/{software}/export', [App\Http\Controllers\SoftwareController::class, 'softwareLogsExport']);
     Route::get('/software-export-all', [App\Http\Controllers\SoftwareController::class, 'exportAllSoftware']);
-    Route::get('/software-export-company/{company}', [App\Http\Controllers\SoftwareController::class, 'exportCompanySoftware']);
+    Route::get('/software/export-company/{company}', [App\Http\Controllers\SoftwareController::class, 'exportCompanySoftware']);
     Route::get('/software/export-user/{user}', [App\Http\Controllers\SoftwareController::class, 'exportUserSoftware']);
 
     // Software Attachments Routes
