@@ -95,7 +95,7 @@ class TicketReportExportController extends Controller
                 'message' => 'The user must be at least company admin.',
             ], 401);
         }
-        if ($user['is_company_admin'] == 1 && $user->selectedCompany()->id != $ticketReportExport->company_id) {
+        if ($user['is_admin'] != 1 && ($user['is_company_admin'] == 1 && $user->selectedCompany()->id != $ticketReportExport->company_id)) {
             return response([
                 'message' => 'You can\'t download this report.',
             ], 401);
