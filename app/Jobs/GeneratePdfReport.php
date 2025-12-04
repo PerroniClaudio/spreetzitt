@@ -167,6 +167,13 @@ class GeneratePdfReport implements ShouldQueue
                         continue;
                     }
 
+                    if($ticket->ticketType->is_scheduling && !$ticket->is_scheduling_time_approved) {
+                        $loadErrorsOnly = true;
+                        $errorsString .= '- #'.$ticket->id.' è un\'attività programmata senza approvazione dei tempi.';
+
+                        continue;
+                    }
+
                     if (! $ticket->actual_processing_time && !$ticket->ticketType->is_master) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' non ha il tempo di lavoro.';

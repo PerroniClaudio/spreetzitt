@@ -668,6 +668,12 @@ class GeneratePdfProjectReport implements ShouldQueue
         $errorsString = '';
 
         foreach ($tickets as $ticket) {
+
+            // Per ora ancora non ci sono i ticket di tipo scheduling in questo report. però il controllo lo metto adesso, altrimenti mi scordo
+            if($ticket->ticketType->is_scheduling && !$ticket->is_scheduling_time_approved) {
+                $errorsString .= '- #'.$ticket->id.' è di tipo scheduling ma non ha il tempo approvato. ';
+            }
+
             if (! $ticket->actual_processing_time && ! ($ticket->ticketType && $ticket->ticketType->is_master)) {
                 $errorsString .= '- #'.$ticket->id.' non ha il tempo di lavoro. ';
             }

@@ -115,6 +115,77 @@ class TicketController extends Controller
     }
 
     /**
+     * Recupera i ticket di tipo scheduling con i relativi tempi per un ticket specifico.
+     */
+    public function getSchedulingTicketsWithTimes(Ticket $ticket)
+    {
+        // Da implementare: questa funzione deve restituire i ticket di tipo scheduling con i relativi tempi per il ticket specificato.
+        return response([
+            'message' => 'Funzione da implementare.',
+            'data' => [],
+        ], 400);
+        // Implementazione del metodo
+    }
+
+    /**
+     * Approva il tempo di scheduling per un ticket (solo superadmin).
+     */
+    public function approveSchedulingTime(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+        if ($user['is_superadmin'] != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        if ($ticket->is_scheduling_time_approved) {
+            return response(['ticket' => $ticket, 'message' => 'Scheduling time already approved.'], 200);
+        }
+
+        $ticket->is_scheduling_time_approved = 1;
+        $ticket->save();
+
+        TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'content' => 'Tempo di attività programmata approvato.',
+            'type' => 'scheduling',
+        ]);
+
+        $ticket->invalidateCache();
+
+        return response(['ticket' => $ticket], 200);
+    }
+
+    /**
+     * Rimuove l'approvazione del tempo di scheduling per un ticket (solo superadmin).
+     */
+    public function removeApproveSchedulingTime(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+        if ($user['is_superadmin'] != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $ticket->is_scheduling_time_approved) {
+            return response(['ticket' => $ticket, 'message' => 'Scheduling time approval already removed.'], 200);
+        }
+
+        $ticket->is_scheduling_time_approved = 0;
+        $ticket->save();
+
+        TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $user->id,
+            'content' => 'Approvazione del tempo di attività programmata rimossa.',
+            'type' => 'scheduling',
+        ]);
+
+        $ticket->invalidateCache();
+
+        return response(['ticket' => $ticket], 200);
+    }
+
+    /**
      * Show the form for creating a new resource.
      */
     public function create()

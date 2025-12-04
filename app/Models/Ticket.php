@@ -54,6 +54,7 @@ class Ticket extends Model
         'assigned',
         'last_assignment_id',
         'scheduled_duration',
+        'is_scheduling_time_approved', // indica se è stato approvato il tempo previsto attività programmata e ticket collegati (controllo umano se i tempi non coincidono)
         'project_name',
         'project_start',
         'project_end',
