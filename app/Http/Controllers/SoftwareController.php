@@ -1554,7 +1554,7 @@ class SoftwareController extends Controller
         // Log audit
         SoftwareAuditLog::create([
             'log_subject' => 'software_attachment',
-            'log_type' => 'soft_delete',
+            'log_type' => 'delete',
             'modified_by' => $authUser->id,
             'software_id' => $software->id,
             'old_data' => json_encode($attachmentData),
@@ -1645,7 +1645,7 @@ class SoftwareController extends Controller
         // Log audit
         SoftwareAuditLog::create([
             'log_subject' => 'software_attachment',
-            'log_type' => 'force_delete',
+            'log_type' => 'permanent_delete',
             'modified_by' => $authUser->id,
             'software_id' => $software->id,
             'old_data' => json_encode($attachmentData),

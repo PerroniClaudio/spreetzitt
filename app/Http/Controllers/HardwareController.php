@@ -1687,7 +1687,7 @@ class HardwareController extends Controller
         // Log audit
         HardwareAuditLog::create([
             'log_subject' => 'hardware_attachment',
-            'log_type' => 'soft_delete',
+            'log_type' => 'delete',
             'modified_by' => $authUser->id,
             'hardware_id' => $hardware->id,
             'old_data' => json_encode($attachmentData),
@@ -1778,7 +1778,7 @@ class HardwareController extends Controller
         // Log audit
         HardwareAuditLog::create([
             'log_subject' => 'hardware_attachment',
-            'log_type' => 'force_delete',
+            'log_type' => 'permanent_delete',
             'modified_by' => $authUser->id,
             'hardware_id' => $hardware->id,
             'old_data' => json_encode($attachmentData),

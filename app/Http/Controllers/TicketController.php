@@ -117,14 +117,33 @@ class TicketController extends Controller
     /**
      * Recupera i ticket di tipo scheduling con i relativi tempi per un ticket specifico.
      */
-    public function getSchedulingTicketsWithTimes(Ticket $ticket)
+    public function getSchedulingTicketsWithTimes(Ticket $ticket, Request $request)
     {
-        // Da implementare: questa funzione deve restituire i ticket di tipo scheduling con i relativi tempi per il ticket specificato.
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        // Costruisci la query in modo che possa essere modificata esternamente
+        $query = Ticket::query()
+            ->whereHas('ticketType', function ($q) {
+                $q->where('is_scheduling', true);
+            });
+        
+        // Se il parametro with_open è false o non presente, mostra solo i ticket chiusi
+        if (! $request->has('with_open') || $request->query('with_open') === 'false') {
+            $query->where('stage_id', $closedStageId);
+        }
+        // Se il parametro with_approved è true, mostra solo i ticket senza approvazione del tempo
+        if ($request->has('with_approved') && $request->query('with_approved') === 'true') {
+            $query->where('is_scheduling_time_approved', false);
+        }
+
+        $tickets = $query
+            ->with(['ticketType:id,name', 'user:id,name,surname', 'stage:id,name'])
+            ->withSum('schedulingSlaves as scheduling_slaves_total_time', 'actual_processing_time')
+            ->get();
+
         return response([
-            'message' => 'Funzione da implementare.',
-            'data' => [],
-        ], 400);
-        // Implementazione del metodo
+            'tickets' => $tickets,
+        ], 200);
     }
 
     /**
@@ -2017,6 +2036,49 @@ class TicketController extends Controller
                 ->where('is_billable', null)
                 ->count();
         }
+
+        return response([
+            'counters' => $counters,
+        ], 200);
+    }
+    
+    /**
+     * Show counters of all tickets (if superadmin) or only those belonging to the authenticated admin groups.
+     */
+    public function adminSchedulingTimeCounters(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_superadmin'] != 1) {
+            return response([
+                'message' => 'Unauthorized.',
+            ], 401);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        // Query ottimizzata per contare i ticket di tipo scheduling non ancora approvati
+        $counters = DB::selectOne('
+            SELECT 
+                COUNT(CASE WHEN t.stage_id != ? AND t.is_scheduling_time_approved = 0 THEN 1 END) as still_open,
+                COUNT(CASE WHEN t.stage_id = ? AND t.is_scheduling_time_approved = 0 THEN 1 END) as to_approve,
+                COUNT(CASE WHEN t.stage_id = ? AND t.is_scheduling_time_approved = 0 AND EXISTS (
+                    SELECT 1 FROM tickets s WHERE s.scheduling_id = t.id LIMIT 1
+                ) THEN 1 END) as to_approve_with_slaves,
+                COUNT(CASE WHEN t.stage_id = ? AND t.is_scheduling_time_approved = 0 AND NOT EXISTS (
+                    SELECT 1 FROM tickets s WHERE s.scheduling_id = t.id LIMIT 1
+                ) THEN 1 END) as to_approve_without_slaves
+            FROM tickets t
+            INNER JOIN ticket_types tt ON t.type_id = tt.id
+            WHERE tt.is_scheduling = 1
+        ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId]);
+
+        $counters = [
+            'still_open' => $counters->still_open,
+            'to_approve' => $counters->to_approve,
+            'to_approve_with_slaves' => $counters->to_approve_with_slaves,
+            'to_approve_without_slaves' => $counters->to_approve_without_slaves,
+        ];
 
         return response([
             'counters' => $counters,

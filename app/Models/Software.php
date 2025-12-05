@@ -78,7 +78,7 @@ class Software extends Model
 
         // Aggiunge un log quando viene eliminato un software (soft delete)
         static::deleting(function ($model) {
-            $deleteType = $model->isForceDeleting() ? 'force_delete' : 'soft_delete';
+            $deleteType = $model->isForceDeleting() ? 'permanent_delete' : 'delete';
 
             $model->users = $model->users()->pluck('user_id')->toArray();
             SoftwareAuditLog::create([
