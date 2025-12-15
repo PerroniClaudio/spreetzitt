@@ -466,12 +466,14 @@ class VertexAiController extends Controller
                 'id', 'user_id', 'company_id', 'status', 'stage_id', 'description', 'priority',
                 'due_date', 'created_at', 'updated_at', 'type_id', 'admin_user_id', 'group_id',
                 'assigned', 'sla_take', 'sla_solve', 'is_user_error', 'actual_processing_time',
-                'is_billable', 'source', 'is_rejected', 'parent_ticket_id',
+                'is_billable', 'source', 'is_rejected', 'parent_ticket_id', 'ticket_cause_id',
+                'project_id', 'master_id', 'scheduling_id', 'scheduled_duration', 'work_mode',
             ],
             'ticket_types' => [
                 'id', 'name', 'ticket_type_category_id', 'company_id', 'default_priority',
                 'default_sla_solve', 'default_sla_take', 'is_deleted', 'description',
-                'expected_processing_time', 'expected_is_billable', 'created_at', 'updated_at',
+                'expected_processing_time', 'expected_is_billable', 'is_project', 'is_master',
+                'is_scheduling', 'created_at', 'updated_at',
             ],
             'ticket_type_categories' => [
                 'id', 'name', 'is_problem', 'is_request', 'is_deleted', 'created_at', 'updated_at',
@@ -491,12 +493,22 @@ class VertexAiController extends Controller
                 'id', 'ticket_id', 'user_id', 'content', 'old_stage_id', 'new_stage_id',
                 'type', 'show_to_user', 'created_at', 'updated_at',
             ],
+            'ticket_causes' => [
+                'id', 'name', 'created_at', 'updated_at', 'deleted_at',
+            ],
+            'ticket_report_pdf_exports' => [
+                'id', 'file_name', 'file_path', 'start_date', 'end_date', 'company_id',
+                'is_generated', 'is_user_generated', 'is_failed', 'error_message', 'user_id',
+                'send_email', 'is_ai_generated', 'ai_query', 'ai_prompt',
+                'created_at', 'updated_at',
+            ],
 
             // === HARDWARE MANAGEMENT ===
             'hardware' => [
                 'id', 'make', 'model', 'serial_number', 'company_asset_number', 'support_label',
                 'purchase_date', 'company_id', 'hardware_type_id', 'ownership_type',
-                'status', 'position', 'is_exclusive_use', 'created_at', 'updated_at',
+                'status', 'position', 'is_exclusive_use', 'is_accessory', 'created_at', 'updated_at',
+                'deleted_at',
             ],
             'hardware_types' => [
                 'id', 'name', 'created_at', 'updated_at',
@@ -504,6 +516,42 @@ class VertexAiController extends Controller
             'hardware_user' => [
                 'id', 'hardware_id', 'user_id', 'created_by', 'responsible_user_id',
                 'created_at', 'updated_at',
+            ],
+            'hardware_attachments' => [
+                'id', 'hardware_id', 'file_path', 'original_filename', 'display_name',
+                'file_extension', 'mime_type', 'file_size', 'uploaded_by',
+                'created_at', 'updated_at', 'deleted_at',
+            ],
+            'hardware_audit_log' => [
+                'id', 'hardware_id', 'modified_by', 'old_data', 'new_data', 'log_subject',
+                'log_type', 'created_at', 'updated_at',
+            ],
+
+            // === SOFTWARE MANAGEMENT ===
+            'software' => [
+                'id', 'vendor', 'product_name', 'version', 'activation_key', 'company_asset_number',
+                'is_exclusive_use', 'license_type', 'max_installations', 'purchase_date',
+                'expiration_date', 'support_expiration_date', 'status', 'company_id',
+                'software_type_id', 'created_at', 'updated_at', 'deleted_at',
+            ],
+            'software_types' => [
+                'id', 'name', 'created_at', 'updated_at',
+            ],
+            'software_user' => [
+                'id', 'software_id', 'user_id', 'created_by', 'responsible_user_id',
+                'created_at', 'updated_at',
+            ],
+            'software_attachments' => [
+                'id', 'software_id', 'file_path', 'original_filename', 'display_name',
+                'file_extension', 'mime_type', 'file_size', 'uploaded_by',
+                'created_at', 'updated_at', 'deleted_at',
+            ],
+            'software_audit_log' => [
+                'id', 'software_id', 'modified_by', 'old_data', 'new_data', 'log_subject',
+                'log_type', 'created_at', 'updated_at',
+            ],
+            'software_ticket' => [
+                'id', 'software_id', 'ticket_id', 'created_at', 'updated_at',
             ],
 
             // === GROUPS & ORGANIZATION ===
@@ -557,14 +605,28 @@ class VertexAiController extends Controller
                 'request_open', 'request_in_progress', 'request_waiting', 'request_out_of_sla',
                 'created_at', 'updated_at',
             ],
+            'project_report_pdf_exports' => [
+                'id', 'file_name', 'file_path', 'start_date', 'end_date', 'company_id',
+                'is_generated', 'is_failed', 'error_message', 'user_id', 'send_email',
+                'created_at', 'updated_at',
+            ],
 
             // === AUDIT & LOGS ===
             'vertex_ai_query_logs' => [
-                'id', 'user_id', 'user_email', 'user_prompt', 'result_count',
-                'was_successful', 'execution_time', 'created_at', 'updated_at',
+                'id', 'user_id', 'user_email', 'user_prompt', 'generated_sql', 'ai_response',
+                'result_count', 'was_successful', 'execution_time', 'ip_address', 'user_agent',
+                'error_message', 'created_at', 'updated_at',
             ],
             'failed_login_attempts' => [
                 'id', 'email', 'user_id', 'ip_address', 'attempt_type',
+                'created_at', 'updated_at',
+            ],
+            'users_logs' => [
+                'id', 'modified_by', 'user_id', 'old_data', 'new_data', 'log_subject',
+                'log_type', 'created_at', 'updated_at',
+            ],
+            'tickets_logs' => [
+                'id', 'modified_by', 'old_data', 'new_data', 'log_subject', 'log_type',
                 'created_at', 'updated_at',
             ],
         ];
@@ -764,6 +826,11 @@ class VertexAiController extends Controller
                 'user_agent' => $request->userAgent(),
                 'was_successful' => false,
             ];
+
+            // Dato che questa funzione serve a generare un report specifico, qui si potrebbe inserire del testo iniziale per specificare il contesto, 
+            // es. come deve usare le date nella query (da - a, non devono essere created_at del ticket e basta, ma created_at del ticket deve essere 
+            // inferiore alla data di fine e la data di inizio si deve usare per escludere i ticket che sono stati chiusi prima di quella data). 
+            // Poi nel caso gli si può passare anche la query utilizzata dalla funzione normale come riferimento.
 
             $logEntry = VertexAiQueryLog::create($logData);
             $logId = $logEntry->id;

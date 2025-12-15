@@ -9,6 +9,7 @@ use App\Models\TicketReportPdfExport;
 use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\User;
+use App\Http\Controllers\VertexAiController;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception as Exception;
 use Illuminate\Bus\Queueable;
@@ -67,7 +68,10 @@ class GeneratePdfReport implements ShouldQueue
             // === RECUPERO TICKET: AI o STANDARD ===
             if ($report->is_ai_generated && $report->ai_query) {
                 // Report AI: esegue query SQL generata dall'AI e converte in Collection di Ticket.
-                // Questa poi vienefiltrata ulteriormente con Eloquent per escludere progetti e ticket chiusi prima della data di inizio
+                // Rivalidazione sicurezza query (potrebbe essere stata modificata dopo la creazione)
+                (new VertexAiController())->validateSqlQuery($report->ai_query);
+                
+                // Questa poi viene filtrata ulteriormente con Eloquent per escludere progetti e ticket chiusi prima della data di inizio
                 $ticketIds = collect(DB::select($report->ai_query))->pluck('id')->toArray();
                 $tickets = Ticket::whereIn('id', $ticketIds)
                     ->where('project_id', null)
