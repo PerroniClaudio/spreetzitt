@@ -338,6 +338,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/approved-ticket-pdf-report/list/{company}', [App\Http\Controllers\TicketReportPdfExportController::class, 'approvedPdfCompany']);
     Route::get('/ticket-pdf-report/preview/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfPreview']);
     Route::get('/ticket-pdf-report/download/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfDownload']);
+    Route::get('/ticket-pdf-report/no-company/list', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfNoCompany']);
 
     // Project PDF Report Routes
 
@@ -519,6 +520,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
 
     // Vertex AI Routes
     Route::post('/vertex-ai/generate-report', [App\Http\Controllers\VertexAiController::class, 'generateReportFromPrompt']);
+    Route::post('/vertex-ai/generate-pdf-report', [App\Http\Controllers\VertexAiController::class, 'generatePdfReportFromPrompt']);
 
     // Ticket Stages Management
     Route::apiResource('ticket-stages', App\Http\Controllers\TicketStageController::class);

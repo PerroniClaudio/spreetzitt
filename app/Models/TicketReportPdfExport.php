@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class TicketReportPdfExport extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'file_name',
         'file_path',
@@ -22,7 +24,25 @@ class TicketReportPdfExport extends Model
         'is_approved_billing',
         'approved_billing_identification',
         'send_email',
+        'is_ai_generated',
+        'ai_query',
+        'ai_prompt',
     ];
+
+    /**
+     * Boot del model per validazioni
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($report) {
+            // Valida che i report non AI abbiano company_id
+            if (!$report->is_ai_generated && !$report->company_id) {
+                throw new \Exception('company_id è obbligatorio per i report non generati dall\'AI');
+            }
+        });
+    }
 
     // Crea l'identificativo del report PDF da utilizzare come riferimento in fattura.
     public function generatePdfIdentificationString()

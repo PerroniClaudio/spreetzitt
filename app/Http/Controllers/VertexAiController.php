@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GeneratePdfReport;
+use App\Models\Company;
+use App\Models\TicketReportPdfExport;
 use App\Models\VertexAiQueryLog;
 use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class VertexAiController extends Controller
 {
@@ -725,4 +729,371 @@ class VertexAiController extends Controller
 
         return $csv;
     }
+
+    /**
+     * Genera un report PDF da un prompt AI.
+     * Crea un record in TicketReportPdfExport con la query generata dall'AI,
+     * poi il job GeneratePdfReport lo processerà.
+     */
+    public function generatePdfReportFromPrompt(Request $request)
+    {
+        $startTime = microtime(true);
+        $user = $request->user();
+        $userPrompt = '';
+        $logId = null;
+
+        try {
+            // Solo admin possono generare report PDF
+            if (!$user || $user->is_admin != 1) {
+                return response()->json(['error' => 'Unauthorized. Solo gli admin possono generare report PDF.'], 401);
+            }
+
+            // Validazione - solo il prompt è richiesto
+            $validated = $request->validate([
+                'prompt' => 'required|string|max:1000',
+            ]);
+
+            $userPrompt = $validated['prompt'];
+
+            // Crea log iniziale
+            $logData = [
+                'user_id' => $user->id,
+                'user_email' => $user->email,
+                'user_prompt' => $userPrompt,
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'was_successful' => false,
+            ];
+
+            $logEntry = VertexAiQueryLog::create($logData);
+            $logId = $logEntry->id;
+
+            // Controlli anti-prompt injection
+            if ($this->isPromptSuspicious($userPrompt)) {
+                $this->updateLogEntry($logId, [
+                    'error_message' => 'Prompt rifiutato: contenuto potenzialmente pericoloso',
+                    'execution_time' => microtime(true) - $startTime,
+                ]);
+
+                return response()->json(['error' => 'Prompt non valido o potenzialmente pericoloso.'], 400);
+            }
+
+            // Genera query SQL dal prompt
+            $sqlQuery = $this->generateSqlFromPrompt($userPrompt);
+
+            if (!$sqlQuery) {
+                $this->updateLogEntry($logId, [
+                    'error_message' => 'Impossibile generare query SQL dal prompt fornito',
+                    'execution_time' => microtime(true) - $startTime,
+                ]);
+
+                return response()->json([
+                    'error' => 'Non riesco a interpretare la richiesta per generare un report PDF.',
+                    'suggestion' => 'Prova a essere più specifico sui ticket che vuoi nel report.',
+                    'examples' => [
+                        'Ticket chiusi nell\'ultimo mese',
+                        'Ticket aperti con priorità alta',
+                        'Tutti i ticket di tipo "Richiesta" chiusi quest\'anno',
+                        'Ticket fatturabili non ancora fatturati per l\'azienda Acme',
+                    ],
+                ], 400);
+            }
+
+            // Aggiorna log con la query generata
+            $this->updateLogEntry($logId, [
+                'generated_sql' => $sqlQuery,
+                'ai_response' => $this->lastAiResponse,
+            ]);
+
+            // Valida la query (senza eseguirla per ora)
+            $this->validateSqlQuery($sqlQuery);
+
+            // Estrae company_id dalla query se presente in modo univoco
+            $companyId = $this->extractCompanyIdFromQuery($sqlQuery);
+
+            // Estrae le date dal prompt (OBBLIGATORIE)
+            $dates = $this->extractDatesFromPrompt($userPrompt, $sqlQuery);
+            
+            if (!$dates['start_date'] || !$dates['end_date']) {
+                $this->updateLogEntry($logId, [
+                    'error_message' => 'Impossibile estrarre le date dal prompt. Le date sono obbligatorie.',
+                    'execution_time' => microtime(true) - $startTime,
+                ]);
+
+                return response()->json([
+                    'error' => 'Non riesco a identificare il periodo temporale richiesto.',
+                    'suggestion' => 'Per favore specifica un periodo nel prompt.',
+                    'examples' => [
+                        'Ticket chiusi dal 01/01/2024 al 31/12/2024',
+                        'Ticket aperti nell\'ultimo mese',
+                        'Report dal 1 gennaio al 31 marzo 2024',
+                        'Ticket dell\'anno 2024',
+                        'Report degli ultimi 30 giorni',
+                    ],
+                ], 400);
+            }
+
+            if ($companyId) {
+                $company = Company::find($companyId);
+                $companyName = $company ? Str::slug($company->name) : 'company_'.$companyId;
+            }
+
+            $name = time().'_ai_report_'.$companyName.'_'.$dates['start_date'].'_'.$dates['end_date'].'.pdf';
+
+            // Crea il record TicketReportPdfExport
+            $pdfExport = TicketReportPdfExport::create([
+                'file_name' => $name,
+                'file_path' => 'pdf_exports/'.($companyId ? $companyId : 'no_company').'/'.$name, // Verrà impostato dal job
+                'start_date' => $dates['start_date'],
+                'end_date' => $dates['end_date'],
+                'optional_parameters' => json_encode(['ai_generated' => true]),
+                'company_id' => $companyId, // Può essere null
+                'is_generated' => false,
+                'is_user_generated' => false,
+                'is_failed' => false,
+                'error_message' => null,
+                'user_id' => $user->id,
+                'is_approved_billing' => false,
+                'approved_billing_identification' => null,
+                'send_email' => false, // I report AI non inviano email automaticamente
+                'is_ai_generated' => true,
+                'ai_query' => $sqlQuery,
+                'ai_prompt' => $userPrompt,
+            ]);
+
+            // Dispatcha il job per generare il PDF
+            GeneratePdfReport::dispatch($pdfExport);
+
+            // Aggiorna log con successo
+            $this->updateLogEntry($logId, [
+                'was_successful' => true,
+                'execution_time' => microtime(true) - $startTime,
+            ]);
+
+            Log::info('Report PDF AI schedulato con successo', [
+                'user_id' => $user->id,
+                'pdf_export_id' => $pdfExport->id,
+                'prompt' => $userPrompt,
+                'sql_query' => $sqlQuery,
+                'company_id' => $companyId,
+                'start_date' => $dates['start_date'],
+                'end_date' => $dates['end_date'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Report PDF in fase di generazione. Riceverai una notifica quando sarà pronto.',
+                'pdf_export_id' => $pdfExport->id,
+                'company_id' => $companyId,
+                'start_date' => $dates['start_date'],
+                'end_date' => $dates['end_date'],
+                'estimated_time' => 'Pochi minuti',
+            ], 202); // 202 Accepted
+
+        } catch (Exception $e) {
+            $errorMessage = 'Errore durante la creazione del report PDF: ' . $e->getMessage();
+
+            if ($logId) {
+                $this->updateLogEntry($logId, [
+                    'error_message' => $e->getMessage(),
+                    'execution_time' => microtime(true) - $startTime,
+                ]);
+            }
+
+            Log::error('Errore generazione PDF AI', [
+                'user_id' => $user ? $user->id : null,
+                'prompt' => $userPrompt,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json(['error' => 'Errore durante la creazione del report PDF.'], 500);
+        }
+    }
+
+    /**
+     * Valida la query SQL senza eseguirla (controlli di sicurezza)
+     */
+    private function validateSqlQuery(string $sqlQuery): void
+    {
+        // Usa gli stessi controlli di sicurezza di executeSecureQuery
+        if (!preg_match('/^\s*SELECT\s+/i', $sqlQuery)) {
+            throw new Exception('Solo query SELECT sono permesse');
+        }
+
+        $dangerousOperations = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'REPLACE'];
+        foreach ($dangerousOperations as $op) {
+            if (preg_match('/\b' . $op . '\s+/i', $sqlQuery)) {
+                throw new Exception("Operazione $op non permessa");
+            }
+        }
+
+        $sensitiveColumns = [
+            'password', 'password_hash', 'encrypted_password', 'pwd',
+            'access_token', 'refresh_token', 'api_token', 'remember_token', 'token',
+            'microsoft_token', 'oauth_token', 'google_token', 'facebook_token',
+            'secret_key', 'private_key', 'secret', 'key',
+            '2fa_secret', 'backup_codes', 'two_factor', 'otp',
+            'client_secret', 'auth_secret',
+        ];
+
+        foreach ($sensitiveColumns as $column) {
+            if (preg_match('/\b' . $column . '\b/i', $sqlQuery)) {
+                throw new Exception("Colonna sensibile '$column' non permessa nelle query");
+            }
+        }
+    }
+
+    /**
+     * Estrae company_id dalla query SQL se presente in modo univoco.
+     * Ritorna l'ID della company se trovato un solo valore specifico, altrimenti null.
+     */
+    private function extractCompanyIdFromQuery(string $sqlQuery): ?int
+    {
+        // Pattern per trovare company_id = valore (case insensitive, gestisce spazi)
+        // Esempi: company_id = 5, company_id=5, tickets.company_id = 5
+        if (preg_match_all('/(?:tickets\.)?company_id\s*=\s*(\d+)/i', $sqlQuery, $matches)) {
+            $companyIds = array_unique($matches[1]);
+            
+            // Se c'è esattamente un company_id univoco nella query, lo usiamo
+            if (count($companyIds) === 1) {
+                $companyId = (int) $companyIds[0];
+                
+                // Verifica che la company esista
+                $companyExists = DB::table('companies')->where('id', $companyId)->exists();
+                
+                if ($companyExists) {
+                    Log::info('Company ID estratto dalla query AI', [
+                        'company_id' => $companyId,
+                        'query' => $sqlQuery
+                    ]);
+                    return $companyId;
+                }
+            }
+        }
+
+        // Se non troviamo un company_id univoco o valido, ritorniamo null
+        Log::info('Nessun company_id univoco trovato nella query AI', [
+            'query' => $sqlQuery
+        ]);
+        
+        return null;
+    }
+
+    /**
+     * Estrae le date di inizio e fine dal prompt o dalla query SQL.
+     * Ritorna un array con start_date e end_date in formato Y-m-d, oppure null se non trovate.
+     */
+    private function extractDatesFromPrompt(string $prompt, string $sqlQuery): array
+    {
+        $startDate = null;
+        $endDate = null;
+
+        // Pattern per date esplicite in vari formati
+        // Esempi: dal 01/01/2024 al 31/12/2024, from 2024-01-01 to 2024-12-31
+        $patterns = [
+            // Formato italiano: dal GG/MM/AAAA al GG/MM/AAAA
+            '/dal\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+al\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i',
+            // Formato: da GG/MM/AAAA a GG/MM/AAAA
+            '/da\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+a\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i',
+            // Formato inglese: from YYYY-MM-DD to YYYY-MM-DD
+            '/from\s+(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\s+to\s+(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/i',
+            // Formato: tra GG/MM/AAAA e GG/MM/AAAA
+            '/tra\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\s+e\s+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $prompt, $matches)) {
+                // Determina il formato in base al pattern
+                if (strpos($pattern, 'YYYY') !== false) {
+                    // Formato YYYY-MM-DD
+                    $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', "{$matches[1]}-{$matches[2]}-{$matches[3]}")->format('Y-m-d');
+                    $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', "{$matches[4]}-{$matches[5]}-{$matches[6]}")->format('Y-m-d');
+                } else {
+                    // Formato DD/MM/YYYY
+                    $startDate = \Carbon\Carbon::createFromFormat('d/m/Y', "{$matches[1]}/{$matches[2]}/{$matches[3]}")->format('Y-m-d');
+                    $endDate = \Carbon\Carbon::createFromFormat('d/m/Y', "{$matches[4]}/{$matches[5]}/{$matches[6]}")->format('Y-m-d');
+                }
+                break;
+            }
+        }
+
+        // Se non trovate date esplicite, cerca periodi relativi
+        if (!$startDate || !$endDate) {
+            $now = \Carbon\Carbon::now();
+
+            // Ultimo mese / last month
+            if (preg_match('/ultimo\s+mese|last\s+month/i', $prompt)) {
+                $startDate = $now->copy()->subMonth()->startOfMonth()->format('Y-m-d');
+                $endDate = $now->copy()->subMonth()->endOfMonth()->format('Y-m-d');
+            }
+            // Ultimi X giorni
+            elseif (preg_match('/ultim[oi]\s+(\d+)\s+giorni?|last\s+(\d+)\s+days?/i', $prompt, $matches)) {
+                $days = (int)($matches[1] ?? $matches[2]);
+                $startDate = $now->copy()->subDays($days)->format('Y-m-d');
+                $endDate = $now->format('Y-m-d');
+            }
+            // Questo mese / this month
+            elseif (preg_match('/questo\s+mese|this\s+month/i', $prompt)) {
+                $startDate = $now->copy()->startOfMonth()->format('Y-m-d');
+                $endDate = $now->format('Y-m-d');
+            }
+            // Anno specifico: 2024, anno 2024, year 2024
+            elseif (preg_match('/(?:anno|year)?\s*(\d{4})/i', $prompt, $matches)) {
+                $year = (int)$matches[1];
+                $startDate = \Carbon\Carbon::create($year, 1, 1)->format('Y-m-d');
+                $endDate = \Carbon\Carbon::create($year, 12, 31)->format('Y-m-d');
+            }
+            // Mese specifico: gennaio 2024, gen 2024, january 2024
+            elseif (preg_match('/(gennaio|febbraio|marzo|aprile|maggio|giugno|luglio|agosto|settembre|ottobre|novembre|dicembre|gen|feb|mar|apr|mag|giu|lug|ago|set|ott|nov|dic|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{4})/i', $prompt, $matches)) {
+                $monthMap = [
+                    'gennaio' => 1, 'gen' => 1, 'january' => 1,
+                    'febbraio' => 2, 'feb' => 2, 'february' => 2,
+                    'marzo' => 3, 'mar' => 3, 'march' => 3,
+                    'aprile' => 4, 'apr' => 4, 'april' => 4,
+                    'maggio' => 5, 'mag' => 5, 'may' => 5,
+                    'giugno' => 6, 'giu' => 6, 'june' => 6,
+                    'luglio' => 7, 'lug' => 7, 'july' => 7,
+                    'agosto' => 8, 'ago' => 8, 'august' => 8,
+                    'settembre' => 9, 'set' => 9, 'september' => 9,
+                    'ottobre' => 10, 'ott' => 10, 'october' => 10,
+                    'novembre' => 11, 'nov' => 11, 'november' => 11,
+                    'dicembre' => 12, 'dic' => 12, 'december' => 12,
+                ];
+                $month = $monthMap[strtolower($matches[1])] ?? null;
+                $year = (int)$matches[2];
+                if ($month) {
+                    $date = \Carbon\Carbon::create($year, $month, 1);
+                    $startDate = $date->copy()->startOfMonth()->format('Y-m-d');
+                    $endDate = $date->copy()->endOfMonth()->format('Y-m-d');
+                }
+            }
+        }
+
+        // Fallback: cerca date nella query SQL
+        if ((!$startDate || !$endDate) && $sqlQuery) {
+            // Pattern per created_at >= 'YYYY-MM-DD' AND created_at <= 'YYYY-MM-DD'
+            if (preg_match('/created_at\s*>=\s*[\'"](\d{4}-\d{2}-\d{2})[\'"].*created_at\s*<=\s*[\'"](\d{4}-\d{2}-\d{2})[\'\"]/i', $sqlQuery, $matches)) {
+                $startDate = $matches[1];
+                $endDate = $matches[2];
+            }
+            // Pattern per BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD'
+            elseif (preg_match('/created_at\s+BETWEEN\s+[\'"](\d{4}-\d{2}-\d{2})[\'"].*[\'"](\d{4}-\d{2}-\d{2})[\'\"]/i', $sqlQuery, $matches)) {
+                $startDate = $matches[1];
+                $endDate = $matches[2];
+            }
+        }
+
+        Log::info('Estrazione date dal prompt AI', [
+            'prompt' => $prompt,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ]);
+
+        return [
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+    }
 }
+

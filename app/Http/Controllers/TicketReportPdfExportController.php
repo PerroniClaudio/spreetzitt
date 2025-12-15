@@ -39,6 +39,28 @@ class TicketReportPdfExportController extends Controller
             'reports' => $reports,
         ], 200);
     }
+    
+    /**
+     * Lista per company singola
+     */
+    public function pdfNoCompany(Request $request)
+    {
+        $user = $request->user();
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $reports = TicketReportPdfExport::whereNull('company_id')
+            // ->where('is_generated', true)
+            ->orderBy('start_date', 'DESC')
+            ->get();
+
+        return response([
+            'reports' => $reports,
+        ], 200);
+    }
 
     /**
      * Lista approvati per azienda singola

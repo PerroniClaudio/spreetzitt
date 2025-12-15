@@ -16,6 +16,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
@@ -49,7 +50,8 @@ class GeneratePdfReport implements ShouldQueue
         try {
             $report = $this->report;
             $user = User::find($report->user_id);
-            $company = Company::find($report->company_id);
+            $company = $report->company_id ? Company::find($report->company_id) : null;
+
             // Poi qui deve generare il pdf, salvarlo e restituirlo (sostituendo ticketController->batchReport e TicketReportExportController->exportBatch)
 
             // Parte presa da batchReport, cioè i dati che si visualizzavano nella preview web
@@ -61,35 +63,57 @@ class GeneratePdfReport implements ShouldQueue
             // I progetti e i ticket a loro associati vanno esclusi da questo report.
 
             $queryTo = \Carbon\Carbon::parse($report->end_date)->endOfDay()->toDateTimeString();
-            // QUANDO SI MODIFICA QUESTA QUERY VA MODIFICATA ANCHE QUELLA IN GenerateTicketProFormaBillJob.php
-            $tickets = Ticket::where('company_id', $report->company_id)
-                ->where('created_at', '<=', $queryTo)
-                ->where('description', 'NOT LIKE', 'Ticket importato%')
-                ->where('project_id', null)
-                ->whereHas('ticketType', function ($query) {
-                    $query->where('is_project', '!=', true);
-                })
-                ->whereDoesntHave('statusUpdates', function ($query) use ($report) {
-                    if (! empty($report->start_date)) {
-                        $query->where('type', 'closing')
-                            ->where('created_at', '<=', $report->start_date);
-                    }
-                })
-                // Parte aggiunta per usare meno memoria (va modificato anche il resto del codice per usare questo approccio, perchè rende inutilizzabili alcuni metodi)
-                // ->select([
-                //     'id', 'company_id', 'created_at', 'description', 'stage_id', 
-                //     'actual_processing_time', 'is_billable', 'is_billing_validated',
-                //     'work_mode', 'admin_user_id', 'master_id', 'user_id', 'source',
-                //     'priority', 'is_user_error', 'is_form_correct', 'updated_at'
-                // ])
-                // ->with([
-                //     'ticketType:id,name,is_master,category_id',
-                //     'ticketType.category:id,name,is_problem,is_request',
-                //     'user:id,name,surname,is_admin',
-                //     'messages:id,ticket_id,message,created_at,user_id',
-                //     'messages.user:id,name,surname,is_admin'
-                // ])
-                ->get();
+            
+            // === RECUPERO TICKET: AI o STANDARD ===
+            if ($report->is_ai_generated && $report->ai_query) {
+                // Report AI: esegue query SQL generata dall'AI e converte in Collection di Ticket.
+                // Questa poi vienefiltrata ulteriormente con Eloquent per escludere progetti e ticket chiusi prima della data di inizio
+                $ticketIds = collect(DB::select($report->ai_query))->pluck('id')->toArray();
+                $tickets = Ticket::whereIn('id', $ticketIds)
+                    ->where('project_id', null)
+                    ->whereHas('ticketType', function ($query) {
+                        $query->where('is_project', '!=', true);
+                    })
+                    ->where('created_at', '<=', $queryTo)
+                    ->whereDoesntHave('statusUpdates', function ($query) use ($report) {
+                        if (! empty($report->start_date)) {
+                            $query->where('type', 'closing')
+                                ->where('created_at', '<=', $report->start_date);
+                        }
+                    })
+                    ->get();
+            } else {
+                // Report standard: usa query Eloquent tradizionale
+                // QUANDO SI MODIFICA QUESTA QUERY VA MODIFICATA ANCHE QUELLA IN GenerateTicketProFormaBillJob.php
+                $tickets = Ticket::where('company_id', $report->company_id)
+                    ->where('created_at', '<=', $queryTo)
+                    ->where('description', 'NOT LIKE', 'Ticket importato%')
+                    ->where('project_id', null)
+                    ->whereHas('ticketType', function ($query) {
+                        $query->where('is_project', '!=', true);
+                    })
+                    ->whereDoesntHave('statusUpdates', function ($query) use ($report) {
+                        if (! empty($report->start_date)) {
+                            $query->where('type', 'closing')
+                                ->where('created_at', '<=', $report->start_date);
+                        }
+                    })
+                    // Parte aggiunta per usare meno memoria (va modificato anche il resto del codice per usare questo approccio, perchè rende inutilizzabili alcuni metodi)
+                    // ->select([
+                    //     'id', 'company_id', 'created_at', 'description', 'stage_id', 
+                    //     'actual_processing_time', 'is_billable', 'is_billing_validated',
+                    //     'work_mode', 'admin_user_id', 'master_id', 'user_id', 'source',
+                    //     'priority', 'is_user_error', 'is_form_correct', 'updated_at'
+                    // ])
+                    // ->with([
+                    //     'ticketType:id,name,is_master,category_id',
+                    //     'ticketType.category:id,name,is_problem,is_request',
+                    //     'user:id,name,surname,is_admin',
+                    //     'messages:id,ticket_id,message,created_at,user_id',
+                    //     'messages.user:id,name,surname,is_admin'
+                    // ])
+                    ->get();
+            }
 
             if (! $tickets->isEmpty()) {
                 $tickets->load('ticketType');
@@ -1631,16 +1655,19 @@ class GeneratePdfReport implements ShouldQueue
             $ticket_by_unbillable_time_url = $charts_base_url.urlencode(json_encode($unbillable_tickets_time_data));
 
             // Logo da usare
-
-            $brand = $company->brands()->first();
-            $google_url = $brand->withGUrl()->logo_url;
+            if ($company) {
+                $brand = $company->brands()->first();
+                $google_url = $brand ? $brand->withGUrl()->logo_url : public_path('images/ifortech-logo-dark.png');
+            } else {
+                $google_url = public_path('images/ifortech-logo-dark.png');
+            }
 
             $data = [
                 'tickets' => $reduced_tickets,
                 'title' => 'Esportazione tickets',
-                'date_from' => \Carbon\Carbon::createFromFormat('Y-m-d', $report->start_date),
-                'date_to' => \Carbon\Carbon::createFromFormat('Y-m-d', $report->end_date),
-                'company' => $company,
+                'date_from' => $report->start_date ? \Carbon\Carbon::createFromFormat('Y-m-d', $report->start_date) : now()->subMonth(),
+                'date_to' => $report->end_date ? \Carbon\Carbon::createFromFormat('Y-m-d', $report->end_date) : now(),
+                'company' => $company ? $company : (object)['name' => 'Azienda non specificata'],
                 'request_number' => $total_requests,
                 'incident_number' => $total_incidents,
                 'opened_tickets_count' => $opened_tickets_count,
@@ -1705,7 +1732,7 @@ class GeneratePdfReport implements ShouldQueue
                 'is_failed' => false,
             ]);
 
-            if ($report->send_email) {
+            if ($report->send_email && $company) {
                 $admins = $company->users()->where('is_company_admin', true)->get();
                 foreach ($admins as $admin) {
                     Mail::to($admin)->send(new AvailableReportNotification($report));
