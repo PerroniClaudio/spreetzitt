@@ -833,12 +833,14 @@ class VertexAiController extends Controller
                 ], 400);
             }
 
+            $companyName = null;
+
             if ($companyId) {
                 $company = Company::find($companyId);
                 $companyName = $company ? Str::slug($company->name) : 'company_'.$companyId;
             }
 
-            $name = time().'_ai_report_'.$companyName.'_'.$dates['start_date'].'_'.$dates['end_date'].'.pdf';
+            $name = time().'_ai_report_'.(!!$companyName ? $companyName.'_' : '').$dates['start_date'].'_'.$dates['end_date'].'.pdf';
 
             // Crea il record TicketReportPdfExport
             $pdfExport = TicketReportPdfExport::create([
