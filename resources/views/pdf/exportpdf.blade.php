@@ -34,7 +34,7 @@
 
         <div class="card">
             <h2 class="main-header" style="font-size:1.5rem;line-height: 1;margin-bottom: 0.5rem;">
-                {{ $company['name'] }}</h2>
+                {{ $company ? (is_array($company) ? $company['name'] : $company->name) : 'Azienda non selezionata' }}</h2>
 
             <table style="margin: auto; font-size: 0.75rem; width: fit-content;">
                 <tr style="width: fit-content;">
