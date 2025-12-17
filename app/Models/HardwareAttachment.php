@@ -21,7 +21,134 @@ class HardwareAttachment extends Model
         'mime_type',
         'file_size',
         'uploaded_by',
+        'access_level',
+        'uploaded_by_level',
     ];
+
+    /**
+     * Ottiene tutti i livelli di accesso disponibili
+     */
+    public static function getAccessLevels(): array
+    {
+        return array_keys(config('permissions.access_levels'));
+    }
+
+    /**
+     * Ottiene il valore numerico di un livello di accesso
+     */
+    public static function getLevelValue(string $level): int
+    {
+        return config("permissions.access_levels.{$level}", 999);
+    }
+
+    /**
+     * Ottiene le label leggibili dei livelli
+     */
+    public static function getAccessLevelLabels(): array
+    {
+        return config('permissions.access_level_labels');
+    }
+
+    /**
+     * Boot method per impostare uploaded_by_level automaticamente
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Imposta uploaded_by_level al momento della creazione
+        static::creating(function ($attachment) {
+            if (!$attachment->uploaded_by_level && $attachment->uploader) {
+                $attachment->uploaded_by_level = self::getUserLevelFromUser($attachment->uploader);
+            }
+        });
+
+        // Solo con force delete elimina fisicamente il file da storage
+        static::forceDeleting(function ($attachment) {
+            $disk = FileUploadController::getStorageDisk();
+            if (Storage::disk($disk)->exists($attachment->file_path)) {
+                Storage::disk($disk)->delete($attachment->file_path);
+            }
+        });
+    }
+
+    /**
+     * Determina il livello di un utente
+     */
+    public static function getUserLevelFromUser(User $user): string
+    {
+        if (!!$user->is_superadmin) {
+            return 'superadmin';
+        }
+        if (!!$user->is_admin) {
+            return 'admin';
+        }
+        if (!!$user->is_company_admin) {
+            return 'company_admin';
+        }
+        return 'user';
+    }
+
+    /**
+     * Scope per filtrare allegati accessibili da un utente.
+     * Restituisce solo gli allegati che l'utente può visualizzare in base al suo livello.
+     * 
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param User $user
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeAccessibleBy($query, User $user)
+    {
+        $userLevel = self::getUserLevelFromUser($user);
+        $userLevelValue = self::getLevelValue($userLevel);
+        
+        // Ottieni tutti i livelli accessibili (con valore >= utente)
+        // Es: admin (2) può accedere a: admin (2), company_admin (3), user (4)
+        $accessibleLevels = collect(config('permissions.access_levels'))
+            ->filter(fn($value) => $value >= $userLevelValue)
+            ->keys()
+            ->toArray();
+        
+        return $query->whereIn('access_level', $accessibleLevels);
+    }
+
+    /**
+     * Verifica se un utente può visualizzare questo allegato
+     */
+    public function canView(User $user): bool
+    {
+        $userLevel = self::getUserLevelFromUser($user);
+        return self::getLevelValue($userLevel) <= self::getLevelValue($this->access_level);
+    }
+
+    /**
+     * Verifica se un utente può modificare l'access_level di questo allegato
+     * Deve soddisfare ENTRAMBE le condizioni:
+     * 1. Avere livello >= uploaded_by_level (es: admin può modificare file caricati da company_admin)
+     * 2. Poter visualizzare il file (se access_level è ristretto, non puoi modificarlo)
+     */
+    public function canModifyAccessLevel(User $user): bool
+    {
+        $userLevel = self::getUserLevelFromUser($user);
+        
+        // Deve avere privilegi >= a chi ha caricato il file
+        $canModifyByUploader = self::getLevelValue($userLevel) <= self::getLevelValue($this->uploaded_by_level);
+        
+        // Deve poter vedere il file (access_level)
+        $canSeeFile = $this->canView($user);
+        
+        // Entrambe le condizioni devono essere vere
+        return $canModifyByUploader && $canSeeFile;
+    }
+
+    /**
+     * Verifica se un utente può eliminare questo allegato
+     */
+    public function canDelete(User $user): bool
+    {
+        // Stesse regole della modifica access_level
+        return $this->canModifyAccessLevel($user);
+    }
 
     /**
      * Relazione con Hardware
@@ -122,21 +249,5 @@ class HardwareAttachment extends Model
         }
 
         return round($bytes, 2) . ' ' . $units[$i];
-    }
-
-    /**
-     * Elimina il file da storage solo quando si fa force delete
-     */
-    protected static function boot()
-    {
-        parent::boot();
-
-        // Solo con force delete elimina fisicamente il file da storage
-        static::forceDeleting(function ($attachment) {
-            $disk = FileUploadController::getStorageDisk();
-            if (Storage::disk($disk)->exists($attachment->file_path)) {
-                Storage::disk($disk)->delete($attachment->file_path);
-            }
-        });
     }
 }

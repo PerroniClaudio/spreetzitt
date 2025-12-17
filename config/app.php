@@ -299,7 +299,8 @@ return [
     ],
 
     'hardware_statuses' => [
-        'new' => 'Nuovo',
+        // 'new' => 'Nuovo',
+        'original_condition' => 'Condizioni all\'acquisto',
         'repaired' => 'Riparato',
         'refurbished' => 'Ricondizionato',
         'broken' => 'Guasto',

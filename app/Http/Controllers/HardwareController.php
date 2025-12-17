@@ -23,6 +23,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
 use function PHPUnit\Framework\isEmpty;
@@ -1433,13 +1434,20 @@ class HardwareController extends Controller
             }
         }
 
-        // Admin vede tutti gli allegati (anche soft deleted)
-        // User e Company Admin vedono solo quelli non eliminati
+        // Filtra allegati in base al livello di accesso dell'utente
+        $query = $hardware->attachments()->accessibleBy($authUser);
+        
+        // Admin vede anche gli allegati soft deleted
         if ($authUser->is_admin) {
-            $attachments = $hardware->attachments()->withTrashed()->with('uploader')->get();
-        } else {
-            $attachments = $hardware->attachments()->with('uploader')->get();
+            $query->withTrashed();
         }
+        
+        $attachments = $query->with('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id')->get();
+
+        // Aggiungi permessi di modifica per ogni allegato
+        $attachments->each(function ($attachment) use ($authUser) {
+            $attachment->can_modify = $attachment->canModifyAccessLevel($authUser);
+        });
 
         return response(['attachments' => $attachments], 200);
     }
@@ -1463,6 +1471,7 @@ class HardwareController extends Controller
         $fields = $request->validate([
             'file' => 'required|file|max:10240', // Max 10MB
             'display_name' => 'nullable|string|max:255',
+            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
         ]);
 
         $file = $request->file('file');
@@ -1476,6 +1485,7 @@ class HardwareController extends Controller
         $filePath = FileUploadController::storeFile($file, $path, $uniqueName);
 
         // Crea record nel database
+        // uploaded_by_level viene impostato automaticamente nel boot() del Model
         $attachment = HardwareAttachment::create([
             'hardware_id' => $hardware->id,
             'file_path' => $filePath,
@@ -1485,6 +1495,7 @@ class HardwareController extends Controller
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
             'uploaded_by' => $authUser->id,
+            'access_level' => $fields['access_level'] ?? HardwareAttachment::getUserLevelFromUser($authUser) ?? config('permissions.default_access_level'),
         ]);
 
         // Log audit
@@ -1501,7 +1512,7 @@ class HardwareController extends Controller
         ]);
 
         return response([
-            'attachment' => $attachment->load('uploader'),
+            'attachment' => $attachment->load('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id'),
             'message' => 'File caricato con successo',
         ], 201);
     }
@@ -1522,6 +1533,11 @@ class HardwareController extends Controller
             return response(['message' => 'Unauthorized'], 403);
         }
 
+        // Valida access_level se fornito
+        $validated = $request->validate([
+            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
+        ]);
+
         if (!$request->hasFile('files')) {
             return response(['message' => 'No files uploaded'], 400);
         }
@@ -1529,6 +1545,7 @@ class HardwareController extends Controller
         $files = $request->file('files');
         $uploadedAttachments = [];
         $count = 0;
+        $defaultAccessLevel = $validated['access_level'] ?? HardwareAttachment::getUserLevelFromUser($authUser) ?? config('permissions.default_access_level');
 
         if (is_array($files)) {
             foreach ($files as $file) {
@@ -1555,6 +1572,7 @@ class HardwareController extends Controller
                         'mime_type' => $file->getMimeType(),
                         'file_size' => $file->getSize(),
                         'uploaded_by' => $authUser->id,
+                        'access_level' => $defaultAccessLevel,
                     ]);
 
                     $uploadedAttachments[] = $attachment;
@@ -1582,6 +1600,7 @@ class HardwareController extends Controller
                     'mime_type' => $files->getMimeType(),
                     'file_size' => $files->getSize(),
                     'uploaded_by' => $authUser->id,
+                    'access_level' => $defaultAccessLevel,
                 ]);
 
                 $uploadedAttachments[] = $attachment;
@@ -1633,11 +1652,32 @@ class HardwareController extends Controller
         }
 
         $fields = $request->validate([
-            'display_name' => 'required|string|max:255',
+            'display_name' => 'nullable|string|max:255',
+            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
         ]);
 
-        $oldName = $attachment->display_name;
-        $attachment->update(['display_name' => $fields['display_name']]);
+        // Verifica permessi per modificare access_level
+        if (isset($fields['access_level']) && !$attachment->canModifyAccessLevel($authUser)) {
+            return response(['message' => 'Non hai i permessi per modificare il livello di accesso di questo allegato'], 403);
+        }
+
+        // Verifica che l'utente non possa impostare un livello superiore al proprio
+        if (isset($fields['access_level'])) {
+            $userLevel = HardwareAttachment::getUserLevelFromUser($authUser);
+            $userLevelValue = HardwareAttachment::getLevelValue($userLevel);
+            $requestedLevelValue = HardwareAttachment::getLevelValue($fields['access_level']);
+            
+            if ($requestedLevelValue < $userLevelValue) {
+                return response(['message' => 'Non puoi impostare un livello di accesso superiore al tuo'], 403);
+            }
+        }
+
+        $oldData = [
+            'display_name' => $attachment->display_name,
+            'access_level' => $attachment->access_level,
+        ];
+        
+        $attachment->update(array_filter($fields, fn($v) => $v !== null));
 
         // Log audit
         HardwareAuditLog::create([
@@ -1645,8 +1685,8 @@ class HardwareController extends Controller
             'log_type' => 'update',
             'modified_by' => $authUser->id,
             'hardware_id' => $hardware->id,
-            'old_data' => json_encode(['display_name' => $oldName]),
-            'new_data' => json_encode(['display_name' => $fields['display_name']]),
+            'old_data' => json_encode($oldData),
+            'new_data' => json_encode(array_filter($fields, fn($v) => $v !== null)),
         ]);
 
         return response([
@@ -1662,7 +1702,7 @@ class HardwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Solo admin e company admin possono eliminare
+        // Verifica permessi di base (hardware ownership)
         if (!$authUser->is_admin && !$authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
@@ -1674,6 +1714,11 @@ class HardwareController extends Controller
         // Verifica che l'allegato appartenga all'hardware
         if ($attachment->hardware_id !== $hardware->id) {
             return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        // Verifica permessi di cancellazione in base al livello
+        if (!$attachment->canDelete($authUser)) {
+            return response(['message' => 'Non hai i permessi per eliminare questo allegato'], 403);
         }
 
         $attachmentData = [
@@ -1704,11 +1749,6 @@ class HardwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Solo admin può ripristinare
-        if (!$authUser->is_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        }
-
         // Trova l'allegato soft deleted
         $attachment = HardwareAttachment::withTrashed()
             ->where('id', $attachmentId)
@@ -1717,6 +1757,11 @@ class HardwareController extends Controller
 
         if (!$attachment) {
             return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Solo admin o superadmin può ripristinare. il superadmin tutto, l'admin solo fino al suo livello.
+        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+            return response(['message' => 'Unauthorized'], 403);
         }
 
         if (!$attachment->trashed()) {
@@ -1739,7 +1784,7 @@ class HardwareController extends Controller
         ]);
 
         return response([
-            'attachment' => $attachment->load('uploader'),
+            'attachment' => $attachment->load('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id'),
             'message' => 'Allegato ripristinato',
         ], 200);
     }
@@ -1750,12 +1795,7 @@ class HardwareController extends Controller
     public function forceDeleteAttachment(Hardware $hardware, $attachmentId, Request $request)
     {
         $authUser = $request->user();
-
-        // Solo admin può eliminare definitivamente
-        if (!$authUser->is_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        }
-
+        
         // Trova l'allegato soft deleted
         $attachment = HardwareAttachment::withTrashed()
             ->where('id', $attachmentId)
@@ -1764,6 +1804,11 @@ class HardwareController extends Controller
 
         if (!$attachment) {
             return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Solo admin o superadmin può eliminare definitivamente. il superadmin tutto, l'admin solo fino al suo livello.
+        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+            return response(['message' => 'Unauthorized'], 403);
         }
 
         $attachmentData = [
@@ -1795,17 +1840,6 @@ class HardwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Verifica permessi
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
-            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        } elseif ($authUser->is_company_admin) {
-            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        }
-
         // Admin può scaricare anche file soft deleted
         $attachment = $authUser->is_admin 
             ? HardwareAttachment::withTrashed()->find($attachmentId)
@@ -1818,6 +1852,11 @@ class HardwareController extends Controller
         // Verifica che l'allegato appartenga all'hardware
         if ($attachment->hardware_id !== $hardware->id) {
             return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        // Verifica permessi di visualizzazione in base al livello di accesso
+        if (!$attachment->canView($authUser)) {
+            return response(['message' => 'Non hai i permessi per scaricare questo allegato'], 403);
         }
 
         $url = $attachment->getDownloadUrl();
@@ -1835,17 +1874,6 @@ class HardwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Verifica permessi
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
-            if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        } elseif ($authUser->is_company_admin) {
-            if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        }
-
         // Admin può vedere preview anche di file soft deleted
         $attachment = $authUser->is_admin 
             ? HardwareAttachment::withTrashed()->find($attachmentId)
@@ -1858,6 +1886,11 @@ class HardwareController extends Controller
         // Verifica che l'allegato appartenga all'hardware
         if ($attachment->hardware_id !== $hardware->id) {
             return response(['message' => 'Attachment does not belong to this hardware'], 400);
+        }
+
+        // Verifica permessi di visualizzazione in base al livello di accesso
+        if (!$attachment->canView($authUser)) {
+            return response(['message' => 'Non hai i permessi per visualizzare questo allegato'], 403);
         }
 
         $url = $attachment->getPreviewUrl();
