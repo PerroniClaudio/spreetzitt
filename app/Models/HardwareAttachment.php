@@ -26,30 +26,6 @@ class HardwareAttachment extends Model
     ];
 
     /**
-     * Ottiene tutti i livelli di accesso disponibili
-     */
-    public static function getAccessLevels(): array
-    {
-        return array_keys(config('permissions.access_levels'));
-    }
-
-    /**
-     * Ottiene il valore numerico di un livello di accesso
-     */
-    public static function getLevelValue(string $level): int
-    {
-        return config("permissions.access_levels.{$level}", 999);
-    }
-
-    /**
-     * Ottiene le label leggibili dei livelli
-     */
-    public static function getAccessLevelLabels(): array
-    {
-        return config('permissions.access_level_labels');
-    }
-
-    /**
      * Boot method per impostare uploaded_by_level automaticamente
      */
     protected static function boot()
@@ -59,7 +35,7 @@ class HardwareAttachment extends Model
         // Imposta uploaded_by_level al momento della creazione
         static::creating(function ($attachment) {
             if (!$attachment->uploaded_by_level && $attachment->uploader) {
-                $attachment->uploaded_by_level = self::getUserLevelFromUser($attachment->uploader);
+                $attachment->uploaded_by_level = $attachment->uploader->getUserLevel();
             }
         });
 
@@ -73,23 +49,6 @@ class HardwareAttachment extends Model
     }
 
     /**
-     * Determina il livello di un utente
-     */
-    public static function getUserLevelFromUser(User $user): string
-    {
-        if (!!$user->is_superadmin) {
-            return 'superadmin';
-        }
-        if (!!$user->is_admin) {
-            return 'admin';
-        }
-        if (!!$user->is_company_admin) {
-            return 'company_admin';
-        }
-        return 'user';
-    }
-
-    /**
      * Scope per filtrare allegati accessibili da un utente.
      * Restituisce solo gli allegati che l'utente può visualizzare in base al suo livello.
      * 
@@ -99,8 +58,7 @@ class HardwareAttachment extends Model
      */
     public function scopeAccessibleBy($query, User $user)
     {
-        $userLevel = self::getUserLevelFromUser($user);
-        $userLevelValue = self::getLevelValue($userLevel);
+        $userLevelValue = $user->getUserLevelValue();
         
         // Ottieni tutti i livelli accessibili (con valore >= utente)
         // Es: admin (2) può accedere a: admin (2), company_admin (3), user (4)
@@ -117,8 +75,8 @@ class HardwareAttachment extends Model
      */
     public function canView(User $user): bool
     {
-        $userLevel = self::getUserLevelFromUser($user);
-        return self::getLevelValue($userLevel) <= self::getLevelValue($this->access_level);
+        $userLevelValue = $user->getUserLevelValue();
+        return $userLevelValue <= User::getLevelValue($this->access_level);
     }
 
     /**
@@ -129,10 +87,10 @@ class HardwareAttachment extends Model
      */
     public function canModifyAccessLevel(User $user): bool
     {
-        $userLevel = self::getUserLevelFromUser($user);
+        $userLevelValue = $user->getUserLevelValue();
         
         // Deve avere privilegi >= a chi ha caricato il file
-        $canModifyByUploader = self::getLevelValue($userLevel) <= self::getLevelValue($this->uploaded_by_level);
+        $canModifyByUploader = $userLevelValue <= User::getLevelValue($this->uploaded_by_level);
         
         // Deve poter vedere il file (access_level)
         $canSeeFile = $this->canView($user);

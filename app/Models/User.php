@@ -276,4 +276,53 @@ class User extends Authenticatable
 
         return $company;
     }
+
+    /**
+     * Determina il livello di un utente
+     */
+    public function getUserLevel()
+    {
+        if (!!$this->is_superadmin) {
+            return 'superadmin';
+        }
+        if (!!$this->is_admin) {
+            return 'admin';
+        }
+        if (!!$this->is_company_admin) {
+            return 'company_admin';
+        }
+        return 'user';
+    }
+
+    /**
+     * Ottiene tutti i livelli di accesso disponibili
+     */
+    public static function getAccessLevels(): array
+    {
+        return array_keys(config('permissions.access_levels'));
+    }
+
+    /**
+     * Ottiene il valore numerico di un livello di accesso
+     */
+    public static function getLevelValue(string $level): int
+    {
+        return config("permissions.access_levels.{$level}", 999);
+    }
+    
+    /**
+     * Ottiene il valore numerico del livello di accesso dell'utente
+     */
+    public function getUserLevelValue(): int
+    {
+        return $this->getLevelValue($this->getUserLevel());
+    }
+
+    /**
+     * Ottiene le label leggibili dei livelli
+     */
+    public static function getAccessLevelLabels(): array
+    {
+        return config('permissions.access_level_labels');
+    }
 }

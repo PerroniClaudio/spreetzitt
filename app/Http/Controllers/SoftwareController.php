@@ -23,6 +23,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 
 class SoftwareController extends Controller
@@ -1300,14 +1301,18 @@ class SoftwareController extends Controller
             }
         }
 
-        // Admin vede tutti gli allegati (anche soft deleted)
-        // User e Company Admin vedono solo quelli non eliminati
+        // Filtra allegati in base al livello di accesso dell'utente
+        $query = $software->attachments()->accessibleBy($authUser);
         if ($authUser->is_admin) {
-            $attachments = $software->attachments()->withTrashed()->with('uploader')->get();
-        } else {
-            $attachments = $software->attachments()->with('uploader')->get();
+            $query->withTrashed();
         }
+        
+        $attachments = $query->with('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id')->get();
 
+        // Aggiungi permessi di modifica per ogni allegato
+        $attachments->each(function ($attachment) use ($authUser) {
+            $attachment->can_modify = $attachment->canModifyAccessLevel($authUser);
+        });
         return response(['attachments' => $attachments], 200);
     }
 
@@ -1330,6 +1335,7 @@ class SoftwareController extends Controller
         $fields = $request->validate([
             'file' => 'required|file|max:10240', // Max 10MB
             'display_name' => 'nullable|string|max:255',
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
         $file = $request->file('file');
@@ -1343,6 +1349,7 @@ class SoftwareController extends Controller
         $filePath = FileUploadController::storeFile($file, $path, $uniqueName);
 
         // Crea record nel database
+        // uploaded_by_level viene impostato automaticamente nel boot() del Model
         $attachment = SoftwareAttachment::create([
             'software_id' => $software->id,
             'file_path' => $filePath,
@@ -1352,6 +1359,7 @@ class SoftwareController extends Controller
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
             'uploaded_by' => $authUser->id,
+            'access_level' => $fields['access_level'] ?? $authUser->getUserLevel() ?? config('permissions.default_access_level'),
         ]);
 
         // Log audit
@@ -1368,7 +1376,7 @@ class SoftwareController extends Controller
         ]);
 
         return response([
-            'attachment' => $attachment->load('uploader'),
+            'attachment' => $attachment->load('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id'),
             'message' => 'File caricato con successo',
         ], 201);
     }
@@ -1389,6 +1397,11 @@ class SoftwareController extends Controller
             return response(['message' => 'Unauthorized'], 403);
         }
 
+        // Valida access_level se fornito
+        $validated = $request->validate([
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
+        ]);
+
         if (!$request->hasFile('files')) {
             return response(['message' => 'No files uploaded'], 400);
         }
@@ -1396,6 +1409,7 @@ class SoftwareController extends Controller
         $files = $request->file('files');
         $uploadedAttachments = [];
         $count = 0;
+        $defaultAccessLevel = $validated['access_level'] ?? $authUser->getUserLevel() ?? config('permissions.default_access_level');
 
         if (is_array($files)) {
             foreach ($files as $file) {
@@ -1422,6 +1436,7 @@ class SoftwareController extends Controller
                         'mime_type' => $file->getMimeType(),
                         'file_size' => $file->getSize(),
                         'uploaded_by' => $authUser->id,
+                        'access_level' => $defaultAccessLevel,
                     ]);
 
                     $uploadedAttachments[] = $attachment;
@@ -1449,6 +1464,7 @@ class SoftwareController extends Controller
                     'mime_type' => $files->getMimeType(),
                     'file_size' => $files->getSize(),
                     'uploaded_by' => $authUser->id,
+                    'access_level' => $defaultAccessLevel,
                 ]);
 
                 $uploadedAttachments[] = $attachment;
@@ -1500,11 +1516,31 @@ class SoftwareController extends Controller
         }
 
         $fields = $request->validate([
-            'display_name' => 'required|string|max:255',
+            'display_name' => 'nullable|string|max:255',
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
-        $oldName = $attachment->display_name;
-        $attachment->update(['display_name' => $fields['display_name']]);
+        // Verifica permessi per modificare access_level
+        if (isset($fields['access_level']) && !$attachment->canModifyAccessLevel($authUser)) {
+            return response(['message' => 'Non hai i permessi per modificare il livello di accesso di questo allegato'], 403);
+        }
+
+        // Verifica che l'utente non possa impostare un livello superiore al proprio
+        if (isset($fields['access_level'])) {
+            $userLevelValue = $authUser->getUserLevelValue();
+            $requestedLevelValue = User::getLevelValue($fields['access_level']);
+            
+            if ($requestedLevelValue < $userLevelValue) {
+                return response(['message' => 'Non puoi impostare un livello di accesso superiore al tuo'], 403);
+            }
+        }
+
+        $oldData = [
+            'display_name' => $attachment->display_name,
+            'access_level' => $attachment->access_level,
+        ];
+        
+        $attachment->update(array_filter($fields, fn($v) => $v !== null));
 
         // Log audit
         SoftwareAuditLog::create([
@@ -1512,8 +1548,8 @@ class SoftwareController extends Controller
             'log_type' => 'update',
             'modified_by' => $authUser->id,
             'software_id' => $software->id,
-            'old_data' => json_encode(['display_name' => $oldName]),
-            'new_data' => json_encode(['display_name' => $fields['display_name']]),
+            'old_data' => json_encode($oldData),
+            'new_data' => json_encode(array_filter($fields, fn($v) => $v !== null)),
         ]);
 
         return response([
@@ -1529,7 +1565,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Solo admin e company admin possono eliminare
+        // Verifica permessi di base (software ownership)
         if (!$authUser->is_admin && !$authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
@@ -1541,6 +1577,11 @@ class SoftwareController extends Controller
         // Verifica che l'allegato appartenga al software
         if ($attachment->software_id !== $software->id) {
             return response(['message' => 'Attachment does not belong to this software'], 400);
+        }
+
+        // Verifica permessi di cancellazione in base al livello
+        if (!$attachment->canDelete($authUser)) {
+            return response(['message' => 'Non hai i permessi per eliminare questo allegato'], 403);
         }
 
         $attachmentData = [
@@ -1571,11 +1612,6 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Solo admin può ripristinare
-        if (!$authUser->is_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        }
-
         // Trova l'allegato soft deleted
         $attachment = SoftwareAttachment::withTrashed()
             ->where('id', $attachmentId)
@@ -1584,6 +1620,11 @@ class SoftwareController extends Controller
 
         if (!$attachment) {
             return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Solo admin o superadmin può ripristinare. il superadmin tutto, l'admin solo fino al suo livello.
+        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+            return response(['message' => 'Unauthorized'], 403);
         }
 
         if (!$attachment->trashed()) {
@@ -1606,7 +1647,7 @@ class SoftwareController extends Controller
         ]);
 
         return response([
-            'attachment' => $attachment->load('uploader'),
+            'attachment' => $attachment->load('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id'),
             'message' => 'Allegato ripristinato',
         ], 200);
     }
@@ -1618,11 +1659,6 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Solo admin può eliminare definitivamente
-        if (!$authUser->is_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        }
-
         // Trova l'allegato soft deleted
         $attachment = SoftwareAttachment::withTrashed()
             ->where('id', $attachmentId)
@@ -1631,6 +1667,11 @@ class SoftwareController extends Controller
 
         if (!$attachment) {
             return response(['message' => 'Attachment not found'], 404);
+        }
+
+        // Solo admin o superadmin può eliminare definitivamente. il superadmin tutto, l'admin solo fino al suo livello.
+        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+            return response(['message' => 'Unauthorized'], 403);
         }
 
         $attachmentData = [
@@ -1662,15 +1703,6 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Verifica permessi
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        } elseif ($authUser->is_company_admin) {
-            if ($software->company_id !== $authUser->selectedCompany()?->id) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        }
-
         // Admin può scaricare anche file soft deleted
         $attachment = $authUser->is_admin 
             ? SoftwareAttachment::withTrashed()->where('id', $attachmentId)->first()
@@ -1683,6 +1715,11 @@ class SoftwareController extends Controller
         // Verifica che l'allegato appartenga al software
         if ($attachment->software_id !== $software->id) {
             return response(['message' => 'Attachment does not belong to this software'], 400);
+        }
+
+        // Verifica permessi di visualizzazione in base al livello di accesso
+        if (!$attachment->canView($authUser)) {
+            return response(['message' => 'Non hai i permessi per scaricare questo allegato'], 403);
         }
 
         $url = $attachment->getDownloadUrl();
@@ -1700,15 +1737,6 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        // Verifica permessi
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
-            return response(['message' => 'Unauthorized'], 403);
-        } elseif ($authUser->is_company_admin) {
-            if ($software->company_id !== $authUser->selectedCompany()?->id) {
-                return response(['message' => 'Unauthorized'], 403);
-            }
-        }
-
         // Admin può vedere preview anche di file soft deleted
         $attachment = $authUser->is_admin 
             ? SoftwareAttachment::withTrashed()->where('id', $attachmentId)->first()
@@ -1721,6 +1749,11 @@ class SoftwareController extends Controller
         // Verifica che l'allegato appartenga al software
         if ($attachment->software_id !== $software->id) {
             return response(['message' => 'Attachment does not belong to this software'], 400);
+        }
+
+        // Verifica permessi di visualizzazione in base al livello di accesso
+        if (!$attachment->canView($authUser)) {
+            return response(['message' => 'Non hai i permessi per visualizzare questo allegato'], 403);
         }
 
         $url = $attachment->getPreviewUrl();

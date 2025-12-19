@@ -1471,7 +1471,7 @@ class HardwareController extends Controller
         $fields = $request->validate([
             'file' => 'required|file|max:10240', // Max 10MB
             'display_name' => 'nullable|string|max:255',
-            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
         $file = $request->file('file');
@@ -1495,7 +1495,7 @@ class HardwareController extends Controller
             'mime_type' => $file->getMimeType(),
             'file_size' => $file->getSize(),
             'uploaded_by' => $authUser->id,
-            'access_level' => $fields['access_level'] ?? HardwareAttachment::getUserLevelFromUser($authUser) ?? config('permissions.default_access_level'),
+            'access_level' => $fields['access_level'] ?? $authUser->getUserLevel() ?? config('permissions.default_access_level'),
         ]);
 
         // Log audit
@@ -1535,7 +1535,7 @@ class HardwareController extends Controller
 
         // Valida access_level se fornito
         $validated = $request->validate([
-            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
         if (!$request->hasFile('files')) {
@@ -1545,7 +1545,7 @@ class HardwareController extends Controller
         $files = $request->file('files');
         $uploadedAttachments = [];
         $count = 0;
-        $defaultAccessLevel = $validated['access_level'] ?? HardwareAttachment::getUserLevelFromUser($authUser) ?? config('permissions.default_access_level');
+        $defaultAccessLevel = $validated['access_level'] ?? $authUser->getUserLevel() ?? config('permissions.default_access_level');
 
         if (is_array($files)) {
             foreach ($files as $file) {
@@ -1653,7 +1653,7 @@ class HardwareController extends Controller
 
         $fields = $request->validate([
             'display_name' => 'nullable|string|max:255',
-            'access_level' => ['nullable', 'string', Rule::in(HardwareAttachment::getAccessLevels())],
+            'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
         // Verifica permessi per modificare access_level
@@ -1663,9 +1663,8 @@ class HardwareController extends Controller
 
         // Verifica che l'utente non possa impostare un livello superiore al proprio
         if (isset($fields['access_level'])) {
-            $userLevel = HardwareAttachment::getUserLevelFromUser($authUser);
-            $userLevelValue = HardwareAttachment::getLevelValue($userLevel);
-            $requestedLevelValue = HardwareAttachment::getLevelValue($fields['access_level']);
+            $userLevelValue = $authUser->getUserLevelValue();
+            $requestedLevelValue = User::getLevelValue($fields['access_level']);
             
             if ($requestedLevelValue < $userLevelValue) {
                 return response(['message' => 'Non puoi impostare un livello di accesso superiore al tuo'], 403);
