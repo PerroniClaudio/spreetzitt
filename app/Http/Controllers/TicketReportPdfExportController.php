@@ -101,15 +101,41 @@ class TicketReportPdfExportController extends Controller
                 if ($user['is_company_admin'] != 1) {
                     // non è company admin
                     return response([
-                        'message' => 'The user must be at least company admin.',
+                        'message' => 'L\'utente deve essere almeno amministratore aziendale.',
                     ], 401);
                 }
                 // è company admin
                 if (! $user->companies()->where('companies.id', $request->company_id)->exists()) {
                     return response([
-                        'message' => 'You can only request reports for your company.',
+                        'message' => 'Puoi richiedere report solo per la tua azienda.',
                     ], 401);
                 }
+            }
+
+            // Verifica che le date non distino più di 3 mesi
+            $startDate = \Carbon\Carbon::parse($request->start_date);
+            $endDate = \Carbon\Carbon::parse($request->end_date);
+            $today = \Carbon\Carbon::today();
+            
+            // Verifica che start_date sia prima di end_date
+            if ($startDate->isAfter($endDate)) {
+                return response([
+                    'message' => 'La data di inizio deve essere precedente alla data di fine.',
+                ], 422);
+            }
+            
+            // Verifica che end_date non sia nel futuro
+            if ($endDate->isAfter($today)) {
+                return response([
+                    'message' => 'La data di fine non può essere nel futuro.',
+                ], 422);
+            }
+            
+            if ($startDate->diffInMonths($endDate) > 3 || 
+                ($startDate->diffInMonths($endDate) === 3 && $endDate->day > $startDate->day)) {
+                return response([
+                    'message' => 'Il periodo selezionato non può superare i 3 mesi.',
+                ], 422);
             }
 
             $company = Company::find($request->company_id);
@@ -150,12 +176,12 @@ class TicketReportPdfExportController extends Controller
             dispatch(new GeneratePdfReport($report));
 
             return response([
-                'message' => 'Report created successfully',
+                'message' => 'Report creato con successo',
                 'report' => $report,
             ], 200);
         } catch (\Exception $e) {
             return response([
-                'message' => 'Error generating the report',
+                'message' => 'Errore durante la creazione del report.',
                 'error' => $e->getMessage(),
             ], 500);
         }
