@@ -485,4 +485,75 @@ class ProjectReportPdfExportController extends Controller
             ], 500);
         }
     }
+
+    public function updatePdfQuery(Request $request)
+    {
+        return response ([
+            'message' => 'Funzione temporaneamente disabilitata.',
+        ], 503);
+        try {
+            $authUser = $request->user();
+            if ($authUser['is_superadmin'] != 1) {
+                return response([
+                    'message' => 'Unauthorized.',
+                ], 401);
+            }
+            $validatedData = $request->validate([
+                'id' => 'required|exists:ticket_report_pdf_exports,id',
+                'ai_query' => 'required|string',
+            ]);
+
+            $projectReportPdfExport = ProjectReportPdfExport::find($request->id);
+            if (! $projectReportPdfExport) {
+                return response([
+                    'message' => 'Report not found',
+                ], 404);
+            }
+
+            if($projectReportPdfExport->is_approved_biling) {
+                return response([
+                    'message' => 'Non puoi modificare la query AI di un report approvato.',
+                ], 401);
+            }
+
+            if($validatedData['ai_query'] === $projectReportPdfExport->ai_query) {
+                return response([
+                    'message' => 'La query AI fornita è identica a quella esistente. Nessuna modifica apportata.',
+                ], 400);
+            }
+            
+            (new VertexAiController())->validateSqlQuery($validatedData['ai_query']);
+
+            // Quando si aggiorna la query si deve anche rigenerare il report (quindi aggiungere le operazioni della funzione regenerate)
+            // Cancello il file dal bucket
+            if ($projectReportPdfExport->is_generated) {
+                $filePath = $projectReportPdfExport->file_path;
+                $disk = FileUploadController::getStorageDisk();
+                if (Storage::disk($disk)->exists($filePath)) {
+                    Storage::disk($disk)->delete($filePath);
+                }
+            }
+
+            // Aggiorna la query, imposta come non generato e cancella il messaggio di errore
+            $projectReportPdfExport->update([
+                'ai_query' => $validatedData['ai_query'],
+                'is_generated' => false,
+                'error_message' => null,
+                'is_failed' => false,
+            ]);
+
+            // Dispatch per rigenerarlo
+            dispatch(new GeneratePdfProjectReport($projectReportPdfExport));
+
+            return response([
+                'message' => 'Report AI query updated successfully',
+                'report' => $projectReportPdfExport,
+            ], 200);
+        } catch (\Exception $e) {
+            return response([
+                'message' => 'Error updating the report AI query',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
 }

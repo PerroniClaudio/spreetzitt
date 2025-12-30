@@ -23,6 +23,9 @@ class ProjectReportPdfExport extends Model
         'is_approved_billing',
         'approved_billing_identification',
         'send_email',
+        'is_ai_generated',
+        'ai_query',
+        'ai_prompt',
     ];
 
     protected static function boot()

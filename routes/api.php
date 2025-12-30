@@ -339,6 +339,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-pdf-report/preview/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfPreview']);
     Route::get('/ticket-pdf-report/download/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfDownload']);
     Route::get('/ticket-pdf-report/no-company/list', [App\Http\Controllers\TicketReportPdfExportController::class, 'pdfNoCompany']);
+    Route::post('/ticket-pdf-report/update-query', [App\Http\Controllers\TicketReportPdfExportController::class, 'updatePdfQuery']);
 
     // Project PDF Report Routes
 
@@ -350,6 +351,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/approved-project-pdf-report/list/{project}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'approvedProjectPdf']);
     Route::get('/project-pdf-report/preview/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfPreview']);
     Route::get('/project-pdf-report/download/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'projectPdfDownload']);
+    Route::post('/project-pdf-report/update-query', [App\Http\Controllers\ProjectReportPdfExportController::class, 'updatePdfQuery']);
 
     // Ticket reminder Routes
 
@@ -521,6 +523,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // Vertex AI Routes
     Route::post('/vertex-ai/generate-report', [App\Http\Controllers\VertexAiController::class, 'generateReportFromPrompt']);
     Route::post('/vertex-ai/generate-pdf-report', [App\Http\Controllers\VertexAiController::class, 'generatePdfReportFromPrompt']);
+    Route::post('/vertex-ai/generate-pdf-project-report', [App\Http\Controllers\VertexAiController::class, 'generatePdfProjectReportFromPrompt']);
 
     // Ticket Stages Management
     Route::apiResource('ticket-stages', App\Http\Controllers\TicketStageController::class);
