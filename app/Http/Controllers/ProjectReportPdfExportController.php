@@ -178,7 +178,6 @@ class ProjectReportPdfExportController extends Controller
                 'end_date' => $request->end_date,
                 'optional_parameters' => json_encode($request->optional_parameters),
                 'user_id' => $user->id,
-                'send_email' => $request->send_email ?? 0,
             ]);
 
             dispatch(new GeneratePdfProjectReport($report));
@@ -346,6 +345,7 @@ class ProjectReportPdfExportController extends Controller
             $validatedData = $request->validate([
                 'id' => 'required|exists:project_report_pdf_exports,id',
                 'is_approved_billing' => 'boolean',
+                'send_email' => 'boolean',
                 // 'approved_billing_identification' => 'nullable|string|unique:project_report_pdf_exports,approved_billing_identification',
             ]);
 
@@ -365,19 +365,129 @@ class ProjectReportPdfExportController extends Controller
             // }
 
             // Genero l'identificativo da utilizzare per la fatturazione
-            if ($validatedData['is_approved_billing'] == 1 && ! $projectReportPdfExport->approved_billing_identification) {
+            if (isset($validatedData['is_approved_billing']) && $validatedData['is_approved_billing'] == 1 && ! $projectReportPdfExport->approved_billing_identification) {
                 $validatedData['approved_billing_identification'] = $projectReportPdfExport->generatePdfIdentificationString();
+            }
+
+            $isApprovedBilling = $validatedData['is_approved_billing'] ?? $projectReportPdfExport->is_approved_billing;
+            $sendEmail = $validatedData['send_email'] ?? false;
+            
+            // Determina se inviare l'email in base ai cambiamenti
+            $shouldSendEmail = false;
+            
+            // Caso 1: send_email è cambiato da false a true e is_approved_billing è true
+            if ($sendEmail && !$projectReportPdfExport->send_email && $isApprovedBilling) {
+                $shouldSendEmail = true;
+            }
+            
+            // Caso 2: is_approved_billing è cambiato da false a true e send_email è true
+            if (isset($validatedData['is_approved_billing']) && 
+                $validatedData['is_approved_billing'] == 1 && 
+                !$projectReportPdfExport->is_approved_billing && 
+                $sendEmail) {
+                $shouldSendEmail = true;
+            }
+
+            // Imposta lo stato pending se deve essere inviata
+            // Possibili valori: null, 'pending', 'sent', 'failed', 'resend_requested'
+            if ($shouldSendEmail) {
+                $validatedData['email_status'] = 'pending';
             }
 
             $projectReportPdfExport->update($validatedData);
 
+            // Invia email se necessario
+            if ($shouldSendEmail) {
+                // Verifica che il report sia stato generato
+                if (! $projectReportPdfExport->is_generated) {
+                    $projectReportPdfExport->update([
+                        'email_status' => "failed",
+                    ]);
+                    return response([
+                        'message' => 'Cannot send email: report not generated yet or generation failed.',
+                        'report' => $projectReportPdfExport,
+                    ], 422);
+                }
+
+                // Verifica che il file esista
+                $disk = FileUploadController::getStorageDisk();
+                if (! Storage::disk($disk)->exists($projectReportPdfExport->file_path)) {
+                    $projectReportPdfExport->update([
+                        'email_status' => "failed",
+                    ]);
+                    return response([
+                        'message' => 'Cannot send email: report file not found in storage.',
+                        'report' => $projectReportPdfExport,
+                    ], 404);
+                }
+
+                // Dispatch del job per l'invio dell'email
+                dispatch(new \App\Jobs\SendProjectPdfReportUpdatedEmail($projectReportPdfExport));
+            }
+
             return response([
-                'message' => 'Report updated successfully',
+                'message' => 'Report updated successfully'.($shouldSendEmail ? ' and email queued' : ''),
                 'report' => $projectReportPdfExport,
             ], 200);
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error updating the report',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+    public function resendEmail(ProjectReportPdfExport $projectReportPdfExport)
+    {
+        try {
+            $authUser = request()->user();
+            if ($authUser['is_admin'] != 1) {
+                return response([
+                    'message' => 'Unauthorized.',
+                ], 401);
+            }
+
+            // Verifica che il report sia stato generato
+            if (! $projectReportPdfExport->is_generated) {
+                return response([
+                    'message' => 'Cannot send email: report not generated yet or generation failed.',
+                    'report' => $projectReportPdfExport,
+                ], 422);
+            }
+
+            // Verifica che il report sia approvato per la fatturazione e che send_email sia true
+            if (! $projectReportPdfExport->is_approved_billing || ! $projectReportPdfExport->send_email) {
+                return response([
+                    'message' => 'Cannot send email: report is not approved for billing or email sending is disabled.',
+                    'report' => $projectReportPdfExport,
+                ], 422);
+            }
+
+            // Verifica che il file esista
+            $disk = FileUploadController::getStorageDisk();
+            if (! Storage::disk($disk)->exists($projectReportPdfExport->file_path)) {
+                return response([
+                    'message' => 'Cannot send email: report file not found in storage.',
+                    'report' => $projectReportPdfExport,
+                ], 404);
+            }
+            
+            // Imposta lo stato a resend_requested
+            // Possibili valori: null, 'pending', 'sent', 'failed', 'resend_requested'
+            $projectReportPdfExport->email_status = 'resend_requested';
+            $projectReportPdfExport->save();
+            
+            // Dispatch del job per l'invio dell'email
+            dispatch(new \App\Jobs\SendProjectPdfReportUpdatedEmail($projectReportPdfExport));
+
+            return response([
+                'message' => 'Email resend scheduled successfully',
+                'report' => $projectReportPdfExport,
+            ], 200);
+        } catch (\Exception $e) {
+            return response([
+                'message' => 'Error resending the email',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -426,7 +536,7 @@ class ProjectReportPdfExportController extends Controller
             ]);
 
             // Dispatch per rigenerarlo
-            dispatch(new GeneratePdfProjectReport($projectReportPdfExport));
+            dispatch(new GeneratePdfProjectReport($projectReportPdfExport, true));
 
             return response([
                 'message' => 'The report is scheduled to be regenerated',
@@ -543,7 +653,7 @@ class ProjectReportPdfExportController extends Controller
             ]);
 
             // Dispatch per rigenerarlo
-            dispatch(new GeneratePdfProjectReport($projectReportPdfExport));
+            dispatch(new GeneratePdfProjectReport($projectReportPdfExport, true));
 
             return response([
                 'message' => 'Report AI query updated successfully',

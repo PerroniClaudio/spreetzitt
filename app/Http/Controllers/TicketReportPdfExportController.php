@@ -170,7 +170,6 @@ class TicketReportPdfExportController extends Controller
                 'end_date' => $request->end_date,
                 'optional_parameters' => json_encode($request->optional_parameters),
                 'user_id' => $user->id,
-                'send_email' => $request->send_email,
             ]);
 
             dispatch(new GeneratePdfReport($report));
@@ -308,6 +307,7 @@ class TicketReportPdfExportController extends Controller
             $validatedData = $request->validate([
                 'id' => 'required|exists:ticket_report_pdf_exports,id',
                 'is_approved_billing' => 'boolean',
+                'send_email' => 'boolean',
                 // 'approved_billing_identification' => 'nullable|string|unique:ticket_report_pdf_exports,approved_billing_identification',
             ]);
 
@@ -327,11 +327,65 @@ class TicketReportPdfExportController extends Controller
             // }
 
             // Genero l'identificativo da utilizzare per la fatturazione
-            if ($validatedData['is_approved_billing'] == 1 && ! $ticketReportPdfExport->approved_billing_identification) {
+            if (isset($validatedData['is_approved_billing']) && $validatedData['is_approved_billing'] == 1 && ! $ticketReportPdfExport->approved_billing_identification) {
                 $validatedData['approved_billing_identification'] = $ticketReportPdfExport->generatePdfIdentificationString();
             }
 
+            $isApprovedBilling = $validatedData['is_approved_billing'] ?? $ticketReportPdfExport->is_approved_billing;
+            $sendEmail = $validatedData['send_email'] ?? false;
+            
+            // Determina se inviare l'email in base ai cambiamenti
+            $shouldSendEmail = false;
+            
+            // Caso 1: send_email è cambiato da false a true e is_approved_billing è true
+            if ($sendEmail && !$ticketReportPdfExport->send_email && $isApprovedBilling) {
+                $shouldSendEmail = true;
+            }
+
+            // Caso 2: is_approved_billing è cambiato da false a true e send_email è true
+            if (isset($validatedData['is_approved_billing']) && 
+                $validatedData['is_approved_billing'] == 1 && 
+                !$ticketReportPdfExport->is_approved_billing && 
+                $sendEmail) {
+                $shouldSendEmail = true;
+            }
+
+            // Imposta lo stato pending se deve essere inviata
+            // Possibili valori: null, 'pending', 'sent', 'failed', 'resend_requested'
+            if ($shouldSendEmail) {
+                $validatedData['email_status'] = 'pending';
+            }
+
             $ticketReportPdfExport->update($validatedData);
+
+            // Invia email se necessario
+            if ($shouldSendEmail) {
+                // Verifica che il report sia stato generato
+                if (! $ticketReportPdfExport->is_generated) {
+                    $ticketReportPdfExport->update([
+                        'email_status' => "failed",
+                    ]);
+                    return response([
+                        'message' => 'Cannot send email: report not generated yet or generation failed.',
+                        'report' => $ticketReportPdfExport,
+                    ], 422);
+                }
+
+                // Verifica che il file esista
+                $disk = FileUploadController::getStorageDisk();
+                if (! Storage::disk($disk)->exists($ticketReportPdfExport->file_path)) {
+                    $ticketReportPdfExport->update([
+                        'email_status' => "failed",
+                    ]);
+                    return response([
+                        'message' => 'Cannot send email: report file not found in storage.',
+                        'report' => $ticketReportPdfExport,
+                    ], 404);
+                }
+
+                // Dispatch del job per l'invio dell'email
+                dispatch(new \App\Jobs\SendPdfReportUpdatedEmail($ticketReportPdfExport));
+            }
 
             return response([
                 'message' => 'Report updated successfully',
@@ -340,6 +394,62 @@ class TicketReportPdfExportController extends Controller
         } catch (\Exception $e) {
             return response([
                 'message' => 'Error updating the report',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+
+    public function resendEmail(TicketReportPdfExport $ticketReportPdfExport)
+    {
+        try {
+            $authUser = request()->user();
+            if ($authUser['is_admin'] != 1) {
+                return response([
+                    'message' => 'Unauthorized.',
+                ], 401);
+            }
+
+            // Verifica che il report sia stato generato
+            if (! $ticketReportPdfExport->is_generated) {
+                return response([
+                    'message' => 'Cannot send email: report not generated yet or generation failed.',
+                    'report' => $ticketReportPdfExport,
+                ], 422);
+            }
+
+            // Verifica che il report sia approvato per la fatturazione e che send_email sia true
+            if (! $ticketReportPdfExport->is_approved_billing || ! $ticketReportPdfExport->send_email) {
+                return response([
+                    'message' => 'Cannot send email: report is not approved for billing or email sending is disabled.',
+                    'report' => $ticketReportPdfExport,
+                ], 422);
+            }
+
+            // Verifica che il file esista
+            $disk = FileUploadController::getStorageDisk();
+            if (! Storage::disk($disk)->exists($ticketReportPdfExport->file_path)) {
+                return response([
+                    'message' => 'Cannot send email: report file not found in storage.',
+                    'report' => $ticketReportPdfExport,
+                ], 404);
+            }
+            
+            // Imposta lo stato a resend_requested
+            // Possibili valori: null, 'pending', 'sent', 'failed', 'resend_requested'
+            $ticketReportPdfExport->email_status = 'resend_requested';
+            $ticketReportPdfExport->save();
+            
+            // Dispatch del job per l'invio dell'email
+            dispatch(new \App\Jobs\SendPdfReportUpdatedEmail($ticketReportPdfExport));
+
+            return response([
+                'message' => 'Email resend scheduled successfully',
+                'report' => $ticketReportPdfExport,
+            ], 200);
+        } catch (\Exception $e) {
+            return response([
+                'message' => 'Error resending the email',
                 'error' => $e->getMessage(),
             ], 500);
         }
@@ -388,7 +498,7 @@ class TicketReportPdfExportController extends Controller
             ]);
 
             // Dispatch per rigenerarlo
-            dispatch(new GeneratePdfReport($ticketReportPdfExport));
+            dispatch(new GeneratePdfReport($ticketReportPdfExport, true));
 
             return response([
                 'message' => 'The report is scheduled to be regenerated',
@@ -505,7 +615,7 @@ class TicketReportPdfExportController extends Controller
             ]);
 
             // Dispatch per rigenerarlo
-            dispatch(new GeneratePdfReport($ticketReportPdfExport));
+            dispatch(new GeneratePdfReport($ticketReportPdfExport, true));
 
             return response([
                 'message' => 'Report AI query updated successfully',

@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Mail\AvailableReportNotification;
 use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketReportPdfExport;
@@ -31,13 +30,16 @@ class GeneratePdfReport implements ShouldQueue
 
     public $report;
 
+    public $isRegeneration;
+
     /**
      * Create a new job instance.
      */
-    public function __construct(TicketReportPdfExport $report)
+    public function __construct(TicketReportPdfExport $report, bool $isRegeneration = false)
     {
         //
         $this->report = $report;
+        $this->isRegeneration = $isRegeneration;
 
         // Aumenta il limite di memoria a 512MB per questo job
         ini_set('memory_limit', '512M');
@@ -1730,18 +1732,19 @@ class GeneratePdfReport implements ShouldQueue
 
             // Se ci mette troppo tempo potremmo rispondere ok alla creazione del report e generarlo tramite un job, che quando ha fatto aggiorna il report
 
-            $report->update([
+            $updateData = [
                 'is_generated' => true,
                 'error_message' => null,
                 'is_failed' => false,
-            ]);
+            ];
 
-            if ($report->send_email && $company) {
-                $admins = $company->users()->where('is_company_admin', true)->get();
-                foreach ($admins as $admin) {
-                    Mail::to($admin)->send(new AvailableReportNotification($report));
-                }
+            // Imposta last_regenerated_at solo se è una rigenerazione
+            if ($this->isRegeneration) {
+                $updateData['last_regenerated_at'] = now();
             }
+
+            $report->update($updateData);
+
         } catch (Exception $e) {
             $shortenedMessage = $e->getMessage();
             if (strlen($shortenedMessage) > 500) {

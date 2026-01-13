@@ -26,6 +26,9 @@ class ProjectReportPdfExport extends Model
         'is_ai_generated',
         'ai_query',
         'ai_prompt',
+        'email_status',
+        'last_email_sent_at',
+        'last_regenerated_at',
     ];
 
     protected static function boot()
@@ -68,6 +71,16 @@ class ProjectReportPdfExport extends Model
         }
 
         return $identificationString;
+    }
+
+    public function company()
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    public function project()
+    {
+        return $this->belongsTo(Ticket::class, 'project_id');
     }
 
     use HasFactory;

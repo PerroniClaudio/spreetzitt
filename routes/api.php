@@ -331,6 +331,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // Ticket PDF Report Routes
 
     Route::post('/ticket-pdf-report/update', [App\Http\Controllers\TicketReportPdfExportController::class, 'update']);
+    Route::get('/ticket-pdf-report/{ticketReportPdfExport}/resend-email', [App\Http\Controllers\TicketReportPdfExportController::class, 'resendEmail']);
     Route::post('/ticket-pdf-report/regenerate/', [App\Http\Controllers\TicketReportPdfExportController::class, 'regenerate']);
     Route::delete('/ticket-pdf-report/delete/{ticketReportPdfExport}', [App\Http\Controllers\TicketReportPdfExportController::class, 'destroy']);
     Route::post('/ticket-pdf-report/export', [App\Http\Controllers\TicketReportPdfExportController::class, 'storePdfExport']);
@@ -344,6 +345,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // Project PDF Report Routes
 
     Route::post('/project-pdf-report/update', [App\Http\Controllers\ProjectReportPdfExportController::class, 'update']);
+    Route::get('/project-pdf-report/{projectReportPdfExport}/resend-email', [App\Http\Controllers\ProjectReportPdfExportController::class, 'resendEmail']);
     Route::post('/project-pdf-report/regenerate/', [App\Http\Controllers\ProjectReportPdfExportController::class, 'regenerate']);
     Route::delete('/project-pdf-report/delete/{projectReportPdfExport}', [App\Http\Controllers\ProjectReportPdfExportController::class, 'destroy']);
     Route::post('/project-pdf-report/export', [App\Http\Controllers\ProjectReportPdfExportController::class, 'storeProjectPdfExport']);
