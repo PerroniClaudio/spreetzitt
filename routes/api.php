@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BillableValueCauseController;
 use App\Http\Controllers\BrandController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\GroupController;
@@ -97,7 +98,15 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-causes/{id}/force', [TicketCauseController::class, 'forceDestroy']);
     Route::post('/ticket-causes/{id}/restore', [TicketCauseController::class, 'restore']);
 
-
+    // Billable Value Causes Routes
+    Route::get('/billable-value-causes', [BillableValueCauseController::class, 'index']);
+    Route::get('/all-billable-value-causes', [BillableValueCauseController::class, 'all']);
+    Route::post('/billable-value-causes', [BillableValueCauseController::class, 'store']);
+    Route::get('/billable-value-causes/{billableValueCause}', [BillableValueCauseController::class, 'show']);
+    Route::put('/billable-value-causes/{billableValueCause}', [BillableValueCauseController::class, 'update']);
+    Route::delete('/billable-value-causes/{billableValueCause}', [BillableValueCauseController::class, 'destroy']);
+    Route::delete('/billable-value-causes/{id}/force', [BillableValueCauseController::class, 'forceDestroy']);
+    Route::post('/billable-value-causes/{id}/restore', [BillableValueCauseController::class, 'restore']);
 
     Route::resource('ticket', App\Http\Controllers\TicketController::class);
     Route::get('/old-ticket-search', [App\Http\Controllers\OldTicketController::class, 'search']);
@@ -110,6 +119,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/files', [App\Http\Controllers\TicketController::class, 'storeFiles']);
     Route::post('/ticket/{ticket}/priority-update', [App\Http\Controllers\TicketController::class, 'updateTicketPriority']);
     Route::post('/ticket/{ticket}/billable-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBillable']);
+    Route::post('/ticket/{ticket}/billable-value-cause-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillableValueCause']);
     Route::post('/ticket/{ticket}/billed-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBilled']);
     Route::post('/ticket/{ticket}/bill-details-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillDetails']);
     Route::post('/ticket/{ticket}/billing-info-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillingInfo']);

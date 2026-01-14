@@ -126,7 +126,7 @@ class TicketController extends Controller
             ->whereHas('ticketType', function ($q) {
                 $q->where('is_scheduling', true);
             });
-        
+
         // Se il parametro with_open è false o non presente, mostra solo i ticket chiusi
         if (! $request->has('with_open') || $request->query('with_open') === 'false') {
             $query->where('stage_id', $closedStageId);
@@ -246,13 +246,13 @@ class TicketController extends Controller
             }
 
             // Controllo per attività programmata
-            if($ticketType->is_scheduling == 1){
-                if(!$user->can_open_scheduling){
+            if ($ticketType->is_scheduling == 1) {
+                if (! $user->can_open_scheduling) {
                     return response([
                         'message' => 'Non si hanno i permessi per aprire un ticket di tipo attività programmata',
                     ], 403);
                 }
-                if(!$request->scheduledDuration) {
+                if (! $request->scheduledDuration) {
                     return response([
                         'message' => 'La durata pianificata è obbligatoria per questo tipo di ticket',
                     ], 400);
@@ -264,30 +264,30 @@ class TicketController extends Controller
             if ($ticketType->is_master == 1) {
 
                 $slaveTypes = $ticketType->slaveTypes();
-                
+
                 $decodedSlaveTickets = $request->slaveTickets ? json_decode($request->slaveTickets, true) : [];
                 $slaveTicketsRequest = collect($decodedSlaveTickets);
 
                 if (
-                    !isset($request->slaveTickets) ||
+                    ! isset($request->slaveTickets) ||
                     ($slaveTypes->wherePivot('is_required', 1)->pluck('ticket_types.id')->diff($slaveTicketsRequest->pluck('type_id'))->count() > 0)
                 ) {
                     return response([
-                        'message' => 'Dati mancanti o incompleti per i ticket collegati. ' 
-                        . $slaveTypes->wherePivot('is_required', 1)->pluck('id')->diff($slaveTicketsRequest->pluck('type_id'))->count()
-                        . ' di '. $slaveTypes->wherePivot('is_required', 1)->count(),
+                        'message' => 'Dati mancanti o incompleti per i ticket collegati. '
+                        .$slaveTypes->wherePivot('is_required', 1)->pluck('id')->diff($slaveTicketsRequest->pluck('type_id'))->count()
+                        .' di '.$slaveTypes->wherePivot('is_required', 1)->count(),
                     ], 400);
                 }
             }
 
             // Controlli per progetto
-            if($ticketType->is_project == 1){
-                if(!$user->can_open_project){
+            if ($ticketType->is_project == 1) {
+                if (! $user->can_open_project) {
                     return response([
                         'message' => 'Non si hanno i permessi per aprire un ticket di tipo progetto',
                     ], 403);
                 }
-                if(!$request->projectExpectedDuration || !$request->projectName || !$request->projectStartDate || !$request->projectEndDate) {
+                if (! $request->projectExpectedDuration || ! $request->projectName || ! $request->projectStartDate || ! $request->projectEndDate) {
                     return response([
                         'message' => 'Nome e durata pianificata sono obbligatori per questo tipo di ticket',
                     ], 400);
@@ -460,7 +460,7 @@ class TicketController extends Controller
                     $hardwareIds = $request['messageData'][$field->field_label];
                     foreach ($hardwareIds as $id) {
                         $hardware = Hardware::find($id);
-                        if (!$hardware) {
+                        if (! $hardware) {
                             throw new \Exception('Hardware con id '.$id.' non trovato.');
                         }
                         $ticket->hardware()->syncWithoutDetaching($id);
@@ -525,20 +525,20 @@ class TicketController extends Controller
             $group = $ticketType->groups->first();
             $groupId = $group ? $group->id : null;
 
-            if (!$ticketType) {
-                throw new \Exception('Tipo di ticket non trovato.' . $slaveTicketToStore['type_id']);
+            if (! $ticketType) {
+                throw new \Exception('Tipo di ticket non trovato.'.$slaveTicketToStore['type_id']);
             }
             if ($masterTicket->company_id != $ticketType->company_id) {
-                throw new \Exception('Il tipo di ticket non appartiene alla stessa compagnia del ticket master. Master: ' . $masterTicket->company_id . ' - Collegato: ' . $ticketType->company_id);
+                throw new \Exception('Il tipo di ticket non appartiene alla stessa compagnia del ticket master. Master: '.$masterTicket->company_id.' - Collegato: '.$ticketType->company_id);
             }
             if ($ticketType->is_master == 1) {
-                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: ' . $ticketType->name);
+                throw new \Exception('Non si può collegare un\'operazione strutturata a un\'altra. Tipo: '.$ticketType->name);
             }
             if ($ticketType->is_scheduling == 1) {
-                throw new \Exception('Non si può collegare un\'attività pianificata a un\'operazione strutturata. Tipo: ' . $ticketType->name);
+                throw new \Exception('Non si può collegare un\'attività pianificata a un\'operazione strutturata. Tipo: '.$ticketType->name);
             }
             if ($ticketType->is_grouping == 1) {
-                throw new \Exception('Non si può collegare un\'ticket di raggruppamento a un\'operazione strutturata. Tipo: ' . $ticketType->name);
+                throw new \Exception('Non si può collegare un\'ticket di raggruppamento a un\'operazione strutturata. Tipo: '.$ticketType->name);
             }
 
             $newSlaveTicket = Ticket::create([
@@ -698,7 +698,7 @@ class TicketController extends Controller
                     $hardwareIds = $slaveTicketToStore['messageData'][$field->field_label];
                     foreach ($hardwareIds as $id) {
                         $hardware = Hardware::find($id);
-                        if (!$hardware) {
+                        if (! $hardware) {
                             throw new \Exception('Hardware con id '.$id.' non trovato.');
                         }
                         $newSlaveTicket->hardware()->syncWithoutDetaching($id);
@@ -718,9 +718,9 @@ class TicketController extends Controller
                 ]),
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            throw new \Exception('Dati mancanti o non validi per i ticket collegati. ' . $e->getMessage());
+            throw new \Exception('Dati mancanti o non validi per i ticket collegati. '.$e->getMessage());
         }
-        
+
     }
 
     /**
@@ -800,12 +800,12 @@ class TicketController extends Controller
         $this->addVirtualFields($ticket);
 
         // Aggiungere alla fine i dati che servono solo nella risposta e non vanno salvati nel DB
-        if($ticket->ticketType->is_master == 1){
+        if ($ticket->ticketType->is_master == 1) {
             // Usa setAttribute invece di assegnazione diretta per evitare che venga considerato "dirty"
             $ticket->setAttribute('slavesActualProcessingTimesSum', $ticket->slaves()->sum('actual_processing_time') ?? 0);
         }
 
-        if($ticket->ticketType->is_project == 1){
+        if ($ticket->ticketType->is_project == 1) {
             $ticket->setAttribute('projectSlavesActualProcessingTimesSum', $ticket->projectTickets()->sum('actual_processing_time') ?? 0);
         }
 
@@ -938,20 +938,20 @@ class TicketController extends Controller
 
         dispatch(new SendUpdateEmail($update));
 
-        if($ticket->stage_id != $newTicketStageId && !$ticket->handler){
+        if ($ticket->stage_id != $newTicketStageId && ! $ticket->handler) {
             // Se il ticket viene spostato in uno stato diverso da "Nuovo" e non ha un gestore, lo assegna all'utente che ha fatto la modifica, se è nel gruppo. Altrimenti al primo del gruppo.
             $selectedGroup = null;
             $adminUser = null;
-            
-            if($ticket->group && $ticket->group->users->count() > 0){
+
+            if ($ticket->group && $ticket->group->users->count() > 0) {
                 // Se il ticket ha già un gruppo associato e quel gruppo ha utenti, usa quello
                 $selectedGroup = $ticket->group;
                 // Se l'utente che fa la richiesta è nel gruppo, usa quello, altrimenti prendi il primo
-                $adminUser = $selectedGroup->users->where('id', $request->user()->id)->first() 
+                $adminUser = $selectedGroup->users->where('id', $request->user()->id)->first()
                     ?? $selectedGroup->users->first();
             }
-            
-            if($adminUser){
+
+            if ($adminUser) {
                 $ticket->admin_user_id = $adminUser->id;
                 $ticket->save();
 
@@ -1098,6 +1098,53 @@ class TicketController extends Controller
         ], 200);
     }
 
+    public function updateTicketBillableValueCause(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            'billable_value_cause_id' => 'nullable|exists:billable_value_causes,id',
+        ]);
+
+        if ($request->user()['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be an admin.',
+            ], 401);
+        }
+
+        // Verifica se il campo è stato modificato
+        $ticket->billable_value_cause_id = $fields['billable_value_cause_id'];
+        $isValueChanged = $ticket->isDirty('billable_value_cause_id');
+
+        if (! $isValueChanged) {
+            return response([
+                'message' => 'Nessuna modifica apportata alla causa di fatturabilità del ticket.',
+            ], 400);
+        }
+
+        $ticket->save();
+
+        // Refresh del ticket per assicurarsi che i cast siano applicati
+        $ticket->refresh();
+
+        $causeText = 'Non definita';
+        if ($fields['billable_value_cause_id']) {
+            $billableValueCause = \App\Models\BillableValueCause::find($fields['billable_value_cause_id']);
+            $causeText = $billableValueCause ? $billableValueCause->name : 'Non definita';
+        }
+
+        $update = TicketStatusUpdate::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $request->user()->id,
+            'content' => 'Causa di fatturabilità del ticket impostata su: '.$causeText,
+            'type' => 'billing',
+        ]);
+
+        dispatch(new SendUpdateEmail($update));
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
     public function updateTicketIsBilled(Ticket $ticket, Request $request)
     {
         $fields = $request->validate([
@@ -1185,6 +1232,7 @@ class TicketController extends Controller
             'bill_identification' => 'nullable|string|max:255',
             'bill_date' => 'nullable|date',
             'is_billing_validated' => 'sometimes|boolean',
+            'billable_value_cause_id' => 'nullable|exists:billable_value_causes,id',
         ]);
 
         if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
@@ -1254,6 +1302,15 @@ class TicketController extends Controller
 
         if (isset($changes['is_billing_validated'])) {
             $logMessages[] = 'Validazione: '.($changes['is_billing_validated'] ? 'Validato' : 'Non validato');
+        }
+
+        if (isset($changes['billable_value_cause_id'])) {
+            $causeText = 'Non definita';
+            if ($changes['billable_value_cause_id']) {
+                $billableValueCause = \App\Models\BillableValueCause::find($changes['billable_value_cause_id']);
+                $causeText = $billableValueCause ? $billableValueCause->name : 'Non definita';
+            }
+            $logMessages[] = 'Causa di fatturabilità: '.$causeText;
         }
 
         $update = TicketStatusUpdate::create([
@@ -1366,7 +1423,7 @@ class TicketController extends Controller
             ], 401);
         }
 
-        if($ticket->ticketType->is_master == 1) {
+        if ($ticket->ticketType->is_master == 1) {
             return response([
                 'message' => 'Non è possibile modificare il tempo di lavorazione effettivo di un\'operazione strutturata. Va calcolato sommando i tempi dei ticket collegati.',
             ], 400);
@@ -1401,7 +1458,7 @@ class TicketController extends Controller
                     return response([
                         'message' => 'Actual processing time for closed tickets must be greater than or equal to the expected processing time for this ticket type.',
                     ], 400);
-                }                
+                }
             }
 
             $ticket->update([
@@ -1484,9 +1541,9 @@ class TicketController extends Controller
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
 
         $ticketType = $ticket->ticketType;
-        
+
         // Controlli diversi se il ticket è o meno un'operazione strutturata
-        if($ticketType->is_master == 1) {
+        if ($ticketType->is_master == 1) {
             // Controlla se ci sono ticket slave non ancora chiusi
             $hasOpenSlaveTickets = $ticket->slaves()->where('stage_id', '!=', $closedTicketStageId)->exists();
             if ($hasOpenSlaveTickets) {
@@ -1495,9 +1552,9 @@ class TicketController extends Controller
                 ], 400);
             }
         }
-        
+
         // Sia operazione strutturata che progetto non richiedono il tempo di lavorazione effettivo in chiusura, perchè si calcola sommando i collegati.
-        if(!$ticketType->is_master && !$ticketType->is_project) {
+        if (! $ticketType->is_master && ! $ticketType->is_project) {
             $request->validate([
                 'actualProcessingTime' => 'required|int',
             ]);
@@ -1508,7 +1565,7 @@ class TicketController extends Controller
                     'message' => 'Actual processing time must be set and greater than or equal to the minimum processing time for this ticket type.',
                 ], 400);
             }
-    
+
             if ($fields['actualProcessingTime'] % 10 != 0) {
                 return response([
                     'message' => 'Actual processing time must be a multiple of 10 minutes.',
@@ -2041,7 +2098,7 @@ class TicketController extends Controller
             'counters' => $counters,
         ], 200);
     }
-    
+
     /**
      * Show counters of all tickets (if superadmin) or only those belonging to the authenticated admin groups.
      */
@@ -2183,7 +2240,7 @@ class TicketController extends Controller
     }
 
     // Attività programmate disponibili per il ticket (tra cui scegliere per collegarlo)
-    public function getAvailableSchedulingTickets (Ticket $ticket, Request $request)
+    public function getAvailableSchedulingTickets(Ticket $ticket, Request $request)
     {
         $user = $request->user();
 
@@ -2207,7 +2264,7 @@ class TicketController extends Controller
         $schedulingTickets = Ticket::whereHas('ticketType', function ($query) {
             $query->where('is_scheduling', true);
         })->where('company_id', $ticket->company_id)
-        ->where('id', '!=', $ticket->id)
+            ->where('id', '!=', $ticket->id)
         // ->with([
         //     'referer' => function ($query) {
         //         $query->select('id', 'name', 'surname', 'email');
@@ -2225,7 +2282,7 @@ class TicketController extends Controller
         //         $query->select('id', 'name', 'is_scheduling');
         //     },
         // ])
-        ->get();
+            ->get();
 
         $schedulingTickets->each(function ($schedulingTicket) use ($user) {
             $schedulingTicket->user_full_name =
@@ -2290,7 +2347,7 @@ class TicketController extends Controller
                 'message' => 'This ticket is a project ticket. A project cannot be connected to a scheduling ticket.',
             ], 400);
         }
-        if( $ticket->project_id != null) {
+        if ($ticket->project_id != null) {
             return response([
                 'message' => 'This is already connected to a project. A ticket can only be connected to a project or a scheduling ticket. Not both.',
             ], 400);
@@ -2317,9 +2374,9 @@ class TicketController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
-            $warning = "";
+            $warning = '';
 
             $oldSchedulingId = $ticket->scheduling_id;
 
@@ -2337,26 +2394,26 @@ class TicketController extends Controller
                     // Raggruppa gli slave per scheduling_id corrente
                     $slavesBySchedulingId = $slaveTickets->groupBy('scheduling_id');
                     $slavesUpdated = false;
-                    
+
                     foreach ($slavesBySchedulingId as $currentSchedulingId => $slavesGroup) {
                         $slaveIds = $slavesGroup->pluck('id')->toArray();
                         $hasChanges = false;
-                        
+
                         // Aggiorna tutti gli slave di questo gruppo al nuovo scheduling
                         foreach ($slavesGroup as $slaveTicket) {
-                            if($slaveTicket->scheduling_id != $schedulingTicket->id) {
+                            if ($slaveTicket->scheduling_id != $schedulingTicket->id) {
                                 $slaveTicket->update(['scheduling_id' => $schedulingTicket->id]);
                                 $slavesUpdated = true;
                                 $hasChanges = true;
                             }
                         }
-                        
+
                         // Crea un log per questo gruppo di slave (se almeno uno è stato modificato)
                         if ($hasChanges) {
                             $ticketIdsBySchedulingId[$currentSchedulingId] = array_merge($ticketIdsBySchedulingId[$currentSchedulingId], $slaveIds);
                         }
                     }
-                    
+
                     if ($slavesUpdated) {
                         $warning .= "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati. ";
                     }
@@ -2366,7 +2423,7 @@ class TicketController extends Controller
             // Se il ticket ha un master, rimuovi l'associazione del master all'attività programmata precedente, perchè uno dei figli non è più associato a quella. Il master può essere associato solo se tutti i figli sono associati alla stessa.
             if ($ticket->master_id != null) {
                 $masterTicket = Ticket::find($ticket->master_id);
-                if($masterTicket) {
+                if ($masterTicket) {
                     // Se tutti i figli del master sono ora associati alla stessa attività programmata, associa anche il master a quell'attività programmata.
                     $allSlaves = $masterTicket->slaves;
                     $allSlavesAssociatedToSameScheduling = true;
@@ -2409,9 +2466,9 @@ class TicketController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response([
-                'message' => 'Errore durante il collegamento all\'attività programmata: ' . $e->getMessage(),
+                'message' => 'Errore durante il collegamento all\'attività programmata: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -2434,9 +2491,9 @@ class TicketController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
-            $warning = '';            
+            $warning = '';
             $oldSchedulingId = $ticket->scheduling_id;
 
             // Rimuovi l'associazione all'attività programmata
@@ -2469,9 +2526,9 @@ class TicketController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response([
-                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: ' . $e->getMessage(),
+                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -2495,7 +2552,7 @@ class TicketController extends Controller
 
         // Prepara i messaggi usando il plurale appropriato
         $ticketCount = count($ticketIds);
-        $ticketNumbers = '#' . implode(', #', $ticketIds);
+        $ticketNumbers = '#'.implode(', #', $ticketIds);
         $verbSingular = $ticketCount === 1;
 
         // Determina il tipo di operazione e genera il contenuto del log
@@ -2614,7 +2671,7 @@ class TicketController extends Controller
     }
 
     // Prende i dati di riepilogo dell'attività programmata
-    public function getSchedulingTicketRecapData (Ticket $ticket, Request $request)
+    public function getSchedulingTicketRecapData(Ticket $ticket, Request $request)
     {
         $user = $request->user();
 
@@ -2631,26 +2688,26 @@ class TicketController extends Controller
         }
 
         $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
-        
+
         // Recupera tutti i ticket collegati a questa attività programmata
         $schedulingSlaves = $ticket->schedulingSlaves;
-        
+
         // Conteggio totale
         $totalCount = $schedulingSlaves->count();
-        
+
         // Separa aperti e chiusi
         $closedSlaves = $schedulingSlaves->where('stage_id', $closedStageId);
         $openSlaves = $schedulingSlaves->where('stage_id', '!=', $closedStageId);
-        
+
         $closedCount = $closedSlaves->count();
         $openCount = $openSlaves->count();
-        
+
         // Tempo totale dei ticket chiusi
         $totalClosedProcessingTime = $closedSlaves->sum('actual_processing_time') ?? 0;
-        
+
         // Tempo totale dei ticket ancora aperti (tempo parziale)
         $totalOpenProcessingTime = $openSlaves->sum('actual_processing_time') ?? 0;
-        
+
         $recapData = [
             'scheduled_duration' => $ticket->scheduled_duration,
             'total_slaves_count' => $totalCount,
@@ -2693,8 +2750,8 @@ class TicketController extends Controller
 
         // Salva i valori precedenti per il log
         $previousName = $ticket->project_name;
-        $previousStartDateText = $ticket->project_start ? date('d/m/Y', strtotime($ticket->project_start)) : "N/A";
-        $previousEndDateText = $ticket->project_end ? date('d/m/Y', strtotime($ticket->project_end)) : "N/A";
+        $previousStartDateText = $ticket->project_start ? date('d/m/Y', strtotime($ticket->project_start)) : 'N/A';
+        $previousEndDateText = $ticket->project_end ? date('d/m/Y', strtotime($ticket->project_end)) : 'N/A';
         $previousDuration = $ticket->project_expected_duration ?? 0;
 
         // Aggiorna tutti i campi del progetto
@@ -2702,18 +2759,18 @@ class TicketController extends Controller
 
         // Prepara il messaggio di log con le modifiche
         $changes = [];
-        
+
         if ($previousName !== $fields['project_name']) {
             $changes[] = 'Nome: "'.$previousName.'" -> "'.$fields['project_name'].'"';
         }
-        
+
         $newStartDateText = date('d/m/Y', strtotime($ticket->project_start));
         $newEndDateText = date('d/m/Y', strtotime($ticket->project_end));
-        
+
         if ($previousStartDateText !== $newStartDateText || $previousEndDateText !== $newEndDateText) {
             $changes[] = 'Date: '.$previousStartDateText.' - '.$previousEndDateText.' -> '.$newStartDateText.' - '.$newEndDateText;
         }
-        
+
         if ($previousDuration !== $fields['project_expected_duration']) {
             $prevHours = floor($previousDuration / 60);
             $prevMinutes = $previousDuration % 60;
@@ -2722,7 +2779,7 @@ class TicketController extends Controller
             $changes[] = 'Durata prevista: '.$prevHours.'h '.$prevMinutes.'m -> '.$newHours.'h '.$newMinutes.'m';
         }
 
-        $logContent = 'Progetto aggiornato. ' . implode('; ', $changes);
+        $logContent = 'Progetto aggiornato. '.implode('; ', $changes);
 
         $update = TicketStatusUpdate::create([
             'ticket_id' => $ticket->id,
@@ -2740,10 +2797,9 @@ class TicketController extends Controller
             'ticket' => $ticket,
         ], 200);
     }
-    
 
     // Progetti disponibili per il ticket (tra cui scegliere per collegarlo)
-    public function getAvailableProjectTickets (Ticket $ticket, Request $request)
+    public function getAvailableProjectTickets(Ticket $ticket, Request $request)
     {
         $user = $request->user();
 
@@ -2767,8 +2823,8 @@ class TicketController extends Controller
         $projectTickets = Ticket::whereHas('ticketType', function ($query) {
             $query->where('is_project', true);
         })->where('company_id', $ticket->company_id)
-        ->where('id', '!=', $ticket->id)
-        ->get();
+            ->where('id', '!=', $ticket->id)
+            ->get();
 
         $projectTickets->each(function ($projectTicket) use ($user) {
             $projectTicket->user_full_name =
@@ -2811,7 +2867,7 @@ class TicketController extends Controller
             'available_project_tickets' => $projectTickets,
         ], 200);
     }
-    
+
     // Gestisce il collegamento di un ticket ad un progetto
     public function connectToProjectTicket(Ticket $ticket, Request $request)
     {
@@ -2833,12 +2889,12 @@ class TicketController extends Controller
                 'message' => 'This ticket is a scheduling ticket. A scheduling ticket cannot be connected to a project.',
             ], 400);
         }
-        if( $ticket->scheduling_id != null) {
+        if ($ticket->scheduling_id != null) {
             return response([
                 'message' => 'This is already connected to a scheduling ticket. A ticket can only be connected to a project or a scheduling ticket. Not both.',
             ], 400);
         }
-        
+
         $fields = $request->validate([
             'project_id' => 'required|int',
         ]);
@@ -2860,9 +2916,9 @@ class TicketController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
-            $warning = "";
+            $warning = '';
 
             $oldProjectId = $ticket->project_id;
 
@@ -2884,30 +2940,30 @@ class TicketController extends Controller
                     // Raggruppa gli slave per project_id corrente
                     $slavesByProjectId = $slaveTickets->groupBy('project_id');
                     $slavesUpdated = false;
-                    
+
                     foreach ($slavesByProjectId as $currentProjectId => $slavesGroup) {
                         $slaveIds = $slavesGroup->pluck('id')->toArray();
                         $hasChanges = false;
-                        
+
                         // Aggiorna tutti gli slave di questo gruppo al nuovo project
                         foreach ($slavesGroup as $slaveTicket) {
-                            if($slaveTicket->project_id != $projectTicket->id) {
+                            if ($slaveTicket->project_id != $projectTicket->id) {
                                 $slaveTicket->update(['project_id' => $projectTicket->id]);
                                 $slavesUpdated = true;
                                 $hasChanges = true;
                             }
                         }
-                        
+
                         // Crea un log per questo gruppo di slave (se almeno uno è stato modificato)
                         if ($hasChanges) {
                             // Assicurati che la chiave esista nell'array prima di fare il merge
-                            if (!isset($ticketIdsByProjectId[$currentProjectId])) {
+                            if (! isset($ticketIdsByProjectId[$currentProjectId])) {
                                 $ticketIdsByProjectId[$currentProjectId] = [];
                             }
                             $ticketIdsByProjectId[$currentProjectId] = array_merge($ticketIdsByProjectId[$currentProjectId], $slaveIds);
                         }
                     }
-                    
+
                     if ($slavesUpdated) {
                         $warning .= "Attenzione: Questo è un tipo operazione strutturata. Sono stati collegati automaticamente anche i {$slaveCount} ticket associati. ";
                     }
@@ -2917,7 +2973,7 @@ class TicketController extends Controller
             // Se il ticket ha un master, rimuovi l'associazione del master al progetto precedente, perchè uno dei figli non è più associato a quel progetto. Il master può essere associato solo se tutti i figli sono associati allo stesso progetto
             if ($ticket->master_id != null) {
                 $masterTicket = Ticket::find($ticket->master_id);
-                if($masterTicket) {
+                if ($masterTicket) {
                     // Se tutti i figli del master sono ora associati allo stesso progetto, associa anche il master a quel progetto.
                     $allSlaves = $masterTicket->slaves;
                     $allSlavesAssociatedToSameProject = true;
@@ -2931,15 +2987,15 @@ class TicketController extends Controller
                     if ($allSlavesAssociatedToSameProject) {
                         $oldMasterProjectId = $masterTicket->project_id;
                         $masterTicket->update(['project_id' => $projectTicket->id]);
-                        
+
                         // Assicurati che la chiave esista nell'array prima di fare il merge
                         if ($oldMasterProjectId !== null) {
-                            if (!isset($ticketIdsByProjectId[$oldMasterProjectId])) {
+                            if (! isset($ticketIdsByProjectId[$oldMasterProjectId])) {
                                 $ticketIdsByProjectId[$oldMasterProjectId] = [];
                             }
                             $ticketIdsByProjectId[$oldMasterProjectId] = array_merge($ticketIdsByProjectId[$oldMasterProjectId], [$masterTicket->id]);
                         }
-                        
+
                         $warning .= "Attenzione: Questo ticket è associato ad un'operazione strutturata. Poiché tutti i ticket associati sono collegati allo stesso progetto, anche l'operazione strutturata è stata collegata automaticamente a tale progetto. ";
                     }
 
@@ -2975,9 +3031,9 @@ class TicketController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response([
-                'message' => 'Errore durante il collegamento al progetto: ' . $e->getMessage(),
+                'message' => 'Errore durante il collegamento al progetto: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -3000,9 +3056,9 @@ class TicketController extends Controller
         }
 
         DB::beginTransaction();
-        
+
         try {
-            $warning = '';            
+            $warning = '';
             $oldProjectId = $ticket->project_id;
 
             // Rimuovi l'associazione al progetto
@@ -3035,9 +3091,9 @@ class TicketController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response([
-                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: ' . $e->getMessage(),
+                'message' => 'Errore durante la rimozione del collegamento all\'attività programmata: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -3061,7 +3117,7 @@ class TicketController extends Controller
 
         // Prepara i messaggi usando il plurale appropriato
         $ticketCount = count($ticketIds);
-        $ticketNumbers = '#' . implode(', #', $ticketIds);
+        $ticketNumbers = '#'.implode(', #', $ticketIds);
         $verbSingular = $ticketCount === 1;
 
         // Determina il tipo di operazione e genera il contenuto del log
@@ -3179,9 +3235,8 @@ class TicketController extends Controller
         ], 200);
     }
 
-    
     // Prende i dati di riepilogo del progetto
-    public function getProjectTicketRecapData (Ticket $ticket, Request $request)
+    public function getProjectTicketRecapData(Ticket $ticket, Request $request)
     {
         $user = $request->user();
 
@@ -3201,23 +3256,23 @@ class TicketController extends Controller
 
         // Recupera tutti i ticket collegati a questo progetto
         $projectTickets = $ticket->projectTickets;
-        
+
         // Conteggio totale
         $totalCount = $projectTickets->count();
-        
+
         // Separa aperti e chiusi
         $closedProjectTickets = $projectTickets->where('stage_id', $closedStageId);
         $openProjectTickets = $projectTickets->where('stage_id', '!=', $closedStageId);
-        
+
         $closedCount = $closedProjectTickets->count();
         $openCount = $openProjectTickets->count();
-        
+
         // Tempo totale dei ticket chiusi
         $totalClosedProcessingTime = $closedProjectTickets->sum('actual_processing_time') ?? 0;
-        
+
         // Tempo totale dei ticket ancora aperti (tempo parziale)
         $totalOpenProcessingTime = $openProjectTickets->sum('actual_processing_time') ?? 0;
-        
+
         $recapData = [
             'project_expected_duration' => $ticket->project_expected_duration,
             'total_slaves_count' => $totalCount,
@@ -3234,7 +3289,6 @@ class TicketController extends Controller
         ], 200);
 
     }
-
 
     public function report(Ticket $ticket, Request $request)
     {
