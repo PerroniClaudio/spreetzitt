@@ -552,4 +552,13 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/ticket-pro-forma-bill/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'destroy']);
     Route::get('/ticket-pro-forma-bill/preview/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfPreview']);
     Route::get('/ticket-pro-forma-bill/download/{proFormaBill}', [App\Http\Controllers\TicketProFormaBillController::class, 'pdfDownload']);
+
+    // Invoice Payment Stages Management
+    Route::apiResource('invoice-payment-stages', App\Http\Controllers\InvoicePaymentStageController::class);
+    Route::get('/all-invoice-payment-stages', [App\Http\Controllers\InvoicePaymentStageController::class, 'all']);
+
+    // Invoices Management
+    Route::apiResource('invoices', App\Http\Controllers\InvoiceController::class);
+    Route::post('/invoices/{id}/restore', [App\Http\Controllers\InvoiceController::class, 'restore']);
+    Route::get('/all-invoices', [App\Http\Controllers\InvoiceController::class, 'all']);
 });

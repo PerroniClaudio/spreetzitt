@@ -154,6 +154,11 @@ class Company extends Model
         return $this->hasMany(Property::class);
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
     /**
      * The news sources available to the company.
      *
