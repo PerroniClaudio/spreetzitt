@@ -58,6 +58,7 @@ class FileUploadController extends Controller
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
+            
             return Storage::url('tickets/' . $filePath);
         }
     }

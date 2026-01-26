@@ -44,6 +44,10 @@ Route::get('/test', function () {
     return response()->json(['message' => 'Test route is working']);
 });
 
+Route::get('/test-used-storage-disk', function () {
+    return \App\Http\Controllers\FileUploadController::getStorageDisk();
+});
+
 Route::get('/debug/tickets-missing-user', function () {
     return \App\Models\Ticket::with('user')
         ->where(function ($query) {
