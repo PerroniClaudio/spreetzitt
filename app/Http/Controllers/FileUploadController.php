@@ -58,7 +58,7 @@ class FileUploadController extends Controller
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
-            return Storage::url($filePath);
+            return Storage::url('tickets/' . $filePath);
         }
     }
 
@@ -78,7 +78,7 @@ class FileUploadController extends Controller
                  */
                 $fetchFile = $diskInstance->url($storeFile);
             } else {
-                $fetchFile = Storage::url('/public/'.$storeFile);
+                $fetchFile = Storage::url('tickets/'.$storeFile);
             }
         } catch (\Exception $e) {
             return response()->json([
