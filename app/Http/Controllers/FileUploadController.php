@@ -16,7 +16,7 @@ class FileUploadController extends Controller
     {
         $method = config('app.object_storage_method', 'default');
 
-        return $method;
+        return $method === 'gcs' ? 'gcs' : config('filesystems.default');
     }
 
     /**
@@ -54,12 +54,12 @@ class FileUploadController extends Controller
             /**
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
-            return Storage::disk($disk)->temporaryUrl($filePath, now()->addMinutes($minutesValid), $options);
+            return Storage::disk($disk)->temporaryUrl('tickets/' . $filePath, now()->addMinutes($minutesValid), $options);
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
             
-            return Storage::url('tickets/' . $filePath);
+            return Storage::url($filePath);
         }
     }
 
@@ -79,7 +79,7 @@ class FileUploadController extends Controller
                  */
                 $fetchFile = $diskInstance->url($storeFile);
             } else {
-                $fetchFile = Storage::url('tickets/'.$storeFile);
+                $fetchFile = Storage::url('tickets/' . $storeFile);
             }
         } catch (\Exception $e) {
             return response()->json([
