@@ -16,7 +16,7 @@ class FileUploadController extends Controller
     {
         $method = config('app.object_storage_method', 'default');
 
-        return $method === 'gcs' ? 'gcs' : config('filesystems.default');
+        return $method;
     }
 
     /**
