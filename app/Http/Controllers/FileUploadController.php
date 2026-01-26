@@ -79,7 +79,7 @@ class FileUploadController extends Controller
                  */
                 $fetchFile = $diskInstance->url($storeFile);
             } else {
-                $fetchFile = Storage::url('tickets/' . $storeFile);
+                $fetchFile = Storage::url($storeFile);
             }
         } catch (\Exception $e) {
             return response()->json([
