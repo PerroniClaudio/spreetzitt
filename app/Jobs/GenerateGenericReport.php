@@ -33,7 +33,7 @@ class GenerateGenericReport implements ShouldQueue
     public function handle(): void
     {
         $disk = FileUploadController::getStorageDisk();
-        Excel::store(new GenericExport($this->report), $this->report->file_path, $disk);
+        Excel::store(new GenericExport($this->report), 'tickets/' . $this->report->file_path, $disk);
         $this->report->is_generated = true;
         $this->report->save();
     }

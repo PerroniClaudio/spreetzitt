@@ -83,7 +83,7 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
             }
 
             $disk = \App\Http\Controllers\FileUploadController::getStorageDisk();
-            Storage::disk($disk)->put($proFormaBill->file_path, $pdf->output());
+            Storage::disk($disk)->put('tickets/' . $proFormaBill->file_path, $pdf->output());
 
             $proFormaBill->update([
                 'is_generated' => true,

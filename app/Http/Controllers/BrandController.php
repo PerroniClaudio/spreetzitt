@@ -84,15 +84,13 @@ class BrandController extends Controller
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
 
-            $path = 'brands/'.$id.'/logo';
-
-            $file_path = FileUploadController::storeFile($file, $path, $file_name);
-
+            $db_path = 'brands/'.$id.'/logo';
+            $bucket_path = 'tickets/brands/'.$id.'/logo';
+            FileUploadController::storeFile($file, $bucket_path, $file_name);
             $brand = Brand::find($id);
             $brand->update([
-                'logo_url' => $file_path,
+                'logo_url' => $db_path.'/'.$file_name,
             ]);
-
             return response()->json([
                 'brand' => $brand,
             ]);

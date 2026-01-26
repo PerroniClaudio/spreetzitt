@@ -209,7 +209,8 @@ class DocumentController extends Controller
                 $file_size = $file->getSize();
 
                 // Store the file in Google Cloud Storage
-                $bucket_path = 'documents'.$validated['path'].'';
+                $db_path = $validated['path'];
+                $bucket_path = 'tickets/documents'.$validated['path'].'';
                 FileUploadController::storeFile($file, $bucket_path, $uploaded_name);
 
                 // Create the document record in the database
@@ -218,7 +219,7 @@ class DocumentController extends Controller
                     'uploaded_name' => $uploaded_name,
                     'type' => $validated['type'],
                     'mime_type' => $mime_type,
-                    'path' => $validated['path'],
+                    'path' => $db_path,
                     'company_id' => $validated['company_id'],
                     'uploaded_by' => $user->id,
                     'file_size' => $file_size,
