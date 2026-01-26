@@ -1810,7 +1810,7 @@ class TicketController extends Controller
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
             $path = 'tickets/'.$id.'/'.$file_name;
-            $storeFile = FileUploadController::storeFile($file, 'tickets/'.$id.'/', $file_name);
+            $storeFile = FileUploadController::storeFile($file, $id.'/', $file_name);
             $ticketFile = TicketFile::create([
                 'ticket_id' => $id,
                 'filename' => $file->getClientOriginalName(),
