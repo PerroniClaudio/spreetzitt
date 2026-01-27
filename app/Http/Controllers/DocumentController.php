@@ -210,7 +210,7 @@ class DocumentController extends Controller
 
                 // Store the file in Google Cloud Storage
                 $db_path = $validated['path'];
-                $bucket_path = 'tickets/documents'.$validated['path'].'';
+                $bucket_path = FileUploadController::storagePathPrefix().'documents'.$validated['path'].'';
                 FileUploadController::storeFile($file, $bucket_path, $uploaded_name);
 
                 // Create the document record in the database

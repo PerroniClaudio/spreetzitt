@@ -245,7 +245,7 @@ class TicketReportPdfExportController extends Controller
             }
         }
 
-        $filePath = 'tickets/' . $ticketReportPdfExport->file_path;
+        $filePath = FileUploadController::storagePathPrefix().$ticketReportPdfExport->file_path;
 
         $disk = FileUploadController::getStorageDisk();
 

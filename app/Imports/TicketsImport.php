@@ -130,7 +130,7 @@ class TicketsImport implements ToCollection
 
                         $fileName = 'file_'.$currentValue.'_'.time().substr(uniqid(), -3).'.xlsx';
                     }
-                    $path = 'tickets/'.$ticket->id.'/';
+                    $path = FileUploadController::storagePathPrefix().$ticket->id.'/';
 
                     $export = new RowsExport($filteredRows);
                     $disk = FileUploadController::getStorageDisk();
@@ -240,7 +240,7 @@ class TicketsImport implements ToCollection
 
                         $fileName = 'file_'.$currentValue.'_'.time().substr(uniqid(), -3).'.xlsx';
                     }
-                    $path = 'tickets/'.$ticket->id.'/';
+                    $path = FileUploadController::storagePathPrefix().$ticket->id.'/';
 
                     $export = new RowsExport($filteredRows);
                     $disk = FileUploadController::getStorageDisk();

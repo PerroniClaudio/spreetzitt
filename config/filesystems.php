@@ -14,6 +14,7 @@ return [
     */
 
     'default' => env('FILESYSTEM_DISK', 'local'),
+    'storage_path_prefix' => trim(env('STORAGE_PATH_PREFIX', 'tickets'), '/'),
 
     /*
     |--------------------------------------------------------------------------

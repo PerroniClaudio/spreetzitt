@@ -85,7 +85,7 @@ class BrandController extends Controller
             $file_name = time().'_'.$file->getClientOriginalName();
 
             $db_path = 'brands/'.$id.'/logo';
-            $bucket_path = 'tickets/brands/'.$id.'/logo';
+            $bucket_path = FileUploadController::storagePathPrefix().'brands/'.$id.'/logo';
             FileUploadController::storeFile($file, $bucket_path, $file_name);
             $brand = Brand::find($id);
             $brand->update([

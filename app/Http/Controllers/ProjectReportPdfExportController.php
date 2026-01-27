@@ -280,7 +280,7 @@ class ProjectReportPdfExportController extends Controller
             ], 422);
         }
 
-        $filePath = 'tickets/' . $projectReportPdfExport->file_path;
+        $filePath = FileUploadController::storagePathPrefix().$projectReportPdfExport->file_path;
         $disk = FileUploadController::getStorageDisk();
 
         if (! Storage::disk($disk)->exists($filePath)) {

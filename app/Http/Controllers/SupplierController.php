@@ -80,7 +80,7 @@ class SupplierController extends Controller
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
             $db_path = 'supplier/'.$id.'/logo';
-            $bucket_path = 'tickets/supplier/'.$id.'/logo';
+            $bucket_path = FileUploadController::storagePathPrefix().'supplier/'.$id.'/logo';
             FileUploadController::storeFile($file, $bucket_path, $file_name);
             $supplier = Supplier::find($id);
             $supplier->update([

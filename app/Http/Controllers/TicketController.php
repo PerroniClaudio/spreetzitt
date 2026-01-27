@@ -432,7 +432,7 @@ class TicketController extends Controller
             if ($request->file('file') != null) {
                 $file = $request->file('file');
                 $file_name = time().'_'.$file->getClientOriginalName();
-                $storeFile = FileUploadController::storeFile($file, 'tickets/'.$ticket->id.'/', $file_name);
+                $storeFile = FileUploadController::storeFile($file, FileUploadController::storagePathPrefix().$ticket->id.'/', $file_name);
                 $ticket->update([
                     'file' => $file_name,
                 ]);
@@ -1809,8 +1809,8 @@ class TicketController extends Controller
         if ($request->file('file') != null) {
             $file = $request->file('file');
             $file_name = time().'_'.$file->getClientOriginalName();
-            $path = 'tickets/'.$id.'/'.$file_name;
-            $storeFile = FileUploadController::storeFile($file, 'tickets/tickets/'.$id.'/', $file_name);
+            $path = FileUploadController::storagePathPrefix().$id.'/'.$file_name;
+            $storeFile = FileUploadController::storeFile($file, FileUploadController::storagePathPrefix().'tickets/'.$id.'/', $file_name);
             $ticketFile = TicketFile::create([
                 'ticket_id' => $id,
                 'filename' => $file->getClientOriginalName(),
@@ -1846,8 +1846,8 @@ class TicketController extends Controller
             if (is_array($files)) {
                 foreach ($files as $file) {
                     $file_name = time().'_'.$file->getClientOriginalName();
-                    $path = 'tickets/'.$id.'/'.$file_name;
-                    $storeFile = FileUploadController::storeFile($file, 'tickets/tickets/'.$id.'/', $file_name);
+                    $path = FileUploadController::storagePathPrefix().$id.'/'.$file_name;
+                    $storeFile = FileUploadController::storeFile($file, FileUploadController::storagePathPrefix().'tickets/'.$id.'/', $file_name);
                     $ticketFile = TicketFile::create([
                         'ticket_id' => $id,
                         'filename' => $file->getClientOriginalName(),
@@ -1862,8 +1862,8 @@ class TicketController extends Controller
                 }
             } else {
                 $file_name = time().'_'.$files->getClientOriginalName();
-                $path = 'tickets/'.$id.'/'.$file_name;
-                $storeFile = FileUploadController::storeFile($files, 'tickets/tickets/'.$id.'/', $file_name);
+                $path = FileUploadController::storagePathPrefix().$id.'/'.$file_name;
+                $storeFile = FileUploadController::storeFile($files, FileUploadController::storagePathPrefix().'tickets/'.$id.'/', $file_name);
                 $ticketFile = TicketFile::create([
                     'ticket_id' => $id,
                     'filename' => $files->getClientOriginalName(),
