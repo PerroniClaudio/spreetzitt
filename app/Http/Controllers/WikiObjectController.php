@@ -250,7 +250,7 @@ class WikiObjectController extends Controller
                 $mime_type = $file->getClientMimeType();
                 $file_size = $file->getSize();
                 $db_path = $validated['path'];
-                $bucket_path = 'tickets/wiki_objects'.$validated['path'].'';
+                $bucket_path = FileUploadController::storagePathPrefix().'wiki_objects'.$validated['path'].'';
                 FileUploadController::storeFile($file, $bucket_path, $uploaded_name);
 
                 $company_id = isset($request->company_id) ? $request->company_id : null;

@@ -1728,7 +1728,7 @@ class GeneratePdfReport implements ShouldQueue
             }
 
             $disk = \App\Http\Controllers\FileUploadController::getStorageDisk();
-            Storage::disk($disk)->put('tickets/' . $report->file_path, $pdf->output());
+            Storage::disk($disk)->put(\App\Http\Controllers\FileUploadController::storagePathPrefix().$report->file_path, $pdf->output());
 
             // Se ci mette troppo tempo potremmo rispondere ok alla creazione del report e generarlo tramite un job, che quando ha fatto aggiorna il report
 

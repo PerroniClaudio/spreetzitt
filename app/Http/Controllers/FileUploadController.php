@@ -20,6 +20,16 @@ class FileUploadController extends Controller
     }
 
     /**
+     * Restituisce il prefisso di storage configurato con slash finale se presente.
+     */
+    public static function storagePathPrefix(): string
+    {
+        $prefix = trim((string) config('filesystems.storage_path_prefix', 'tickets'), '/');
+
+        return $prefix === '' ? '' : $prefix.'/';
+    }
+
+    /**
      * Carica un file utilizzando il disco appropriato
      */
     public static function storeFile(UploadedFile $file, string $path, ?string $fileName = null): string
@@ -54,7 +64,7 @@ class FileUploadController extends Controller
             /**
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
-            return Storage::disk($disk)->temporaryUrl('tickets/' . $filePath, now()->addMinutes($minutesValid), $options);
+            return Storage::disk($disk)->temporaryUrl(self::storagePathPrefix().$filePath, now()->addMinutes($minutesValid), $options);
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
