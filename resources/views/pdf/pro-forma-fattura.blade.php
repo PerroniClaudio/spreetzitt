@@ -19,7 +19,7 @@
             <h2>{{ $company->name }}</h2>
         @endif
         <h3>Pro-forma Fattura</h3>
-        <div>Periodo: {{ $bill->data_inizio }} - {{ $bill->data_fine }}</div>
+        <div>Periodo: {{ $bill->start_date }} - {{ $bill->end_date }}</div>
     </div>
 
     <table>
@@ -29,18 +29,33 @@
                 <th>Categoria</th>
                 <th>Tipo</th>
                 <th>Tempo lavorazione (minuti)</th>
+                <th>Costo (€)</th>
             </tr>
         </thead>
         <tbody>
+        <?php $totale = 0; ?>
         @foreach($tickets as $ticket)
+            <?php
+                $minuti = $ticket->actual_processing_time ?? 0;
+                $costo_orario = $ticket->ticketType->hourly_cost ?? 0;
+                $costo = round(($minuti / 60) * $costo_orario, 2);
+                $totale += $costo;
+            ?>
             <tr>
                 <td>{{ $ticket->id }}</td>
                 <td>{{ $ticket->ticketType->category->name ?? '-' }}</td>
                 <td>{{ $ticket->ticketType->name ?? '-' }}</td>
-                <td>{{ $ticket->actual_processing_time ?? '-' }}</td>
+                <td>{{ $minuti }}</td>
+                <td>{{ number_format($costo, 2, ',', '.') }}</td>
             </tr>
         @endforeach
         </tbody>
+        <tfoot>
+            <tr>
+                <th colspan="4" style="text-align:right">Totale</th>
+                <th>{{ number_format($totale, 2, ',', '.') }} €</th>
+            </tr>
+        </tfoot>
     </table>
 
     <div class="footer">
