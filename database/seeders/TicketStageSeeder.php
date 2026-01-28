@@ -87,15 +87,17 @@ class TicketStageSeeder extends Seeder
 
         foreach ($stages as $stageData) {
             // Crea il record usando create per i campi fillable
-            $stage = TicketStage::create([
-                'name' => $stageData['name'],
-                'description' => $stageData['description'],
-                'admin_color' => $stageData['admin_color'],
-                'user_color' => $stageData['user_color'],
-                'order' => $stageData['order'],
-                'is_sla_pause' => $stageData['is_sla_pause'],
-                'is_system' => $stageData['is_system'],
-            ]);
+            $stage = TicketStage::firstOrCreate(
+                ['name' => $stageData['name']],
+                [
+                    'description' => $stageData['description'],
+                    'admin_color' => $stageData['admin_color'],
+                    'user_color' => $stageData['user_color'],
+                    'order' => $stageData['order'],
+                    'is_sla_pause' => $stageData['is_sla_pause'],
+                    'is_system' => $stageData['is_system'],
+                ]
+            );
 
             // Imposta system_key separatamente se necessario (non è fillable)
             if (! is_null($stageData['system_key'])) {

@@ -44,6 +44,12 @@ Route::get('/test', function () {
     return response()->json(['message' => 'Test route is working']);
 });
 
+Route::get('/send-assign-email', function () {
+    $assignUpdate = \App\Models\TicketStatusUpdate::where('type', 'assign')->first();
+    dispatch(new \App\Jobs\SendUpdateEmail($assignUpdate, true));
+    return response()->json(['message' => 'Test route is working. ' . $assignUpdate->id]);
+});
+
 Route::get('/debug/tickets-missing-user', function () {
     return \App\Models\Ticket::with('user')
         ->where(function ($query) {

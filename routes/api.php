@@ -432,6 +432,17 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/hardware/{hardware}/attachments/{attachment}/download', [App\Http\Controllers\HardwareController::class, 'getDownloadUrl']);
     Route::get('/hardware/{hardware}/attachments/{attachment}/preview', [App\Http\Controllers\HardwareController::class, 'getPreviewUrl']);
 
+    // Contract Attachments Routes
+    Route::get('/contracts/{contract}/attachments', [App\Http\Controllers\ContractController::class, 'getAttachments']);
+    Route::post('/contracts/{contract}/attachments', [App\Http\Controllers\ContractController::class, 'uploadAttachment']);
+    Route::post('/contracts/{contract}/attachments/multiple', [App\Http\Controllers\ContractController::class, 'uploadAttachments']);
+    Route::patch('/contracts/{contract}/attachments/{attachment}', [App\Http\Controllers\ContractController::class, 'updateAttachment']);
+    Route::delete('/contracts/{contract}/attachments/{attachment}', [App\Http\Controllers\ContractController::class, 'deleteAttachment']);
+    Route::post('/contracts/{contract}/attachments/{attachment}/restore', [App\Http\Controllers\ContractController::class, 'restoreAttachment']);
+    Route::delete('/contracts/{contract}/attachments/{attachment}/force', [App\Http\Controllers\ContractController::class, 'forceDeleteAttachment']);
+    Route::get('/contracts/{contract}/attachments/{attachment}/download', [App\Http\Controllers\ContractController::class, 'getDownloadUrl']);
+    Route::get('/contracts/{contract}/attachments/{attachment}/preview', [App\Http\Controllers\ContractController::class, 'getPreviewUrl']);
+
     // Software Routes
 
     Route::get('/software-types', [App\Http\Controllers\SoftwareTypeController::class, 'index']);
@@ -561,4 +572,23 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::apiResource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::post('/invoices/{id}/restore', [App\Http\Controllers\InvoiceController::class, 'restore']);
     Route::get('/all-invoices', [App\Http\Controllers\InvoiceController::class, 'all']);
+
+    // Contract Stages Management
+    Route::apiResource('contract-stages', App\Http\Controllers\ContractStageController::class);
+    Route::post('/contract-stages/{id}/restore', [App\Http\Controllers\ContractStageController::class, 'restore']);
+    Route::delete('/contract-stages/{id}/force', [App\Http\Controllers\ContractStageController::class, 'forceDestroy']);
+    Route::get('/all-contract-stages', [App\Http\Controllers\ContractStageController::class, 'all']);
+
+    // Contracts Management
+    Route::apiResource('contracts', App\Http\Controllers\ContractController::class);
+    Route::post('/contracts/{id}/restore', [App\Http\Controllers\ContractController::class, 'restore']);
+    Route::delete('/contracts/{id}/force', [App\Http\Controllers\ContractController::class, 'forceDestroy']);
+    Route::get('/all-contracts', [App\Http\Controllers\ContractController::class, 'all']);
+
+    // Contract-Invoice Relationships
+    Route::get('/contracts/{contract}/invoices', [App\Http\Controllers\ContractController::class, 'getInvoices']);
+    Route::post('/contracts/{contract}/invoices', [App\Http\Controllers\ContractController::class, 'attachInvoices']);
+    Route::delete('/contracts/{contract}/invoices/{invoice}', [App\Http\Controllers\ContractController::class, 'detachInvoice']);
+    Route::put('/contracts/{contract}/invoices/sync', [App\Http\Controllers\ContractController::class, 'syncInvoices']);
+    Route::patch('/contracts/{contract}/invoices/{invoice}', [App\Http\Controllers\ContractController::class, 'updateInvoicePivot']);
 });
