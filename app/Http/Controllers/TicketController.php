@@ -2047,12 +2047,14 @@ class TicketController extends Controller
             $counters = [
                 'billable_missing' => 0,
                 'billing_validation_missing' => 0,
-                'billed_missing' => 0,
                 'billed_bill_identification_missing' => 0,
+                'all_validated_billed_missing' => 0,
+                'billable_validated_billed_missing' => 0,
                 'billed_bill_date_missing' => 0,
                 'open_billable_missing' => 0,
                 'open_billing_validation_missing' => 0,
-                'open_billed_missing' => 0,
+                'open_all_validated_billed_missing' => 0,
+                'open_billable_validated_billed_missing' => 0,
                 'open_billed_bill_identification_missing' => 0,
                 'open_billed_bill_date_missing' => 0,
             ];
@@ -2061,26 +2063,30 @@ class TicketController extends Controller
                 SELECT 
                     COUNT(CASE WHEN is_billable IS NULL THEN 1 END) as billable_missing,
                     COUNT(CASE WHEN is_billing_validated = 0 THEN 1 END) as billing_validation_missing,
-                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL THEN 1 END) as billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as all_validated_billed_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billable_validated_billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL THEN 1 END) as billed_bill_date_missing,
                     COUNT(CASE WHEN is_billable IS NULL AND stage_id != ? THEN 1 END) as open_billable_missing,
                     COUNT(CASE WHEN is_billing_validated = 0 AND stage_id != ? THEN 1 END) as open_billing_validation_missing,
-                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_all_validated_billed_missing,
+                    COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billable_validated_billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_date_missing
                 FROM tickets
-            ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
+            ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
 
             $counters = [
                 'billable_missing' => $counters->billable_missing,
                 'billing_validation_missing' => $counters->billing_validation_missing,
-                'billed_missing' => $counters->billed_missing,
+                'all_validated_billed_missing' => $counters->all_validated_billed_missing,
+                'billable_validated_billed_missing' => $counters->billable_validated_billed_missing,
                 'billed_bill_identification_missing' => $counters->billed_bill_identification_missing,
                 'billed_bill_date_missing' => $counters->billed_bill_date_missing,
                 'open_billable_missing' => $counters->open_billable_missing,
                 'open_billing_validation_missing' => $counters->open_billing_validation_missing,
-                'open_billed_missing' => $counters->open_billed_missing,
+                'open_all_validated_billed_missing' => $counters->open_all_validated_billed_missing,
+                'open_billable_validated_billed_missing' => $counters->open_billable_validated_billed_missing,
                 'open_billed_bill_identification_missing' => $counters->open_billed_bill_identification_missing,
                 'open_billed_bill_date_missing' => $counters->open_billed_bill_date_missing,
             ];
@@ -2264,8 +2270,8 @@ class TicketController extends Controller
             SELECT 
                 t.company_id,
                 c.name as company_name,
-                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 THEN 1 END) as billed_missing,
-                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 AND t.stage_id != ? THEN 1 END) as open_billed_missing
+                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 THEN 1 END) as companies_billed_missing,
+                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 AND t.stage_id != ? THEN 1 END) as open_companies_billed_missing
             FROM tickets t
             LEFT JOIN companies c ON t.company_id = c.id
             GROUP BY t.company_id, c.name
@@ -2277,8 +2283,8 @@ class TicketController extends Controller
         foreach ($results as $row) {
             $counters[$row->company_id] = [
                 'company_name' => $row->company_name,
-                'billed_missing' => $row->billed_missing,
-                'open_billed_missing' => $row->open_billed_missing,
+                'company_billed_missing' => $row->companies_billed_missing,
+                'open_company_billed_missing' => $row->open_companies_billed_missing,
             ];
         }
 

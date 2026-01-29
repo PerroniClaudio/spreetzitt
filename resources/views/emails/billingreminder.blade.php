@@ -34,11 +34,23 @@
 <h4 style="color: #2c3e50; margin-top: 0;">Non Ancora Fatturati</h4>
 <div style="display: flex; justify-content: space-between; margin: 5px 0;">
     <span><strong>Totale:</strong></span>
-    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['all_validated_billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
 </div>
 <div style="display: flex; justify-content: space-between; margin: 5px 0;">
     <span><strong>Di cui aperti:</strong></span>
-    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['open_billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['open_all_validated_billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+</div>
+</div>
+
+<div style="background-color: #f8f9fa; padding: 15px; border-left: 4px solid #3498db; margin-bottom: 15px;">
+<h4 style="color: #2c3e50; margin-top: 0;">Non Ancora Fatturati</h4>
+<div style="display: flex; justify-content: space-between; margin: 5px 0;">
+    <span><strong>Totale:</strong></span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['billable_validated_billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+</div>
+<div style="display: flex; justify-content: space-between; margin: 5px 0;">
+    <span><strong>Di cui aperti:</strong></span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['open_billable_validated_billed_missing'] ?? 0, 0, ',', '.') }} ticket</span>
 </div>
 </div>
 
@@ -70,11 +82,12 @@
 <div style="margin: 20px 0; padding: 15px; background-color: #e8f4fd; border: 1px solid #3498db; border-radius: 4px;">
 <h4 style="color: #2c3e50; margin-top: 0;">📊 Riepilogo</h4>
 <p style="margin: 0;">
-<strong>Totale ticket che richiedono attenzione:</strong> 
+<strong>Totale ticket che richiedono attenzione (non preciso):</strong> 
 {{ number_format(
     ($counters['billable_missing'] ?? 0) + 
     ($counters['billing_validation_missing'] ?? 0) + 
-    ($counters['billed_missing'] ?? 0) + 
+    ($counters['all_validated_billed_missing'] ?? 0) + 
+    // ($counters['billable_validated_billed_missing'] ?? 0) +  // Questo non lo mettiamo perchè sono sicuramente doppioni di quelli già contati sopra
     ($counters['billed_bill_identification_missing'] ?? 0) + 
     ($counters['billed_bill_date_missing'] ?? 0), 
     0, ',', '.'
@@ -85,7 +98,8 @@
 {{ number_format(
     ($counters['open_billable_missing'] ?? 0) + 
     ($counters['open_billing_validation_missing'] ?? 0) + 
-    ($counters['open_billed_missing'] ?? 0) + 
+    ($counters['open_all_validated_billed_missing'] ?? 0) + 
+    // ($counters['open_billable_validated_billed_missing'] ?? 0) +  // Questo non lo mettiamo perchè sono sicuramente doppioni di quelli già contati sopra
     ($counters['open_billed_bill_identification_missing'] ?? 0) + 
     ($counters['open_billed_bill_date_missing'] ?? 0), 
     0, ',', '.'

@@ -60,26 +60,30 @@ class SendBillingReminders implements ShouldQueue
             SELECT 
                 COUNT(CASE WHEN is_billable IS NULL THEN 1 END) as billable_missing,
                 COUNT(CASE WHEN is_billing_validated = 0 THEN 1 END) as billing_validation_missing,
-                COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billed_missing,
                 COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL THEN 1 END) as billed_bill_identification_missing,
+                COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as all_validated_billed_missing,
+                COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billable_validated_billed_missing,
                 COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL THEN 1 END) as billed_bill_date_missing,
                 COUNT(CASE WHEN is_billable IS NULL AND stage_id != ? THEN 1 END) as open_billable_missing,
                 COUNT(CASE WHEN is_billing_validated = 0 AND stage_id != ? THEN 1 END) as open_billing_validation_missing,
-                COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billed_missing,
                 COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_identification_missing,
+                COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_all_validated_billed_missing,
+                COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billable_validated_billed_missing,
                 COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_date_missing
             FROM tickets
-        ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
+        ', [$closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId, $closedStageId]);
 
         return [
             'billable_missing' => $result->billable_missing,
             'billing_validation_missing' => $result->billing_validation_missing,
-            'billed_missing' => $result->billed_missing,
+            'all_validated_billed_missing' => $result->all_validated_billed_missing,
+            'billable_validated_billed_missing' => $result->billable_validated_billed_missing,
             'billed_bill_identification_missing' => $result->billed_bill_identification_missing,
             'billed_bill_date_missing' => $result->billed_bill_date_missing,
             'open_billable_missing' => $result->open_billable_missing,
             'open_billing_validation_missing' => $result->open_billing_validation_missing,
-            'open_billed_missing' => $result->open_billed_missing,
+            'open_all_validated_billed_missing' => $result->open_all_validated_billed_missing,
+            'open_billable_validated_billed_missing' => $result->open_billable_validated_billed_missing,
             'open_billed_bill_identification_missing' => $result->open_billed_bill_identification_missing,
             'open_billed_bill_date_missing' => $result->open_billed_bill_date_missing,
         ];
