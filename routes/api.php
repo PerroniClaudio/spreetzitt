@@ -137,6 +137,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket-admin', [App\Http\Controllers\TicketController::class, 'adminGroupsTickets']);
     Route::get('/ticket-admin-billing', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingTickets']);
     Route::get('/ticket-admin-billing-counters', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingCounters']);
+    Route::get('/tickets/billed-missing-by-company', [\App\Http\Controllers\TicketController::class, 'getBilledMissingByCompany']);
     Route::post('/ticket/{ticket}/assign-to-admin', [App\Http\Controllers\TicketController::class, 'assignToAdminUser']);
     Route::post('/ticket/{ticket}/assign-to-group', [App\Http\Controllers\TicketController::class, 'assignToGroup']);
     Route::get('/ticket/{ticket}/closing-messages', [App\Http\Controllers\TicketController::class, 'closingMessages']);

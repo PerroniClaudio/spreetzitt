@@ -2240,6 +2240,52 @@ class TicketController extends Controller
     }
 
     // Attività programmate disponibili per il ticket (tra cui scegliere per collegarlo)
+
+    /**
+     * Restituisce i counter dei ticket validati ma non ancora fatturati (a prescindere da fatturabile o no), suddivisi per azienda,
+     * e il counter di quanti di questi sono ancora aperti (per azienda).
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getBilledMissingByCompany(Request $request)
+    {
+        $user = $request->user();
+
+        if ($user['is_admin'] != 1) {
+            return response([
+                'message' => 'The user must be at least an admin.',
+            ], 401);
+        }
+
+        $closedStageId = TicketStage::where('system_key', 'closed')->value('id');
+
+        // Query: raggruppa per company_id e conta i ticket validati ma non ancora fatturati (a prescindere da fatturabile o no), e quelli ancora aperti, includendo anche il nome azienda
+        $results = DB::select('
+            SELECT 
+                t.company_id,
+                c.name as company_name,
+                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 THEN 1 END) as billed_missing,
+                COUNT(CASE WHEN t.is_billing_validated = 1 AND t.is_billed = 0 AND t.stage_id != ? THEN 1 END) as open_billed_missing
+            FROM tickets t
+            LEFT JOIN companies c ON t.company_id = c.id
+            GROUP BY t.company_id, c.name
+            ORDER BY c.name ASC
+        ', [$closedStageId]);
+
+        // Restituisce un array associativo company_id => [company_name, billed_missing, open_billed_missing]
+        $counters = [];
+        foreach ($results as $row) {
+            $counters[$row->company_id] = [
+                'company_name' => $row->company_name,
+                'billed_missing' => $row->billed_missing,
+                'open_billed_missing' => $row->open_billed_missing,
+            ];
+        }
+
+        return response([
+            'counters' => $counters,
+        ], 200);
+    }
     public function getAvailableSchedulingTickets(Ticket $ticket, Request $request)
     {
         $user = $request->user();
