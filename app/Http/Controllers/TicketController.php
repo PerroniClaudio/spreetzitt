@@ -1320,7 +1320,7 @@ class TicketController extends Controller
             'type' => 'billing',
         ]);
 
-        dispatch(new SendUpdateEmail($update));
+        // dispatch(new SendUpdateEmail($update));
 
         return response([
             'ticket' => $ticket,
