@@ -93,9 +93,11 @@ class AutoAssignTicket implements ShouldQueue
                     'type' => 'assign',
                 ]);
 
-                dispatch(new SendUpdateEmail($assignUpdate, true));
+                // Questo invio è stato commentato per evitare doppie email all'utente assegnato
+                // dispatch(new SendUpdateEmail($assignUpdate, true));
+
                 // Invia mail di avviso a tutto il gruppo che un ticket è stato assegnato automaticamente e non è detto che venga gestito da quell'utente.
-                dispatch(new SendGroupWarningEmail('auto-assign', $selectedGroup, $ticket, $assignUpdate));
+                dispatch(new SendGroupWarningEmail('auto-assign', $selectedGroup, $ticket, $assignUpdate, true));
             }
 
             // Si controlla se lo stato è "Nuovo" e in tal caso lo si porta a "Assegnato"
