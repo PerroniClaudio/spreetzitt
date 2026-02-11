@@ -1524,7 +1524,7 @@ class GeneratePdfReport implements ShouldQueue
                     ]],
                 ],
                 'options' => [
-                    'title' => ['display' => true, 'text' => 'SLA'],
+                    'title' => ['display' => true, 'text' => 'Tempo presa in carico'],
                     'legend' => [
                         'display' => true,
                         'position' => 'bottom',
