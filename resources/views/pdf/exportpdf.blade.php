@@ -28,7 +28,7 @@
         </div>
 
 
-        <h1 class="main-header" style="font-size:2rem;line-height: 1;margin-top: 3rem; margin-bottom: 1rem;">
+        <h1 class="main-header" style="font-size:2rem;line-height: 1;margin-top: 0.5rem; margin-bottom: 0.5rem;">
             Report attività eseguite
         </h1>
 
@@ -53,7 +53,7 @@
         </div>
     </div>
     
-    <div style="height: 1rem;"></div>
+    <div style="height: 0.5rem;"></div>
 
     <div class="card">
         <p style="margin-bottom: 0.5rem;"><b>Conteggio e fatturabilità ticket</b></p>
@@ -263,10 +263,10 @@
 
         </table>
 
-        <div style="height: 1rem;"></div>
+        {{-- <div style="height: 0.5rem;"></div> --}}
 
         {{-- Grafici top 5 tempo di esecuzione per fatturabilità --}}
-        <table width="100%" style="margin-top: 1rem;">
+        <table width="100%" style="margin-top: 0.5rem;">
             <tr>
                 <td>
                     @php
@@ -293,7 +293,58 @@
 
                 </td>
             </tr>
+            <tr>
+                <td>
+                    @php
+                        $imgData = !empty($tickets_sla_url) ? @file_get_contents($tickets_sla_url) : false;
+                    @endphp
+                    @if ($imgData !== false)
+                        <img src="data:image/png;base64,{{ base64_encode($imgData) }}"
+                            style="width: 100%; height: auto;">
+                    @else
+                        <span>Immagine non disponibile</span>
+                    @endif
+                </td>
+            </tr>
         </table>
+
+        {{-- <div style="height: 1rem;"></div> --}}
+
+        {{-- <p style="margin-bottom: 0.5rem;"><b>Conteggio ticket per presa in carico</b></p>
+        <table style="width:100%; border: 1px solid #353131; border-collapse: collapse;">
+            <thead>
+                <tr style="border: 1px solid #353131;">
+                    <th style="border: 1px solid #353131;" class="text-small-plus  ">
+                        Entro 30 minuti
+                    </th>
+                    <th style="border: 1px solid #353131; width:15%;" class="text-small-plus  ">
+                        Fra 30 e 60 minuti
+                    </th>
+                    <th style="border: 1px solid #353131; width:25%;" class="text-small-plus  ">
+                        Fra 60 e 120 minuti
+                    </th>
+                    <th style="border: 1px solid #353131; width:25%;" class="text-small-plus  ">
+                        Oltre 120 minuti
+                    </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="border: 1px solid #353131;">
+                    <td style="border: 1px solid #353131; padding-left: 0.5rem;">
+                        
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        
+                    </td>
+                    <td style="border: 1px solid #353131; text-align: center;">
+                        
+                    </td>
+                </tr>
+            </tbody>
+        </table> --}}
 
     </div>
 

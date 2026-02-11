@@ -365,6 +365,9 @@ class GeneratePdfReport implements ShouldQueue
                         }
                     }
 
+                    // Presa in carico
+                    $ticket['time_to_take'] = $ticket->timeToTake();
+
                     //? Avanzamento
 
                     $avanzamento = [
@@ -613,14 +616,8 @@ class GeneratePdfReport implements ShouldQueue
 
                 $ticket_by_source[$ticket['data']['source']]++;
 
-                // Presa in carica
-
-                if ($ticket['data']['status_updates'] != null) {
-                    $elapsed_minutes = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->diffInMinutes(\Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['status_updates'][0]['created_at']));
-                } else {
-                    // $elapsed_minutes = $ticket['data']['sla_take'];
-                    $elapsed_minutes = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->diffInMinutes(\Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['updated_at']));
-                }
+                // Presa in carico
+                $elapsed_minutes = $ticket['data']['time_to_take'];
 
                 if ($elapsed_minutes < 30) {
                     $sla_data['less_than_30_minutes']++;
@@ -1438,6 +1435,74 @@ class GeneratePdfReport implements ShouldQueue
 
             // 10 - SLA
 
+            // $tickets_sla_data = [
+            //     'type' => 'horizontalBar',
+            //     'data' => [
+            //         'labels' => ['SLA Presa in Carico'],
+            //         'datasets' => [
+            //             [
+            //                 'label' => 'Meno di 30 minuti',
+            //                 'data' => [$sla_data['less_than_30_minutes']],
+            //                 'backgroundColor' => '#28a745',
+            //             ],
+            //             [
+            //                 'label' => 'Meno di 1 ora',
+            //                 'data' => [$sla_data['less_than_1_hour']],
+            //                 'backgroundColor' => '#ffc107',
+            //             ],
+            //             [
+            //                 'label' => 'Meno di 2 ore',
+            //                 'data' => [$sla_data['less_than_2_hours']],
+            //                 'backgroundColor' => '#fd7e14',
+            //             ],
+            //             [
+            //                 'label' => 'Più di 2 ore',
+            //                 'data' => [$sla_data['more_than_2_hours']],
+            //                 'backgroundColor' => '#dc3545',
+            //             ],
+            //         ],
+            //     ],
+            //     'options' => [
+            //         'title' => ['display' => true, 'text' => 'SLA'],
+            //         'legend' => [
+            //             'display' => true,
+            //             'position' => 'bottom',
+            //             'labels' => [
+            //                 'boxWidth' => 20,
+            //                 'padding' => 10,
+            //                 'usePointStyle' => true,
+            //             ],
+            //         ],
+            //         'scales' => [
+            //             'xAxes' => [[
+            //                 'stacked' => true,
+            //                 'ticks' => [
+            //                     'beginAtZero' => true,
+            //                 ],
+            //             ]],
+            //             'yAxes' => [[
+            //                 'stacked' => true,
+            //                 'barThickness' => 50,
+            //             ]],
+            //         ],
+            //         'plugins' => [
+            //             'datalabels' => [
+            //                 'display' => function($context) {
+            //                     return $context['parsed']['x'] > 0;
+            //                 },
+            //                 'color' => 'white',
+            //                 'font' => [
+            //                     'weight' => 'bold',
+            //                     'size' => 12,
+            //                 ],
+            //                 'formatter' => function($value) {
+            //                     return $value > 0 ? $value : '';
+            //                 },
+            //             ],
+            //         ],
+            //     ],
+            // ];
+
             $tickets_sla_data = [
                 'type' => 'doughnut',
                 'data' => [
@@ -1479,6 +1544,7 @@ class GeneratePdfReport implements ShouldQueue
                     ],
                 ],
             ];
+
 
             $tickets_sla_url = $charts_base_url.urlencode(json_encode($tickets_sla_data));
 

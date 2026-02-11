@@ -488,4 +488,173 @@ class Ticket extends Model
     {
         return !is_null($this->project_id);
     }
+
+    public function timeToTake(): int
+    {
+        $createdAt = $this->created_at;
+        $assignedAt = $this->statusUpdates()->where('type', 'assign')->first()?->created_at;
+        
+        // Se non c'è data di assegnazione, non possiamo calcolare il tempo
+        if (!$assignedAt) {
+            return 0;
+        }
+        
+        $weeklyTimes = $this->company->weeklyTimes;
+        
+        // Se non ci sono orari definiti o tutti i giorni sono 00:00-00:00, usa il fallback
+        if (!$weeklyTimes || $this->areAllDaysEmpty($weeklyTimes)) {
+            $weeklyTimes = $this->getDefaultWeeklyTimes();
+        }
+        
+        // Array delle festività italiane (formato DD-MM)
+        $holidays = [
+            '01-01', // 1 gennaio - Capodanno
+            '06-01', // 6 gennaio - Epifania
+            '25-04', // 25 aprile - Festa della Liberazione
+            '01-05', // 1 maggio - Festa dei Lavoratori
+            '02-06', // 2 giugno - Festa della Repubblica
+            '15-08', // 15 agosto - Ferragosto
+            '01-11', // 1 novembre - Ognissanti
+            '08-12', // 8 dicembre - Immacolata Concezione
+            '25-12', // 25 dicembre - Natale
+            '26-12', // 26 dicembre - Santo Stefano
+        ];
+        
+        $totalMinutes = 0;
+        $current = $createdAt->copy();
+        
+        // Itera giorno per giorno fino alla data di assegnazione
+        while ($current->format('Y-m-d') <= $assignedAt->format('Y-m-d')) {
+            $dayOfWeek = $current->dayOfWeek; // 0 = domenica, 1 = lunedì, ..., 6 = sabato
+            $dayKey = $this->getDayKeyFromDayOfWeek($dayOfWeek);
+            
+            // Verifica se è una festività (usa formato DD-MM per l'Italia)
+            $isHoliday = in_array($current->format('d-m'), $holidays);
+            
+            if ($isHoliday) {
+                $current->addDay()->startOfDay();
+                continue;
+            }
+            
+            // Verifica se ci sono orari validi per questo giorno
+            $dayTimes = $weeklyTimes[$dayKey] ?? null;
+            if (!$dayTimes) {
+                $current->addDay()->startOfDay();
+                continue;
+            }
+            
+            $startTime = $dayTimes['start'] ?? null;
+            $endTime = $dayTimes['end'] ?? null;
+            
+            // Se entrambi gli orari sono 00:00, il giorno non conta
+            if ($startTime === '00:00' && $endTime === '00:00') {
+                $current->addDay()->startOfDay();
+                continue;
+            }
+            
+            // Calcola l'inizio e la fine effettivi per questo giorno
+            $dayStart = $current->copy()->startOfDay()->addHours((int)substr($startTime, 0, 2))->addMinutes((int)substr($startTime, 3, 2));
+            $dayEnd = $current->copy()->startOfDay()->addHours((int)substr($endTime, 0, 2))->addMinutes((int)substr($endTime, 3, 2));
+            
+            // Determina il periodo effettivo da conteggiare per questo giorno
+            $periodStart = $dayStart;
+            $periodEnd = $dayEnd;
+            
+            // Se è il primo giorno, regola l'inizio in base a createdAt
+            if ($current->format('Y-m-d') === $createdAt->format('Y-m-d')) {
+                if ($createdAt->greaterThan($dayStart)) {
+                    $periodStart = $createdAt->copy();
+                } elseif ($createdAt->lessThan($dayStart)) {
+                    // Se createdAt è prima dell'orario lavorativo, inizia dall'orario lavorativo
+                    $periodStart = $dayStart;
+                }
+                
+                // Se createdAt è dopo l'orario lavorativo, non conta niente per questo giorno
+                if ($createdAt->greaterThan($dayEnd)) {
+                    $current->addDay()->startOfDay();
+                    continue;
+                }
+            }
+            
+            // Se è l'ultimo giorno, regola la fine in base ad assignedAt
+            if ($current->format('Y-m-d') === $assignedAt->format('Y-m-d')) {
+                if ($assignedAt->lessThan($dayEnd) && $assignedAt->greaterThan($dayStart)) {
+                    $periodEnd = $assignedAt->copy();
+                } elseif ($assignedAt->lessThan($dayStart)) {
+                    // Se assignedAt è prima dell'orario lavorativo, non conta niente per questo giorno
+                    $current->addDay()->startOfDay();
+                    continue;
+                }
+                // Se assignedAt è dopo l'orario lavorativo, usa tutto l'orario lavorativo
+            }
+            
+            // Calcola i minuti per questo periodo
+            if ($periodStart->lessThan($periodEnd)) {
+                $totalMinutes += $periodStart->diffInMinutes($periodEnd);
+            }
+            
+            $current->addDay()->startOfDay();
+        }
+        
+        // Restituisce i minuti totali
+        return $totalMinutes;
+    }
+    
+    /**
+     * Converte il numero del giorno della settimana nella chiave utilizzata in weeklyTimes
+     */
+    private function getDayKeyFromDayOfWeek(int $dayOfWeek): string
+    {
+        $dayMap = [
+            0 => 'sunday',
+            1 => 'monday', 
+            2 => 'tuesday',
+            3 => 'wednesday',
+            4 => 'thursday',
+            5 => 'friday',
+            6 => 'saturday',
+        ];
+        
+        return $dayMap[$dayOfWeek];
+    }
+    
+    /**
+     * Verifica se tutti i giorni in weeklyTimes hanno orari 00:00-00:00
+     */
+    private function areAllDaysEmpty($weeklyTimes): bool
+    {
+        if (!$weeklyTimes || !is_array($weeklyTimes)) {
+            return true;
+        }
+        
+        $days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        
+        foreach ($days as $day) {
+            $dayTimes = $weeklyTimes[$day] ?? null;
+            if ($dayTimes && 
+                isset($dayTimes['start']) && isset($dayTimes['end']) &&
+                !($dayTimes['start'] === '00:00' && $dayTimes['end'] === '00:00')) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Restituisce gli orari di fallback: lun-ven 09:00-18:00, sab-dom 00:00-00:00
+     */
+    private function getDefaultWeeklyTimes(): array
+    {
+        return [
+            'monday' => ['start' => '09:00', 'end' => '18:00'],
+            'tuesday' => ['start' => '09:00', 'end' => '18:00'],
+            'wednesday' => ['start' => '09:00', 'end' => '18:00'],
+            'thursday' => ['start' => '09:00', 'end' => '18:00'],
+            'friday' => ['start' => '09:00', 'end' => '18:00'],
+            'saturday' => ['start' => '00:00', 'end' => '00:00'],
+            'sunday' => ['start' => '00:00', 'end' => '00:00'],
+        ];
+    }
+
 }
