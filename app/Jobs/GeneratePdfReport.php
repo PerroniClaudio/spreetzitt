@@ -500,6 +500,11 @@ class GeneratePdfReport implements ShouldQueue
                 'unbillable' => [],
             ];
 
+            $tickets_average_time_to_take = collect($tickets_data)
+                ->pluck('data.time_to_take')
+                ->filter(fn($time) => is_numeric($time))
+                ->avg() ?? 0;
+
             foreach ($tickets_data as $ticket) {
                 $date = \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->format('Y-m-d');
                 if (! isset($tickets_by_day[$date])) {
@@ -1259,11 +1264,13 @@ class GeneratePdfReport implements ShouldQueue
                                 'label' => 'Incidents',
                                 'data' => array_values(array_column($tickets_by_month, 'incident')),
                                 'backgroundColor' => $base_incident_color,
+                                'maxBarThickness' => 40,
                             ],
                             [
                                 'label' => 'Requests',
                                 'data' => array_values(array_column($tickets_by_month, 'request')),
                                 'backgroundColor' => $base_request_color,
+                                'maxBarThickness' => 40,
                             ],
                         ],
                     ],
@@ -1435,118 +1442,114 @@ class GeneratePdfReport implements ShouldQueue
 
             // 10 - SLA
 
+            // Calcola il totale per la percentuale
+            $sla_total = array_sum([
+                $sla_data['less_than_30_minutes'],
+                $sla_data['less_than_1_hour'],
+                $sla_data['less_than_2_hours'],
+                $sla_data['more_than_2_hours'],
+            ]) ?: 1;
+
+            $sla_percentages = [
+                round($sla_data['less_than_30_minutes'] / $sla_total * 100, 1),
+                round($sla_data['less_than_1_hour'] / $sla_total * 100, 1),
+                round($sla_data['less_than_2_hours'] / $sla_total * 100, 1),
+                round($sla_data['more_than_2_hours'] / $sla_total * 100, 1),
+            ];
+
+            // Converte i valori in stringa JSON per l'inserimento nel chart config
+            $sla_data_json = json_encode($sla_percentages);
+
+            $tickets_sla_data = <<<EOD
+                {
+                    "type": "horizontalBar",
+                    "data": {
+                        "labels": ["Meno di 30 minuti", "Meno di 1 ora", "Meno di 2 ore", "Più di 2 ore"],
+                        "datasets": [{
+                        "label": "Percentuale",
+                        "data": $sla_data_json,
+                        "backgroundColor": ["#28a745", "#ffc107", "#fd7e14", "#dc3545"],
+                        "maxBarThickness": 40
+                        }]
+                    },
+                    "options": {
+                        "title": {"display": true, "text": "Tempi presa in carico (%)"},
+                        "legend": {"display": false},
+                        "scales": {
+                        "xAxes": [{
+                            "ticks": {
+                            "beginAtZero": true,
+                            "stepSize": 10,
+                            "max": 100
+                            }
+                        }],
+                        "yAxes": [{
+                            "barThickness": 40
+                        }]
+                        },
+                        "plugins": {
+                        "datalabels": {
+                            "display": true,
+                            "color": "white",
+                            "font": {
+                            "weight": "bold",
+                            "size": 12
+                            },
+                            "anchor": "center",
+                            "align": "center",
+                            "formatter": (value) => {
+                            return value > 0 ? value + "%" : "";
+                            }
+                        }
+                        }
+                    }
+                }
+            EOD;
+
             // $tickets_sla_data = [
-            //     'type' => 'horizontalBar',
+            //     'type' => 'doughnut',
             //     'data' => [
-            //         'labels' => ['SLA Presa in Carico'],
-            //         'datasets' => [
-            //             [
-            //                 'label' => 'Meno di 30 minuti',
-            //                 'data' => [$sla_data['less_than_30_minutes']],
-            //                 'backgroundColor' => '#28a745',
-            //             ],
-            //             [
-            //                 'label' => 'Meno di 1 ora',
-            //                 'data' => [$sla_data['less_than_1_hour']],
-            //                 'backgroundColor' => '#ffc107',
-            //             ],
-            //             [
-            //                 'label' => 'Meno di 2 ore',
-            //                 'data' => [$sla_data['less_than_2_hours']],
-            //                 'backgroundColor' => '#fd7e14',
-            //             ],
-            //             [
-            //                 'label' => 'Più di 2 ore',
-            //                 'data' => [$sla_data['more_than_2_hours']],
-            //                 'backgroundColor' => '#dc3545',
-            //             ],
+            //         'labels' => [
+            //             'Meno di 30 minuti',
+            //             'Meno di 1 ora',
+            //             'Meno di 2 ore',
+            //             'Più di 2 ore',
             //         ],
+            //         'datasets' => [[
+            //             'data' => [
+            //                 $sla_data['less_than_30_minutes'],
+            //                 $sla_data['less_than_1_hour'],
+            //                 $sla_data['less_than_2_hours'],
+            //                 $sla_data['more_than_2_hours'],
+            //             ],
+            //             'backgroundColor' => $this->getColorShades(4, true, true, false),
+            //             'maxBarThickness' => 40,
+            //         ]],
             //     ],
             //     'options' => [
-            //         'title' => ['display' => true, 'text' => 'SLA'],
+            //         'title' => ['display' => true, 'text' => 'Tempo presa in carico'],
             //         'legend' => [
             //             'display' => true,
             //             'position' => 'bottom',
             //             'labels' => [
             //                 'boxWidth' => 20,
-            //                 'padding' => 10,
+            //                 'padding' => 20,
             //                 'usePointStyle' => true,
             //             ],
             //         ],
-            //         'scales' => [
-            //             'xAxes' => [[
-            //                 'stacked' => true,
-            //                 'ticks' => [
-            //                     'beginAtZero' => true,
-            //                 ],
-            //             ]],
-            //             'yAxes' => [[
-            //                 'stacked' => true,
-            //                 'barThickness' => 50,
-            //             ]],
-            //         ],
             //         'plugins' => [
             //             'datalabels' => [
-            //                 'display' => function($context) {
-            //                     return $context['parsed']['x'] > 0;
-            //                 },
             //                 'color' => 'white',
             //                 'font' => [
             //                     'weight' => 'bold',
-            //                     'size' => 12,
             //                 ],
-            //                 'formatter' => function($value) {
-            //                     return $value > 0 ? $value : '';
-            //                 },
             //             ],
             //         ],
             //     ],
             // ];
 
-            $tickets_sla_data = [
-                'type' => 'doughnut',
-                'data' => [
-                    'labels' => [
-                        'Meno di 30 minuti',
-                        'Meno di 1 ora',
-                        'Meno di 2 ore',
-                        'Più di 2 ore',
-                    ],
-                    'datasets' => [[
-                        'data' => [
-                            $sla_data['less_than_30_minutes'],
-                            $sla_data['less_than_1_hour'],
-                            $sla_data['less_than_2_hours'],
-                            $sla_data['more_than_2_hours'],
-                        ],
-                        'backgroundColor' => $this->getColorShades(4, true, true, false),
-                        'maxBarThickness' => 40,
-                    ]],
-                ],
-                'options' => [
-                    'title' => ['display' => true, 'text' => 'Tempo presa in carico'],
-                    'legend' => [
-                        'display' => true,
-                        'position' => 'bottom',
-                        'labels' => [
-                            'boxWidth' => 20,
-                            'padding' => 20,
-                            'usePointStyle' => true,
-                        ],
-                    ],
-                    'plugins' => [
-                        'datalabels' => [
-                            'color' => 'white',
-                            'font' => [
-                                'weight' => 'bold',
-                            ],
-                        ],
-                    ],
-                ],
-            ];
 
-
-            $tickets_sla_url = $charts_base_url.urlencode(json_encode($tickets_sla_data));
+            $tickets_sla_url = $charts_base_url.urlencode($tickets_sla_data);
 
             // 11 - Form non corretto
 
@@ -1779,6 +1782,7 @@ class GeneratePdfReport implements ShouldQueue
                 'ticket_by_billable_time_url' => $ticket_by_billable_time_url,
                 'ticket_by_unbillable_time_url' => $ticket_by_unbillable_time_url,
                 'filter' => $filter,
+                'tickets_average_time_to_take' => $tickets_average_time_to_take,
             ];
 
             Pdf::setOptions([
