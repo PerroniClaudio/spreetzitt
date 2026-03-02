@@ -409,9 +409,10 @@ class ProjectReportPdfExportController extends Controller
                     ], 422);
                 }
 
+                $filePath = FileUploadController::storagePathPrefix().$projectReportPdfExport->file_path;
                 // Verifica che il file esista
                 $disk = FileUploadController::getStorageDisk();
-                if (! Storage::disk($disk)->exists($projectReportPdfExport->file_path)) {
+                if (! Storage::disk($disk)->exists($filePath)) {
                     $projectReportPdfExport->update([
                         'email_status' => "failed",
                     ]);
@@ -466,7 +467,8 @@ class ProjectReportPdfExportController extends Controller
 
             // Verifica che il file esista
             $disk = FileUploadController::getStorageDisk();
-            if (! Storage::disk($disk)->exists($projectReportPdfExport->file_path)) {
+            $filePath = FileUploadController::storagePathPrefix().$projectReportPdfExport->file_path;
+            if (! Storage::disk($disk)->exists($filePath)) {
                 return response([
                     'message' => 'Cannot send email: report file not found in storage.',
                     'report' => $projectReportPdfExport,
@@ -620,7 +622,7 @@ class ProjectReportPdfExportController extends Controller
                 ], 404);
             }
 
-            if($projectReportPdfExport->is_approved_biling) {
+            if($projectReportPdfExport->is_approved_billing) {
                 return response([
                     'message' => 'Non puoi modificare la query AI di un report approvato.',
                 ], 401);

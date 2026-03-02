@@ -371,9 +371,10 @@ class TicketReportPdfExportController extends Controller
                     ], 422);
                 }
 
+                $filePath = FileUploadController::storagePathPrefix().$ticketReportPdfExport->file_path;
                 // Verifica che il file esista
                 $disk = FileUploadController::getStorageDisk();
-                if (! Storage::disk($disk)->exists($ticketReportPdfExport->file_path)) {
+                if (! Storage::disk($disk)->exists($filePath)) {
                     $ticketReportPdfExport->update([
                         'email_status' => "failed",
                     ]);
@@ -426,9 +427,11 @@ class TicketReportPdfExportController extends Controller
                 ], 422);
             }
 
+            $filePath = FileUploadController::storagePathPrefix().$ticketReportPdfExport->file_path;
             // Verifica che il file esista
             $disk = FileUploadController::getStorageDisk();
-            if (! Storage::disk($disk)->exists($ticketReportPdfExport->file_path)) {
+            // if (! Storage::disk($disk)->exists($ticketReportPdfExport->file_path)) {
+            if (! Storage::disk($disk)->exists($filePath)) {
                 return response([
                     'message' => 'Cannot send email: report file not found in storage.',
                     'report' => $ticketReportPdfExport,
@@ -582,7 +585,7 @@ class TicketReportPdfExportController extends Controller
                 ], 404);
             }
 
-            if($ticketReportPdfExport->is_approved_biling) {
+            if($ticketReportPdfExport->is_approved_billing) {
                 return response([
                     'message' => 'Non puoi modificare la query AI di un report approvato.',
                 ], 401);
