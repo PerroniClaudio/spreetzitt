@@ -572,6 +572,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/all-invoice-payment-stages', [App\Http\Controllers\InvoicePaymentStageController::class, 'all']);
 
     // Invoices Management
+    Route::get('/invoices/import-template', [App\Http\Controllers\InvoiceController::class, 'exportTemplate']);
+    Route::post('/invoices/import', [App\Http\Controllers\InvoiceController::class, 'import']);
     Route::apiResource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::post('/invoices/{id}/restore', [App\Http\Controllers\InvoiceController::class, 'restore']);
     Route::get('/all-invoices', [App\Http\Controllers\InvoiceController::class, 'all']);

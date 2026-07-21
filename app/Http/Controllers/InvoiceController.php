@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\InvoiceTemplateExport;
+use App\Imports\InvoiceImport;
 use App\Models\Invoice;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class InvoiceController extends Controller
 {
@@ -204,6 +207,43 @@ class InvoiceController extends Controller
         return response()->json([
             'invoices' => $invoices,
             'message' => 'All invoices retrieved successfully',
+        ]);
+    }
+
+    public function exportTemplate(Request $request)
+    {
+        if ($request->user()['is_superadmin'] != 1) {
+            return response()->json([
+                'message' => 'Only superadmins can download the invoice import template.',
+            ], 403);
+        }
+
+        return Excel::download(new InvoiceTemplateExport, 'template_import_fatture.xlsx');
+    }
+
+    public function import(Request $request): JsonResponse
+    {
+        if ($request->user()['is_superadmin'] != 1) {
+            return response()->json([
+                'message' => 'Only superadmins can import invoices.',
+            ], 403);
+        }
+
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx|max:10240',
+        ]);
+
+        try {
+            Excel::import(new InvoiceImport, $request->file('file'));
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'message' => 'Importazione annullata: nessuna fattura è stata salvata.',
+                'errors' => array_filter(explode("\n", $exception->getMessage())),
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Importazione completata con successo.',
         ]);
     }
 }
