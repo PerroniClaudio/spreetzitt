@@ -17,7 +17,6 @@ use App\Models\HardwareAuditLog;
 use App\Models\HardwareType;
 use App\Models\TypeFormFields;
 use App\Models\User;
-use App\Http\Controllers\FileUploadController;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -25,8 +24,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
-
-use function PHPUnit\Framework\isEmpty;
 
 class HardwareController extends Controller
 {
@@ -42,7 +39,7 @@ class HardwareController extends Controller
                 'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                }
+                },
             ])->get();
 
             return response([
@@ -52,14 +49,14 @@ class HardwareController extends Controller
 
         if ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
-            $hardwareList = $selectedCompany 
+            $hardwareList = $selectedCompany
                 ? Hardware::where('company_id', $selectedCompany->id)->with([
                     'hardwareType',
                     'company',
                     'users' => function ($query) {
                         $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                    }
-                ])->get() 
+                    },
+                ])->get()
                 : collect();
 
             return response([
@@ -75,7 +72,7 @@ class HardwareController extends Controller
             'company',
             'users' => function ($query) {
                 $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-            }
+            },
         ])->get() : collect();
 
         return response([
@@ -94,35 +91,36 @@ class HardwareController extends Controller
 
         $hardwareQuery = Hardware::query();
 
-        if(!!$authUser->is_admin) {
+        if ((bool) $authUser->is_admin) {
             $hardwareQuery->withTrashed();
         }
 
         $hardwareList = $hardwareQuery->where('company_id', $company->id)
             ->with([
-                'hardwareType', 
+                'hardwareType',
                 'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                }
+                },
             ])
-            ->get()
-            // ->map(function ($hardware) {
-            //     return [
-            //         ...$hardware->toArray(),
-            //         'users' => $hardware->users->pluck('id')->toArray(),
-            //     ];
-            // });
-                ;
+            ->get();
+
+        // ->map(function ($hardware) {
+        //     return [
+        //         ...$hardware->toArray(),
+        //         'users' => $hardware->users->pluck('id')->toArray(),
+        //     ];
+        // });
         return response([
             'hardwareList' => $hardwareList,
         ], 200);
     }
 
-    public function userCompaniesHardwareList(Request $request, User $user) {
+    public function userCompaniesHardwareList(Request $request, User $user)
+    {
         $authUser = $request->user();
         if (
-            !$authUser->is_admin
+            ! $authUser->is_admin
         ) {
             return response([
                 'message' => 'You are not allowed to view this hardware list',
@@ -134,15 +132,18 @@ class HardwareController extends Controller
             ->with(['hardwareType:id,name', 'company:id,name'])
             ->get()
             ->map(function ($hardware) {
-            $hardware->users = $hardware->users()->pluck('user_id')->toArray();
-            return $hardware;
+                $hardware->users = $hardware->users()->pluck('user_id')->toArray();
+
+                return $hardware;
             });
+
         return response([
             'hardwareList' => $hardwareList,
         ], 200);
     }
 
-    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField) {
+    public function formFieldHardwareList(Request $request, TypeFormFields $typeFormField)
+    {
         $authUser = $request->user();
 
         if (! $typeFormField) {
@@ -169,11 +170,11 @@ class HardwareController extends Controller
         }
         // Aggiungi le relazioni
         $query->with([
-            'hardwareType', 
+            'hardwareType',
             'company',
             'users' => function ($query) {
                 $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-            }
+            },
         ]);
         // Se necessario rimuove gli hardware che non hanno il tipo associato
         if (! $typeFormField->include_no_type_hardware) {
@@ -864,7 +865,7 @@ class HardwareController extends Controller
                 'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                }
+                },
             ])->get();
         } else {
             $hardwareList = $user->hardware()
@@ -874,7 +875,7 @@ class HardwareController extends Controller
                     'company',
                     'users' => function ($query) {
                         $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                    }
+                    },
                 ])
                 ->get();
         }
@@ -1080,18 +1081,18 @@ class HardwareController extends Controller
         ], 403);
     }
 
-    public function exportTemplate()
+    public function exportTemplate(Request $request)
     {
         $name = 'hardware_import_template_'.time().'.xlsx';
 
-        return Excel::download(new HardwareTemplateExport, $name);
+        return Excel::download(new HardwareTemplateExport($request->user()), $name);
     }
 
-    public function exportAssignationTemplate()
+    public function exportAssignationTemplate(Request $request)
     {
         $name = 'hardware_assignation_template_'.time().'.xlsx';
 
-        return Excel::download(new HardwareAssignationTemplateExport, $name);
+        return Excel::download(new HardwareAssignationTemplateExport($request->user()), $name);
     }
 
     public function exportDeletionTemplate()
@@ -1127,7 +1128,7 @@ class HardwareController extends Controller
             }
 
             try {
-                Excel::import(new HardwareImport($authUser), $file, 'xlsx');
+                Excel::import(new HardwareImport($authUser), $file);
             } catch (\Exception $e) {
                 return response([
                     'message' => 'An error occurred while importing the file. Please check the file and try again.'.($e->getMessage() ?? ''),
@@ -1167,7 +1168,7 @@ class HardwareController extends Controller
             }
 
             try {
-                Excel::import(new HardwareAssignationsImport($authUser), $file, 'xlsx');
+                Excel::import(new HardwareAssignationsImport($authUser), $file);
             } catch (\Exception $e) {
                 return response([
                     'message' => 'An error occurred while importing the file. Please check the file and try again.'.($e->getMessage() ?? ''),
@@ -1333,30 +1334,30 @@ class HardwareController extends Controller
     public function exportAllHardware(Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to export all hardware',
             ], 403);
         }
 
         $includeTrashed = true;
-        $name = 'all_hardware_export_' . time() . '.xlsx';
+        $name = 'all_hardware_export_'.time().'.xlsx';
 
         try {
             // Aumenta temporaneamente il limite di memoria
             ini_set('memory_limit', '512M');
             ini_set('max_execution_time', 300);
-            
+
             return Excel::download(new HardwareExport(null, null, $includeTrashed), $name);
         } catch (\Exception $e) {
-            Log::error('Hardware export failed: ' . $e->getMessage(), [
+            Log::error('Hardware export failed: '.$e->getMessage(), [
                 'user_id' => $authUser->id,
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response([
                 'message' => 'Export failed. Please try again later.',
-                'error' => app()->environment('local') ? $e->getMessage() : null
+                'error' => app()->environment('local') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -1367,8 +1368,8 @@ class HardwareController extends Controller
     public function exportCompanyHardware(Request $request, Company $company)
     {
         $authUser = $request->user();
-        
-        if (!$authUser->is_admin && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+
+        if (! $authUser->is_admin && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to export this company\'s hardware',
             ], 403);
@@ -1376,7 +1377,7 @@ class HardwareController extends Controller
 
         // Solo gli admin possono includere il trashed
         $includeTrashed = $authUser->is_admin;
-        $name = 'company_' . $company->name . '_hardware_export_' . time() . '.xlsx';
+        $name = 'company_'.$company->name.'_hardware_export_'.time().'.xlsx';
 
         return Excel::download(new HardwareExport($company->id, null, $includeTrashed), $name);
     }
@@ -1387,11 +1388,11 @@ class HardwareController extends Controller
     public function exportUserHardware(Request $request, User $user)
     {
         $authUser = $request->user();
-        
+
         // Controllo autorizzazioni
-        if (!$authUser->is_admin 
-            && !($authUser->is_company_admin && $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists())
-            && !($authUser->id == $user->id)
+        if (! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists())
+            && ! ($authUser->id == $user->id)
         ) {
             return response([
                 'message' => 'You are not allowed to export this user\'s hardware',
@@ -1401,13 +1402,12 @@ class HardwareController extends Controller
         // Solo gli admin possono includere il trashed
         // $includeTrashed = $authUser->is_admin && $request->boolean('include_trashed', false);
         $includeTrashed = $authUser->is_admin;
-        
-        $userFileName = $user->surname 
-            ? ($user->name ? $user->surname . '_' . $user->name : $user->surname)
+
+        $userFileName = $user->surname
+            ? ($user->name ? $user->surname.'_'.$user->name : $user->surname)
             : ($user->name ?? $user->id);
-        $name = 'user_' . $userFileName . '_hardware_export_' . time() . '.xlsx';
+        $name = 'user_'.$userFileName.'_hardware_export_'.time().'.xlsx';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
-        
 
         return Excel::download(new HardwareExport($authUser->is_admin ? null : $authUser->selectedCompany()?->id, $user->id, $includeTrashed), $name);
     }
@@ -1420,7 +1420,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Verifica permessi
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             if ($authUser->is_company_admin) {
                 // Company admin: può vedere solo hardware della sua azienda
                 if ($hardware->company_id !== $authUser->selectedCompany()?->id) {
@@ -1428,7 +1428,7 @@ class HardwareController extends Controller
                 }
             } else {
                 // User normale: può vedere solo se l'hardware è assegnato a lui
-                if (!$hardware->users()->where('user_id', $authUser->id)->exists()) {
+                if (! $hardware->users()->where('user_id', $authUser->id)->exists()) {
                     return response(['message' => 'Unauthorized'], 403);
                 }
             }
@@ -1436,12 +1436,12 @@ class HardwareController extends Controller
 
         // Filtra allegati in base al livello di accesso dell'utente
         $query = $hardware->attachments()->accessibleBy($authUser);
-        
+
         // Admin vede anche gli allegati soft deleted
         if ($authUser->is_admin) {
             $query->withTrashed();
         }
-        
+
         $attachments = $query->with('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id')->get();
 
         // Aggiungi permessi di modifica per ogni allegato
@@ -1460,7 +1460,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono caricare allegati
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1475,11 +1475,11 @@ class HardwareController extends Controller
         ]);
 
         $file = $request->file('file');
-        
+
         // Genera nome file univoco
         $extension = $file->getClientOriginalExtension();
-        $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-        $path = 'hardware/' . $hardware->id;
+        $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+        $path = 'hardware/'.$hardware->id;
 
         // Upload usando FileUploadController
         $filePath = FileUploadController::storeFile($file, $path, $uniqueName);
@@ -1525,7 +1525,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono caricare allegati
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1538,7 +1538,7 @@ class HardwareController extends Controller
             'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
-        if (!$request->hasFile('files')) {
+        if (! $request->hasFile('files')) {
             return response(['message' => 'No files uploaded'], 400);
         }
 
@@ -1552,8 +1552,8 @@ class HardwareController extends Controller
                 if ($file->isValid()) {
                     // Genera nome file univoco
                     $extension = $file->getClientOriginalExtension();
-                    $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-                    $basePath = 'hardware/' . $hardware->id;
+                    $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+                    $basePath = 'hardware/'.$hardware->id;
 
                     // Upload usando FileUploadController
                     $filePath = FileUploadController::storeFile($file, $basePath, $uniqueName);
@@ -1583,8 +1583,8 @@ class HardwareController extends Controller
             // Singolo file
             if ($files->isValid()) {
                 $extension = $files->getClientOriginalExtension();
-                $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-                $basePath = 'hardware/' . $hardware->id;
+                $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+                $basePath = 'hardware/'.$hardware->id;
 
                 $filePath = FileUploadController::storeFile($files, $basePath, $uniqueName);
 
@@ -1618,7 +1618,7 @@ class HardwareController extends Controller
                 'old_data' => null,
                 'new_data' => json_encode([
                     'files_count' => $count,
-                    'attachment_ids' => array_map(fn($a) => $a->id, $uploadedAttachments),
+                    'attachment_ids' => array_map(fn ($a) => $a->id, $uploadedAttachments),
                 ]),
             ]);
         }
@@ -1626,7 +1626,7 @@ class HardwareController extends Controller
         return response([
             'attachments' => $uploadedAttachments,
             'filesCount' => $count,
-            'message' => $count . ' file caricati con successo',
+            'message' => $count.' file caricati con successo',
         ], 201);
     }
 
@@ -1638,7 +1638,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono modificare
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1657,7 +1657,7 @@ class HardwareController extends Controller
         ]);
 
         // Verifica permessi per modificare access_level
-        if (isset($fields['access_level']) && !$attachment->canModifyAccessLevel($authUser)) {
+        if (isset($fields['access_level']) && ! $attachment->canModifyAccessLevel($authUser)) {
             return response(['message' => 'Non hai i permessi per modificare il livello di accesso di questo allegato'], 403);
         }
 
@@ -1665,7 +1665,7 @@ class HardwareController extends Controller
         if (isset($fields['access_level'])) {
             $userLevelValue = $authUser->getUserLevelValue();
             $requestedLevelValue = User::getLevelValue($fields['access_level']);
-            
+
             if ($requestedLevelValue < $userLevelValue) {
                 return response(['message' => 'Non puoi impostare un livello di accesso superiore al tuo'], 403);
             }
@@ -1675,8 +1675,8 @@ class HardwareController extends Controller
             'display_name' => $attachment->display_name,
             'access_level' => $attachment->access_level,
         ];
-        
-        $attachment->update(array_filter($fields, fn($v) => $v !== null));
+
+        $attachment->update(array_filter($fields, fn ($v) => $v !== null));
 
         // Log audit
         HardwareAuditLog::create([
@@ -1685,7 +1685,7 @@ class HardwareController extends Controller
             'modified_by' => $authUser->id,
             'hardware_id' => $hardware->id,
             'old_data' => json_encode($oldData),
-            'new_data' => json_encode(array_filter($fields, fn($v) => $v !== null)),
+            'new_data' => json_encode(array_filter($fields, fn ($v) => $v !== null)),
         ]);
 
         return response([
@@ -1702,7 +1702,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Verifica permessi di base (hardware ownership)
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1716,7 +1716,7 @@ class HardwareController extends Controller
         }
 
         // Verifica permessi di cancellazione in base al livello
-        if (!$attachment->canDelete($authUser)) {
+        if (! $attachment->canDelete($authUser)) {
             return response(['message' => 'Non hai i permessi per eliminare questo allegato'], 403);
         }
 
@@ -1754,16 +1754,16 @@ class HardwareController extends Controller
             ->where('hardware_id', $hardware->id)
             ->first();
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
         // Solo admin o superadmin può ripristinare. il superadmin tutto, l'admin solo fino al suo livello.
-        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+        if (! $authUser->is_admin || ! $attachment->canDelete($authUser)) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
-        if (!$attachment->trashed()) {
+        if (! $attachment->trashed()) {
             return response(['message' => 'Attachment is not deleted'], 400);
         }
 
@@ -1794,19 +1794,19 @@ class HardwareController extends Controller
     public function forceDeleteAttachment(Hardware $hardware, $attachmentId, Request $request)
     {
         $authUser = $request->user();
-        
+
         // Trova l'allegato soft deleted
         $attachment = HardwareAttachment::withTrashed()
             ->where('id', $attachmentId)
             ->where('hardware_id', $hardware->id)
             ->first();
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
         // Solo admin o superadmin può eliminare definitivamente. il superadmin tutto, l'admin solo fino al suo livello.
-        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+        if (! $authUser->is_admin || ! $attachment->canDelete($authUser)) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1840,11 +1840,11 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Admin può scaricare anche file soft deleted
-        $attachment = $authUser->is_admin 
+        $attachment = $authUser->is_admin
             ? HardwareAttachment::withTrashed()->find($attachmentId)
             : HardwareAttachment::find($attachmentId);
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
@@ -1854,7 +1854,7 @@ class HardwareController extends Controller
         }
 
         // Verifica permessi di visualizzazione in base al livello di accesso
-        if (!$attachment->canView($authUser)) {
+        if (! $attachment->canView($authUser)) {
             return response(['message' => 'Non hai i permessi per scaricare questo allegato'], 403);
         }
 
@@ -1874,11 +1874,11 @@ class HardwareController extends Controller
         $authUser = $request->user();
 
         // Admin può vedere preview anche di file soft deleted
-        $attachment = $authUser->is_admin 
+        $attachment = $authUser->is_admin
             ? HardwareAttachment::withTrashed()->find($attachmentId)
             : HardwareAttachment::find($attachmentId);
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
@@ -1888,7 +1888,7 @@ class HardwareController extends Controller
         }
 
         // Verifica permessi di visualizzazione in base al livello di accesso
-        if (!$attachment->canView($authUser)) {
+        if (! $attachment->canView($authUser)) {
             return response(['message' => 'Non hai i permessi per visualizzare questo allegato'], 403);
         }
 

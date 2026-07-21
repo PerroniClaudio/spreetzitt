@@ -12,8 +12,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class HardwareImport implements ToCollection
+class HardwareImport implements ToCollection, WithMultipleSheets
 {
     // TEMPLATE IMPORT (INDICI):
     // 0 "Marca *",
@@ -42,6 +43,14 @@ class HardwareImport implements ToCollection
         $this->authUser = $authUser;
     }
 
+    /**
+     * @return array<int, self>
+     */
+    public function sheets(): array
+    {
+        return [0 => $this];
+    }
+
     public function collection(Collection $rows)
     {
         DB::beginTransaction();
@@ -53,8 +62,11 @@ class HardwareImport implements ToCollection
             $normalizedStatuses = array_map('strtolower', $statuses);
 
             foreach ($rows as $row) {
-                // Deve saltare la prima riga contentente i titoli (controlla Marca o Seriale)
-                if ((isset($row[0]) && strpos(strtolower($row[0]), 'marca') !== false) || (isset($row[2]) && strpos(strtolower($row[2]), 'seriale') !== false)) {
+                if ($this->isEmptyRow($row)) {
+                    continue;
+                }
+
+                if ($this->isHeaderRow($row)) {
                     continue;
                 }
 
@@ -84,13 +96,13 @@ class HardwareImport implements ToCollection
                     }
                 }
 
-                if(!$isAccessory) {
-                    if(empty($serial)){
+                if (! $isAccessory) {
+                    if (empty($serial)) {
                         throw new \Exception('Deve essere specificato il seriale per l\'hardware non accessorio nella riga con marca '.$row[0].' e modello '.$row[1].'.');
-                    };
-                    if(empty($companyAsset) && empty($supportLabel)){
+                    }
+                    if (empty($companyAsset) && empty($supportLabel)) {
                         throw new \Exception('Deve essere specificato il cespite aziendale o l\'identificativo per l\'hardware non accessorio nella riga con seriale '.($serial ?? '[vuoto]').'.');
-                    };
+                    }
                 }
 
                 $isPresent = null;
@@ -120,8 +132,9 @@ class HardwareImport implements ToCollection
                     }
                 }
 
+                $companyId = $this->extractId($row[11] ?? null);
                 if (! empty($row[11])) {
-                    $isCompanyPresent = Company::find($row[11]);
+                    $isCompanyPresent = Company::find($companyId);
                     if (! $isCompanyPresent) {
                         throw new \Exception('ID Azienda errato per la riga con seriale '.($serial ?? '[vuoto]').'');
                     }
@@ -170,7 +183,7 @@ class HardwareImport implements ToCollection
 
                 // Stato all'acquisto
                 $inputStatusAtPurchase = strtolower(trim($row[15] ?? ''));
-                $statusAtPurchaseKey = array_search($inputStatusAtPurchase, $normalizedStatusesAtPurchase = array_map('strtolower', config('app.hardware_statuses_at_purchase')) );
+                $statusAtPurchaseKey = array_search($inputStatusAtPurchase, $normalizedStatusesAtPurchase = array_map('strtolower', config('app.hardware_statuses_at_purchase')));
                 if ($statusAtPurchaseKey === false) {
                     $statusAtPurchaseKey = 'new'; // fallback
                 }
@@ -200,7 +213,7 @@ class HardwareImport implements ToCollection
                         'support_label' => $supportLabel ?? null,
                         'notes' => $row[9] ?? null,
                         'is_exclusive_use' => strtolower($row[10]) == 'si' ? 1 : 0,
-                        'company_id' => $row[11] ?? null,
+                        'company_id' => $companyId,
                         'status_at_purchase' => $statusAtPurchaseKey ?? null,
                         'status' => $statusKey,
                         'position' => $positionKey,
@@ -217,16 +230,22 @@ class HardwareImport implements ToCollection
                     ]);
                 }
 
+                $responsibleUserId = $this->extractId($row[13] ?? null);
+                $responsibleUser = User::find($responsibleUserId);
+                if ($responsibleUserId !== null && ! $this->canBeResponsible($responsibleUser, $companyId)) {
+                    throw new \Exception('L\'utente con ID '.$responsibleUserId.' non può essere impostato come responsabile per l\'azienda indicata.');
+                }
+
                 if ($row[12] != null) {
-                    if ($row[11] == null) {
+                    if ($companyId === null) {
                         throw new \Exception('ID Azienda mancante per l\'hardware con seriale '.$row[2]);
                     }
                     $userIds = explode(',', $row[12]);
                     $usersCount = count($userIds);
                     $isCorrect = User::whereIn('id', $userIds)
                         ->get()
-                        ->filter(function ($user) use ($row) {
-                            return $user->hasCompany($row[11]);
+                        ->filter(function ($user) use ($companyId) {
+                            return $user->hasCompany($companyId);
                         })
                         ->count() == $usersCount;
                     if (! $isCorrect) {
@@ -236,7 +255,6 @@ class HardwareImport implements ToCollection
                     if ($hardware->is_exclusive_use && count($users) > 1) {
                         throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per l\'hardware con seriale '.$row[2]);
                     }
-                    $responsibleUser = User::find($row[13]);
                     if (! $responsibleUser) {
                         $responsibleUser = User::find($this->authUser->id);
                     }
@@ -253,5 +271,46 @@ class HardwareImport implements ToCollection
             Log::error('Errore durante l\'importazione dell\'hardware: '.$e->getMessage());
             throw $e;
         }
+    }
+
+    private function extractId(mixed $value): ?int
+    {
+        if (is_numeric($value) && (float) $value === floor((float) $value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && preg_match('/^\s*(\d+)\s*-/', $value, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function canBeResponsible(?User $user, ?int $companyId): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->is_admin
+            || $user->is_superadmin
+            || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $row
+     */
+    private function isEmptyRow(Collection $row): bool
+    {
+        return $row->every(fn (mixed $value): bool => $value === null || trim((string) $value) === '');
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $row
+     */
+    private function isHeaderRow(Collection $row): bool
+    {
+        return mb_strtolower(trim((string) ($row[0] ?? ''))) === 'marca *'
+            && str_starts_with(mb_strtolower(trim((string) ($row[2] ?? ''))), 'seriale');
     }
 }

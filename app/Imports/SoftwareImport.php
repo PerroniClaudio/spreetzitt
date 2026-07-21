@@ -63,7 +63,7 @@ class SoftwareImport implements ToCollection
                 }
 
                 // Verifica unicità cespite aziendale se presente
-                if (!empty($row[4])) {
+                if (! empty($row[4])) {
                     $isPresent = Software::where('company_asset_number', $row[4])->first();
                     if ($isPresent) {
                         throw new \Exception('Software con cespite aziendale '.$row[4].' già presente. ID: '.$isPresent->id);
@@ -71,24 +71,24 @@ class SoftwareImport implements ToCollection
                 }
 
                 // Verifica tipo software
-                if (!empty($row[14])) {
+                if (! empty($row[14])) {
                     $softwareType = SoftwareType::find($row[14]);
-                    if (!$softwareType) {
+                    if (! $softwareType) {
                         throw new \Exception('Tipo software non trovato per il software '.$row[1]);
                     }
                 }
 
                 // Verifica azienda
-                if (!empty($row[13])) {
+                if (! empty($row[13])) {
                     $isCompanyPresent = Company::find($row[13]);
-                    if (!$isCompanyPresent) {
+                    if (! $isCompanyPresent) {
                         throw new \Exception('ID Azienda errato per il software '.$row[1]);
                     }
                 }
 
                 // Gestione date
                 $purchaseDate = null;
-                if (!empty($row[7])) {
+                if (! empty($row[7])) {
                     try {
                         if (is_numeric($row[7])) {
                             $purchaseDate = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[7]));
@@ -101,7 +101,7 @@ class SoftwareImport implements ToCollection
                 }
 
                 $expirationDate = null;
-                if (!empty($row[8])) {
+                if (! empty($row[8])) {
                     try {
                         if (is_numeric($row[8])) {
                             $expirationDate = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[8]));
@@ -114,7 +114,7 @@ class SoftwareImport implements ToCollection
                 }
 
                 $supportExpirationDate = null;
-                if (!empty($row[9])) {
+                if (! empty($row[9])) {
                     try {
                         if (is_numeric($row[9])) {
                             $supportExpirationDate = Carbon::instance(\PhpOffice\PhpSpreadsheet\Shared\Date::excelToDateTimeObject($row[9]));
@@ -127,7 +127,7 @@ class SoftwareImport implements ToCollection
                 }
 
                 // Tipo licenza - nessuna validazione, accetta qualsiasi valore
-                $licenseType = !empty($row[5]) ? trim($row[5]) : null;
+                $licenseType = ! empty($row[5]) ? trim($row[5]) : null;
 
                 // Stato (default: active)
                 // $status = !empty($row[11]) ? trim($row[11]) : 'active';
@@ -145,7 +145,7 @@ class SoftwareImport implements ToCollection
                     'activation_key' => $row[3] ?? null,
                     'company_asset_number' => $row[4] ?? null,
                     'license_type' => $licenseType,
-                    'max_installations' => !empty($row[6]) && is_numeric($row[6]) ? (int)$row[6] : null,
+                    'max_installations' => ! empty($row[6]) && is_numeric($row[6]) ? (int) $row[6] : null,
                     'purchase_date' => $purchaseDate,
                     'expiration_date' => $expirationDate,
                     'support_expiration_date' => $supportExpirationDate,
@@ -166,6 +166,12 @@ class SoftwareImport implements ToCollection
                     ]);
                 }
 
+                $responsibleUserId = $this->extractId($row[16] ?? null);
+                $responsibleUser = User::find($responsibleUserId);
+                if ($responsibleUserId !== null && ! $this->canBeResponsible($responsibleUser, $software->company_id)) {
+                    throw new \Exception('L\'utente con ID '.$responsibleUserId.' non può essere impostato come responsabile per l\'azienda indicata.');
+                }
+
                 if ($row[15] != null) {
                     if ($row[13] == null) {
                         throw new \Exception('ID Azienda mancante per il software '.$row[1]);
@@ -178,21 +184,20 @@ class SoftwareImport implements ToCollection
                             return $user->hasCompany($row[13]);
                         })
                         ->count() == $usersCount;
-                    if (!$isCorrect) {
+                    if (! $isCorrect) {
                         throw new \Exception('ID utenti errati per il software '.$row[1]);
                     }
                     $users = explode(',', $row[15]);
                     if ($software->is_exclusive_use && count($users) > 1) {
                         throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per il software '.$row[1]);
                     }
-                    $responsibleUser = User::find($row[16]);
-                    if (!$responsibleUser) {
+                    if (! $responsibleUser) {
                         $responsibleUser = User::find($this->authUser->id);
                     }
                     foreach ($users as $user) {
                         $software->users()->attach($user, [
                             'created_by' => $this->authUser->id ?? null,
-                            'responsible_user_id' => $responsibleUser->id ?? $this->authUser->id ?? null
+                            'responsible_user_id' => $responsibleUser->id ?? $this->authUser->id ?? null,
                         ]);
                     }
                 }
@@ -204,5 +209,29 @@ class SoftwareImport implements ToCollection
             Log::error('Errore durante l\'importazione del software: '.$e->getMessage());
             throw $e;
         }
+    }
+
+    private function extractId(mixed $value): ?int
+    {
+        if (is_numeric($value) && (float) $value === floor((float) $value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && preg_match('/^\s*(\d+)\s*-/', $value, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function canBeResponsible(?User $user, ?int $companyId): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->is_admin
+            || $user->is_superadmin
+            || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
     }
 }

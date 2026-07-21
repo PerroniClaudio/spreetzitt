@@ -47,7 +47,7 @@ class SoftwareAssignationsImport implements ToCollection
 
                 $software = Software::find($row[0]);
 
-                if (!$software) {
+                if (! $software) {
                     throw new \Exception('Software con ID '.$row[0].' inesistente.');
                 }
 
@@ -57,13 +57,13 @@ class SoftwareAssignationsImport implements ToCollection
                 $removedUsers = [];
 
                 // utenti da rimuovere
-                if (!empty($row[4])) {
+                if (! empty($row[4])) {
                     $usersToRemove = explode(',', $row[4]);
                     foreach ($usersToRemove as $userToRemove) {
                         $user = User::find($userToRemove);
                         if ($user && $software->users->contains($user->id)) {
                             $software->users()->detach($user->id);
-                            if (!in_array($user->id, $removedUsers)) {
+                            if (! in_array($user->id, $removedUsers)) {
                                 $removedUsers[] = $user->id;
                             }
                         }
@@ -71,10 +71,10 @@ class SoftwareAssignationsImport implements ToCollection
                 }
 
                 // Modifica azienda. Per avere un log migliore nel caso di cambio azienda è meglio collegare l'eliminazione della vecchia azienda e l'assegnazione della nuova
-                if (!empty($row[3])) {
+                if (! empty($row[3])) {
                     // azienda da rimuovere
                     $CompanyToRemove = Company::find($row[3]);
-                    if ($software->company_id != null && !$CompanyToRemove) {
+                    if ($software->company_id != null && ! $CompanyToRemove) {
                         throw new \Exception('Azienda con ID '.$row[3].' inesistente.');
                     }
                     if ($software->company_id != null && ($software->company_id != $CompanyToRemove->id)) {
@@ -89,33 +89,37 @@ class SoftwareAssignationsImport implements ToCollection
                             }
                         });
                         // Controlla se va sostituita o solo eliminata
-                        if (!empty($row[1])) {
+                        if (! empty($row[1])) {
                             $software->company_id = $row[1];
                         } else {
                             $software->company_id = null;
                         }
                         $software->save();
                     }
-                } elseif (!empty($row[1])) {
+                } elseif (! empty($row[1])) {
                     // azienda da aggiungere
                     if ($software->company_id) {
                         throw new \Exception('Il software con ID '.$row[0].' è già associato ad un\'azienda.');
                     }
 
                     $CompanyToAdd = Company::find($row[1]);
-                    if (!$CompanyToAdd) {
+                    if (! $CompanyToAdd) {
                         throw new \Exception('Azienda con ID '.$row[1].' inesistente.');
                     }
                     $software->company_id = $CompanyToAdd->id;
                     $software->save();
                 }
 
+                if (! empty($row[5]) && ! $this->canBeResponsible(User::find($row[5]), $software->company_id)) {
+                    throw new \Exception('L\'utente con ID '.$row[5].' non può essere impostato come responsabile in quanto non è autorizzato per l\'azienda indicata.');
+                }
+
                 // utenti da aggiungere
-                if (!empty($row[2])) {
+                if (! empty($row[2])) {
                     $usersToAdd = explode(',', $row[2]);
                     if (count($usersToAdd) > 0) {
                         $remainingUsersCount = $software->users->filter(function ($user) use ($removedUsers) {
-                            return !in_array($user->id, $removedUsers);
+                            return ! in_array($user->id, $removedUsers);
                         })->count();
                         if ($software->is_exclusive_use && (count($usersToAdd) > 1 || ($remainingUsersCount > 0))) {
                             if ($remainingUsersCount > 0) {
@@ -127,25 +131,13 @@ class SoftwareAssignationsImport implements ToCollection
                         }
                         foreach ($usersToAdd as $userToAdd) {
                             $user = User::find($userToAdd);
-                            if ($user && !$user->hasCompany($software->company_id)) {
+                            if ($user && ! $user->hasCompany($software->company_id)) {
                                 throw new \Exception('L\'utente con ID '.$userToAdd.' non è assegnato alla stessa azienda del software con ID '.$row[0]);
                             }
-                            if ($user && !$software->users->contains($user->id)) {
-                                if ($row[5]) {
-                                    $responsibleUser = User::find($row[5]);
-                                    if (
-                                        !$responsibleUser ||
-                                        (
-                                            !$responsibleUser->hasCompany($software->company_id) ||
-                                            (!$responsibleUser->is_company_admin && !$responsibleUser->is_admin)
-                                        )
-                                    ) {
-                                        throw new \Exception('L\'utente con ID '.$row[5].' non può essere impostato come responsabile in quanto non è un amministratore dell\'azienda indicata o del supporto.');
-                                    }
-                                }
+                            if ($user && ! $software->users->contains($user->id)) {
                                 $software->users()->attach($user->id, [
                                     'created_by' => $this->authUser->id ?? null,
-                                    'responsible_user_id' => $row[5] ?? $this->authUser->id ?? null
+                                    'responsible_user_id' => $row[5] ?? $this->authUser->id ?? null,
                                 ]);
                             }
                         }
@@ -159,5 +151,16 @@ class SoftwareAssignationsImport implements ToCollection
             Log::error('Errore durante l\'importazione delle assegnazioni software: '.$e->getMessage());
             throw $e;
         }
+    }
+
+    private function canBeResponsible(?User $user, ?int $companyId): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->is_admin
+            || $user->is_superadmin
+            || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
     }
 }

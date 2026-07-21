@@ -255,13 +255,13 @@ class UserController extends Controller
             }
         }
 
-        if(isset($request['can_open_scheduling']) && ($request['can_open_scheduling'] !== $user['can_open_scheduling']) && ($req_user['is_superadmin'] != 1)){
+        if (isset($request['can_open_scheduling']) && ($request['can_open_scheduling'] !== $user['can_open_scheduling']) && ($req_user['is_superadmin'] != 1)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
 
-        if(isset($request['can_open_project']) && ($request['can_open_project'] !== $user['can_open_project']) && ($req_user['is_superadmin'] != 1)){
+        if (isset($request['can_open_project']) && ($request['can_open_project'] !== $user['can_open_project']) && ($req_user['is_superadmin'] != 1)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -316,12 +316,12 @@ class UserController extends Controller
         //Solo gli admin e i company_admin possono eliminare (disabilitare) le utenze
         $req_user = $request->user();
 
-        if(!$id){
+        if (! $id) {
             return response([
                 'message' => 'Error, missing id',
             ], 404);
         }
-        if( $req_user['is_admin'] != 1 && $req_user['is_company_admin'] != 1 ){
+        if ($req_user['is_admin'] != 1 && $req_user['is_company_admin'] != 1) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -329,8 +329,8 @@ class UserController extends Controller
 
         $user = User::where('id', $id)->first();
 
-        if($user->is_superadmin == 1){
-            if($req_user->is_superadmin != 1){
+        if ($user->is_superadmin == 1) {
+            if ($req_user->is_superadmin != 1) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -343,8 +343,8 @@ class UserController extends Controller
                 ], 400);
             }
         }
-        if($user->is_admin == 1){
-            if($req_user->is_admin != 1){
+        if ($user->is_admin == 1) {
+            if ($req_user->is_admin != 1) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
@@ -372,6 +372,7 @@ class UserController extends Controller
                     'log_subject' => 'user',
                     'log_type' => 'delete',
                 ]);
+
                 return response([
                     'deleted_user' => $id,
                 ], 200);
@@ -385,16 +386,16 @@ class UserController extends Controller
                 ], 401);
             }
             // Se il richiedente non è nella stessa compagnia allora non è autorizzato
-            if(!$user->hasCompany($selectedCompanyId)){
+            if (! $user->hasCompany($selectedCompanyId)) {
                 return response([
                     'message' => 'Unauthorized',
                 ], 401);
             }
-            if($user->companies()->count() > 1){
+            if ($user->companies()->count() > 1) {
                 // Se l'utente appartiene a più compagnie allora si stacca solo dalla compagnia del company_admin
                 $oldCompanies = $user->companies()->pluck('companies.id')->toArray();
                 $user->companies()->detach($selectedCompanyId);
-                
+
                 // Log rimozione associazione company
                 UserLog::create([
                     'modified_by' => $req_user->id,
@@ -408,7 +409,7 @@ class UserController extends Controller
                     'log_subject' => 'user_company',
                     'log_type' => 'delete',
                 ]);
-                
+
                 return response([
                     'deleted_user' => $id,
                 ], 200);
@@ -433,12 +434,14 @@ class UserController extends Controller
                         'log_subject' => 'user',
                         'log_type' => 'delete',
                     ]);
+
                     return response([
                         'deleted_user' => $id,
                     ], 200);
                 }
             }
         }
+
         return response([
             'message' => 'Error',
         ], 400);
@@ -462,12 +465,12 @@ class UserController extends Controller
 
         $user = User::where('id', $id)->first();
 
-        if($user->is_superadmin == 1 && ($req_user->is_superadmin != 1)){
+        if ($user->is_superadmin == 1 && ($req_user->is_superadmin != 1)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
         }
-            
+
         $enabled = $user->update([
             'is_deleted' => 0,
         ]);
@@ -506,25 +509,25 @@ class UserController extends Controller
         // Se l'utente è admin allora prende tutti i ticket types di tutti i gruppi associati all'utente, altrimenti solo quelli della sua compagnia
         if ($user['is_admin'] == 1) {
             $groupIds = $user->groups->pluck('id');
-            $ticketTypes = \App\Models\TicketType::whereHas('groups', function($query) use ($groupIds) {
+            $ticketTypes = \App\Models\TicketType::whereHas('groups', function ($query) use ($groupIds) {
                 $query->whereIn('groups.id', $groupIds);
             })->with(['category', 'slaveTypes'])->distinct()->get();
         } else {
             $selectedCompany = $user->selectedCompany();
             $customGroupIds = $user->customUserGroups()->pluck('custom_user_groups.id');
-            
+
             // Query unificata per evitare duplicati
             $ticketTypesQuery = \App\Models\TicketType::with(['category', 'slaveTypes'])
-                ->where(function($query) use ($selectedCompany, $customGroupIds) {
+                ->where(function ($query) use ($selectedCompany, $customGroupIds) {
                     // Ticket types della compagnia (non esclusivi dei gruppi custom)
                     if ($selectedCompany) {
                         $query->where('company_id', $selectedCompany->id)
-                              ->where('is_custom_group_exclusive', false);
+                            ->where('is_custom_group_exclusive', false);
                     }
-                    
+
                     // Ticket types dei gruppi custom dell'utente
                     if ($customGroupIds->isNotEmpty()) {
-                        $query->orWhereHas('customUserGroups', function($groupQuery) use ($customGroupIds) {
+                        $query->orWhereHas('customUserGroups', function ($groupQuery) use ($customGroupIds) {
                             $groupQuery->whereIn('custom_user_groups.id', $customGroupIds);
                         });
                     }
@@ -533,7 +536,7 @@ class UserController extends Controller
             // Se è richiesta apertura nuovo ticket, escludere progetti e scheduling
             if ($request->get('new_ticket') == 'true') {
                 $ticketTypesQuery->where('is_project', false)
-                                 ->where('is_scheduling', false);
+                    ->where('is_scheduling', false);
             }
 
             $ticketTypes = $ticketTypesQuery->distinct()->get();
@@ -653,7 +656,7 @@ class UserController extends Controller
 
         $authUser = $request->user();
 
-        if($authUser['is_admin'] == 1){
+        if ($authUser['is_admin'] == 1) {
             $brands = \App\Models\Brand::all()->toArray();
         } else {
             // Prendi tutti i brand dei tipi di ticket associati all'azienda dell'utente
@@ -697,15 +700,23 @@ class UserController extends Controller
         ], 200);
     }
 
-    public function exportTemplate()
+    public function exportTemplate(Request $request)
     {
-        $name = 'users_import_template_'.time().'.xlsx';
+        $name = 'template_upload_users.xlsx';
 
-        return Excel::download(new UserTemplateExport, $name);
+        return Excel::download(new UserTemplateExport($request->user()), $name);
     }
 
     public function importUsers(Request $request)
     {
+        $authUser = $request->user();
+
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
+            return response([
+                'message' => 'You are not allowed to import users.',
+            ], 403);
+        }
+
         $request->validate([
             'file' => 'required|mimes:xlsx',
         ]);
@@ -721,7 +732,14 @@ class UserController extends Controller
                 ], 400);
             }
 
-            Excel::import(new UsersImport, $file, 'xlsx');
+            try {
+                Excel::import(new UsersImport($authUser), $file);
+            } catch (\Exception $exception) {
+                return response([
+                    'message' => 'Errore durante l\'importazione del file.',
+                    'error' => $exception->getMessage(),
+                ], 400);
+            }
         }
 
         return response([

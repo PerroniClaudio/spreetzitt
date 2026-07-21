@@ -9,14 +9,23 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class HardwareAssignationsImport implements ToCollection
+class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
 {
     protected $authUser;
 
     public function __construct($authUser)
     {
         $this->authUser = $authUser;
+    }
+
+    /**
+     * @return array<int, self>
+     */
+    public function sheets(): array
+    {
+        return [0 => $this];
     }
 
     public function collection(Collection $rows)
@@ -33,6 +42,10 @@ class HardwareAssignationsImport implements ToCollection
         try {
 
             foreach ($rows as $row) {
+                if ($this->isEmptyRow($row)) {
+                    continue;
+                }
+
                 // Deve saltare la prima riga contentente i titoli
                 if (strpos(strtolower($row[0]), 'hardware') !== false) {
                     continue;
@@ -45,7 +58,11 @@ class HardwareAssignationsImport implements ToCollection
                     throw new \Exception('Tutti i campi azienda e utenti sono vuoti in una delle righe.');
                 }
 
-                $hardware = Hardware::find($row[0]);
+                $hardwareId = $this->extractId($row[0]);
+                $companyToAddId = $this->extractId($row[1] ?? null);
+                $companyToRemoveId = $this->extractId($row[3] ?? null);
+                $responsibleUserId = $this->extractId($row[5] ?? null);
+                $hardware = Hardware::find($hardwareId);
 
                 if (! $hardware) {
                     throw new \Exception('Hardware con ID '.$row[0].' inesistente.');
@@ -71,9 +88,9 @@ class HardwareAssignationsImport implements ToCollection
                 }
 
                 // Modifica azienda. Per avere un log migliore nel caso di cambio azienda è meglio collegare l'eliminazione della vecchia azienda e l'assegnazione della nuova
-                if (! empty($row[3])) {
+                if ($companyToRemoveId !== null) {
                     // azienda da rimuovere
-                    $CompanyToRemove = Company::find($row[3]);
+                    $CompanyToRemove = Company::find($companyToRemoveId);
                     if ($hardware->company_id != null && ! $CompanyToRemove) {
                         throw new \Exception('Azienda con ID '.$row[3].' inesistente.');
                     }
@@ -89,25 +106,29 @@ class HardwareAssignationsImport implements ToCollection
                             }
                         });
                         // Controlla se va sostituita o solo eliminata
-                        if (! empty($row[1])) {
-                            $hardware->company_id = $row[1];
+                        if ($companyToAddId !== null) {
+                            $hardware->company_id = $companyToAddId;
                         } else {
                             $hardware->company_id = null;
                         }
                         $hardware->save();
                     }
-                } elseif (! empty($row[1])) {
+                } elseif ($companyToAddId !== null) {
                     // azienda da aggiungere
                     if ($hardware->company_id) {
                         throw new \Exception('L\'hardware con ID '.$row[0].' è già associato ad un\'azienda.');
                     }
 
-                    $CompanyToAdd = Company::find($row[1]);
+                    $CompanyToAdd = Company::find($companyToAddId);
                     if (! $CompanyToAdd) {
                         throw new \Exception('Azienda con ID '.$row[1].' inesistente.');
                     }
                     $hardware->company_id = $CompanyToAdd->id;
                     $hardware->save();
+                }
+
+                if ($responsibleUserId !== null && ! $this->canBeResponsible(User::find($responsibleUserId), $hardware->company_id)) {
+                    throw new \Exception('L\'utente con ID '.$responsibleUserId.' non può essere impostato come responsabile in quanto non è autorizzato per l\'azienda indicata.');
                 }
 
                 // utenti da aggiungere
@@ -131,21 +152,8 @@ class HardwareAssignationsImport implements ToCollection
                                 throw new \Exception('L\'utente con ID '.$userToAdd.' non è assegnato alla stessa azienda dell\'hardware con ID '.$row[0]);
                             }
                             if ($user && ! $hardware->users->contains($user->id)) {
-                                // if($row[5] && !User::where(['id' => $row[5], 'company_id' => $hardware->company_id, 'is_company_admin' => true])
-                                if ($row[5]) {
-                                    $responsibleUser = User::find($row[5]);
-                                    if (
-                                        ! $responsibleUser ||
-                                        (
-                                            ! $responsibleUser->hasCompany($hardware->company_id) ||
-                                            (! $responsibleUser->is_company_admin && ! $responsibleUser->is_admin)
-                                        )
-                                    ) {
-                                        throw new \Exception('L\'utente con ID '.$row[5].' non può essere impostato come responsabile in quanto non è un amministratore dell\'azienda indicata o del supporto.');
-                                    }
-                                }
                                 // Non usiamo il sync perchè non eseguirebbe la funzione di boot del modello personalizzato HardwareUser
-                                $hardware->users()->attach($user->id, ['created_by' => $this->authUser->id ?? null, 'responsible_user_id' => $row[5] ?? $this->authUser->id ?? null]);
+                                $hardware->users()->attach($user->id, ['created_by' => $this->authUser->id ?? null, 'responsible_user_id' => $responsibleUserId ?? $this->authUser->id ?? null]);
                             }
                         }
                     }
@@ -158,5 +166,37 @@ class HardwareAssignationsImport implements ToCollection
             Log::error('Errore durante l\'importazione dell\'hardware: '.$e->getMessage());
             throw $e;
         }
+    }
+
+    private function extractId(mixed $value): ?int
+    {
+        if (is_numeric($value) && (float) $value === floor((float) $value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && preg_match('/^\s*(\d+)\s*-/', $value, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    private function canBeResponsible(?User $user, ?int $companyId): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $user->is_admin
+            || $user->is_superadmin
+            || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $row
+     */
+    private function isEmptyRow(Collection $row): bool
+    {
+        return $row->every(fn (mixed $value): bool => $value === null || trim((string) $value) === '');
     }
 }
