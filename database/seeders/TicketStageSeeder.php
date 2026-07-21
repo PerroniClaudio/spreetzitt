@@ -83,6 +83,16 @@ class TicketStageSeeder extends Seeder
                 'is_system' => true,
                 'system_key' => 'closed',
             ],
+            [
+                'name' => 'Attesa approvazione offerta',
+                'description' => 'Attesa approvazione offerta',
+                'admin_color' => '#284a81',
+                'user_color' => '#4462a7',
+                'order' => 8,
+                'is_sla_pause' => true, // SLA completamente fermato
+                'is_system' => true,
+                'system_key' => 'waiting_approval',
+            ],
         ];
 
         foreach ($stages as $stageData) {

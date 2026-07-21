@@ -121,7 +121,9 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/billable-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBillable']);
     Route::post('/ticket/{ticket}/billable-value-cause-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillableValueCause']);
     Route::post('/ticket/{ticket}/billed-update', [App\Http\Controllers\TicketController::class, 'updateTicketIsBilled']);
-    Route::post('/ticket/{ticket}/bill-details-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillDetails']);
+    // Devo fare le due route per aggiornare ticket-invoice e missing-invoice-note
+    Route::post('/ticket/{ticket}/invoice-update', [App\Http\Controllers\TicketController::class, 'updateTicketInvoice']);
+    Route::post('/ticket/{ticket}/missing-invoice-note-update', [App\Http\Controllers\TicketController::class, 'updateTicketMissingInvoiceNote']);
     Route::post('/ticket/{ticket}/billing-info-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillingInfo']);
     Route::get('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'getTicketBlame']);
     Route::post('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);

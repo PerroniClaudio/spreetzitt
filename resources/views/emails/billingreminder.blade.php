@@ -58,11 +58,11 @@
 <h4 style="color: #2c3e50; margin-top: 0;">ID Fattura Mancante</h4>
 <div style="display: flex; justify-content: space-between; margin: 5px 0;">
     <span><strong>Totale:</strong></span>
-    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['billed_bill_identification_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['billed_invoice_id_missing'] ?? 0, 0, ',', '.') }} ticket</span>
 </div>
 <div style="display: flex; justify-content: space-between; margin: 5px 0;">
     <span><strong>Di cui aperti:</strong></span>
-    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['open_billed_bill_identification_missing'] ?? 0, 0, ',', '.') }} ticket</span>
+    <span style="font-weight: bold; text-align: right; min-width: 60px;">{{ number_format($counters['open_billed_invoice_id_missing'] ?? 0, 0, ',', '.') }} ticket</span>
 </div>
 </div>
 
@@ -88,7 +88,7 @@
     ($counters['billing_validation_missing'] ?? 0) + 
     ($counters['all_validated_billed_missing'] ?? 0) + 
     // ($counters['billable_validated_billed_missing'] ?? 0) +  // Questo non lo mettiamo perchè sono sicuramente doppioni di quelli già contati sopra
-    ($counters['billed_bill_identification_missing'] ?? 0) + 
+    ($counters['billed_invoice_id_missing'] ?? 0) + 
     ($counters['billed_bill_date_missing'] ?? 0), 
     0, ',', '.'
 ) }}
@@ -100,7 +100,7 @@
     ($counters['open_billing_validation_missing'] ?? 0) + 
     ($counters['open_all_validated_billed_missing'] ?? 0) + 
     // ($counters['open_billable_validated_billed_missing'] ?? 0) +  // Questo non lo mettiamo perchè sono sicuramente doppioni di quelli già contati sopra
-    ($counters['open_billed_bill_identification_missing'] ?? 0) + 
+    ($counters['open_billed_invoice_id_missing'] ?? 0) + 
     ($counters['open_billed_bill_date_missing'] ?? 0), 
     0, ',', '.'
 ) }}

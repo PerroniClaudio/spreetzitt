@@ -18,14 +18,34 @@ class TicketFactory extends Factory
      */
     public function definition(): array
     {
+        $user = \App\Models\User::where('is_admin', false)->inRandomOrder()->first();
+        $company = $user ? $user->companies()->first() : \App\Models\Company::inRandomOrder()->first();
+        $ticketType = $company ? $company->ticketTypes()->inRandomOrder()->first() : \App\Models\TicketType::inRandomOrder()->first();
+        $stage = \App\Models\TicketStage::whereNull('deleted_at')->inRandomOrder()->first();
+
+        // sla_take e sla_solve: TicketType > Company > fallback 60
+        $sla_take = $ticketType && $ticketType->default_sla_take ? $ticketType->default_sla_take : ($company && $company->sla_take_low ? $company->sla_take_low : 60);
+        $sla_solve = $ticketType && $ticketType->default_sla_solve ? $ticketType->default_sla_solve : ($company && $company->sla_solve_low ? $company->sla_solve_low : 60);
+        $priority = $ticketType && $ticketType->default_priority ? $ticketType->default_priority : 1;
+
+        $group_id = null;
+        if ($ticketType && method_exists($ticketType, 'groups')) {
+            $group = $ticketType->groups()->inRandomOrder()->first();
+            $group_id = $group ? $group->id : null;
+        }
+
         return [
-            'user_id' => fake()->numberBetween(9, 11),
-            'company_id' => fake()->numberBetween(2, 4),
-            'status' => 0, // Vecchio status, da mantenere finchè non si migra definitivamente al nuovo sistema con stage
-            'stage_id' => fake()->randomElement(\App\Models\TicketStage::whereIsNull('deleted_at')->pluck('id')->toArray()),
-            'type_id' => fake()->numberBetween(1, 10),
-            'description' => fake()->sentence(),
+            'user_id' => $user ? $user->id : fake()->numberBetween(1, 10),
+            'company_id' => $company ? $company->id : fake()->numberBetween(1, 5),
+            'status' => 0,
+            'stage_id' => $stage ? $stage->id : fake()->numberBetween(1, 10),
+            'type_id' => $ticketType ? $ticketType->id : fake()->numberBetween(1, 10),
+            'group_id' => $group_id ?? fake()->numberBetween(1, 5),
+            'description' => 'Questo ticket è stato generato con TicketFactory. '.fake()->sentence(),
             'duration' => 0,
+            'sla_take' => $sla_take,
+            'sla_solve' => $sla_solve,
+            'priority' => $priority,
         ];
     }
 
@@ -34,21 +54,31 @@ class TicketFactory extends Factory
         return $this->afterMaking(function (Ticket $ticket) {
             // ...
         })->afterCreating(function (Ticket $ticket) {
-
-            $form_fields = $ticket->ticketType->typeFormField;
-
+            $form_fields = $ticket->ticketType ? $ticket->ticketType->typeFormField : [];
             $message_data = [];
             $message_data['description'] = $ticket->description;
+            $company_id = $ticket->company_id;
             foreach ($form_fields as $field) {
-                // field_type: email, text, date, radio, tel, select
                 $field_type = $field->field_type;
-                $value = $field_type == 'date' ? fake()->date() :
-                    ($field_type == 'email' ? fake()->email() :
-                    ($field_type == 'tel' ? fake()->phoneNumber() :
-                    ($field_type == 'radio' || $field_type == 'select' ? $field->field_options[0] :
-                    fake()->sentence())));
-
-                $message_data[$field->field_name] = $value;
+                if ($field_type === 'hardware') {
+                    $hardware_ids = \App\Models\Hardware::where('company_id', $company_id)->pluck('id')->toArray();
+                    $message_data[$field->field_name] = ! empty($hardware_ids)
+                        ? [fake()->randomElement($hardware_ids)]
+                        : [fake()->numberBetween(1, 10)];
+                } elseif ($field_type === 'date') {
+                    $message_data[$field->field_name] = fake()->date();
+                } elseif ($field_type === 'email') {
+                    $message_data[$field->field_name] = fake()->email();
+                } elseif ($field_type === 'tel') {
+                    $message_data[$field->field_name] = fake()->phoneNumber();
+                } elseif ($field_type === 'radio' || $field_type === 'select') {
+                    $options = is_array($field->field_options) ? $field->field_options : [];
+                    $message_data[$field->field_name] = ! empty($options)
+                        ? fake()->randomElement($options)
+                        : fake()->word();
+                } else {
+                    $message_data[$field->field_name] = fake()->sentence();
+                }
             }
 
             // Webform

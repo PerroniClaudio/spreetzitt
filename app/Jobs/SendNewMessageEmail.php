@@ -61,11 +61,6 @@ class SendNewMessageEmail implements ShouldQueue
             Mail::to($ticketUser->email)->send(new NewMessageEmail('admin', $this->ticket, $this->message, $link_admin, $this->brand_url, $adminLogoRedirectUrl, $this->user));
         }
 
-        // Inviarlo al gestore se c'è e non l'ha inviato lui
-        if ($handler && $handler->id !== $this->user->id && $handler->email) {
-            Mail::to($handler->email)->send(new NewMessageEmail('admin', $this->ticket, $this->message, $link_admin, $this->brand_url, $adminLogoRedirectUrl, $this->user));
-        }
-
         // Inviarlo all'utente interessato (referer) se non l'ha inviato lui e se è diverso dal {{ strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'referente IT')) }}
         if ($referer && $referer->id !== $this->user->id && ($refererIT ? $refererIT->id !== $referer->id : true) && $referer->email) {
             Mail::to($referer->email)->send(new NewMessageEmail('referer', $this->ticket, $this->message, $link_user, $this->brand_url, $userLogoRedirectUrl, $this->user));
@@ -77,8 +72,16 @@ class SendNewMessageEmail implements ShouldQueue
         }
 
         // Inviarlo al gruppo se non l'ha inviato un admin
+        $sentToGroup = false;
         if ($groupEmail && ! $this->user->is_admin) {
             Mail::to($groupEmail)->send(new NewMessageEmail('admin', $this->ticket, $this->message, $link_admin, $this->brand_url, $adminLogoRedirectUrl, $this->user));
+            $sentToGroup = true;
+        }
+
+        // Il codice corretto dovrebbe essere questo, ma il fatto è che non riesco a replicare il doppio messaggio per fare il test. Devo riprovarci.
+        // Inviarlo al gestore se c'è, non l'ha inviato lui e non è stato inviato al gruppo (perchè il gestore dovrebbe già essere nel gruppo e non serve inviarla due volte).
+        if ($handler && $handler->id !== $this->user->id && $handler->email && ! $sentToGroup) {
+            Mail::to($handler->email)->send(new NewMessageEmail('admin', $this->ticket, $this->message, $link_admin, $this->brand_url, $adminLogoRedirectUrl, $this->user));
         }
 
         // Inviarlo al supporto in ogni caso

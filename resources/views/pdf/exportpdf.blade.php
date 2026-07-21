@@ -669,7 +669,7 @@
                         </table>
                     </td>
 
-                    <td>
+                    {{-- <td>
                         @php
                             $imgData = !empty($tickets_sla_url) ? @file_get_contents($tickets_sla_url) : false;
                         @endphp
@@ -679,7 +679,7 @@
                         @else
                             <span>Immagine non disponibile</span>
                         @endif
-                    </td>
+                    </td> --}}
                 </tr>
             </table>
         </div>

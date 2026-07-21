@@ -11,6 +11,7 @@ use App\Models\Domustart\DomustartTicket;
 use App\Models\Group;
 use App\Models\Hardware;
 use App\Models\HardwareAuditLog;
+use App\Models\Invoice;
 use App\Models\Ticket;
 use App\Models\TicketAssignmentHistoryRecord;
 use App\Models\TicketCause;
@@ -780,6 +781,12 @@ class TicketController extends Controller
             'stage' => function ($query) {
                 $query->select('id', 'name', 'description', 'admin_color', 'user_color', 'is_sla_pause', 'system_key');
             },
+            'contract' => function ($query) {
+                $query->select('id', 'name');
+            },
+            'invoice' => function ($query) {
+                $query->select('id', 'number', 'invoice_date', 'payment_stage_id');
+            },
             'files',
         ])->first();
 
@@ -1182,24 +1189,67 @@ class TicketController extends Controller
         ], 200);
     }
 
-    public function updateTicketBillDetails(Ticket $ticket, Request $request)
+    public function updateTicketInvoice(Ticket $ticket, Request $request)
     {
+        if ($request->user()['is_superadmin'] != 1) {
+            return response([
+                'message' => 'The user must be superadmin.',
+            ], 401);
+        }
+
         $fields = $request->validate([
-            'bill_identification' => 'nullable|string|max:255',
-            'bill_date' => 'nullable|date',
+            'invoice_id' => 'nullable|exists:invoices,id',
         ]);
 
-        if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
+        // Verifica se almeno uno dei campi è stato modificato
+        $ticket->invoice_id = $request->has('invoice_id') ? $fields['invoice_id'] : $ticket->invoice_id;
+
+        $isValueChanged = $ticket->isDirty('invoice_id');
+
+        if ($isValueChanged) {
+            $ticket->save();
+
+            // Refresh del ticket per assicurarsi che i cast siano applicati
+            $ticket->refresh();
+
+            $invoice = Invoice::find($fields['invoice_id']);
+
+            $update = TicketStatusUpdate::create([
+                'ticket_id' => $ticket->id,
+                'user_id' => $request->user()->id,
+                'content' => 'Dettagli fatturazione aggiornati: '.
+                    'ID Fattura: '.($fields['invoice_id'] ?? 'N/A').($invoice ? ', Numero Fattura: '.$invoice->number : ''),
+                'type' => 'billing',
+            ]);
+
+            dispatch(new SendUpdateEmail($update));
+        }
+
+        return response([
+            'ticket' => $ticket,
+        ], 200);
+    }
+
+    public function updateTicketMissingInvoiceNote(Ticket $ticket, Request $request)
+    {
+        $fields = $request->validate([
+            // 'invoice_id' => 'nullable|exists:invoices,id',
+            'missing_invoice_note' => 'nullable|string|max:255',
+        ]);
+
+        if ($request->user()['is_superadmin'] != 1) {
             return response([
                 'message' => 'The user must be superadmin.',
             ], 401);
         }
 
         // Verifica se almeno uno dei campi è stato modificato
-        $ticket->bill_identification = $fields['bill_identification'];
-        $ticket->bill_date = $fields['bill_date'];
+        // $ticket->invoice_id = $fields['invoice_id'];
 
-        $isValueChanged = $ticket->isDirty('bill_identification') || $ticket->isDirty('bill_date');
+        $ticket->missing_invoice_note = $fields['missing_invoice_note'];
+
+        // $isValueChanged = $ticket->isDirty('invoice_id') || $ticket->isDirty('missing_invoice_note');
+        $isValueChanged = $ticket->isDirty('missing_invoice_note');
 
         if ($isValueChanged) {
             $ticket->save();
@@ -1211,8 +1261,7 @@ class TicketController extends Controller
                 'ticket_id' => $ticket->id,
                 'user_id' => $request->user()->id,
                 'content' => 'Dettagli fatturazione aggiornati: '.
-                    'ID Fattura: '.($fields['bill_identification'] ?? 'N/A').', '.
-                    'Data: '.($fields['bill_date'] ? date('d/m/Y', strtotime($fields['bill_date'])) : 'N/A'),
+                    'Nota fattura mancante: '.($fields['missing_invoice_note'] ?? 'N/A'),
                 'type' => 'billing',
             ]);
 
@@ -1229,10 +1278,15 @@ class TicketController extends Controller
         $fields = $request->validate([
             'is_billable' => 'nullable|boolean',
             'is_billed' => 'nullable|boolean',
-            'bill_identification' => 'nullable|string|max:255',
             'bill_date' => 'nullable|date',
             'is_billing_validated' => 'sometimes|boolean',
             'billable_value_cause_id' => 'nullable|exists:billable_value_causes,id',
+            'invoice_id' => ['nullable', function ($attribute, $value, $fail) {
+                if (! is_null($value) && ! \App\Models\Invoice::where('id', $value)->exists()) {
+                    $fail('The selected invoice does not exist.');
+                }
+            }],
+            'missing_invoice_note' => 'nullable|string|max:255',
         ]);
 
         if ($request->user()['is_admin'] != 1 || ($request->user()['is_superadmin'] != 1)) {
@@ -1259,9 +1313,21 @@ class TicketController extends Controller
         $changes = [];
         $originalValues = [];
 
-        // Prepara i campi da aggiornare e traccia le modifiche
+        // Gestione invoice_id: aggiorna sempre se presente nella richiesta (anche se null)
+        if (array_key_exists('invoice_id', $fields)) {
+            if ($fields['invoice_id'] !== $ticket->invoice_id) {
+                $originalValues['invoice_id'] = $ticket->invoice_id;
+                $ticket->invoice_id = $fields['invoice_id']; // può essere null
+                $changes['invoice_id'] = $fields['invoice_id'];
+            }
+        }
+
+        // Prepara gli altri campi da aggiornare e traccia le modifiche
         foreach ($fields as $field => $value) {
-            if ($value !== null && $value !== $ticket->$field) {
+            if ($field === 'invoice_id') {
+                continue; // già gestito sopra
+            }
+            if ($value !== $ticket->$field) {
                 $originalValues[$field] = $ticket->$field;
                 $ticket->$field = $value;
                 $changes[$field] = $value;
@@ -1292,8 +1358,25 @@ class TicketController extends Controller
             $logMessages[] = 'Fatturazione: '.($changes['is_billed'] ? 'Fatturato' : 'Non fatturato');
         }
 
-        if (isset($changes['bill_identification'])) {
-            $logMessages[] = 'ID Fattura: '.($changes['bill_identification'] ?? 'Rimosso');
+        // if (isset($changes['bill_identification'])) {
+        //     $logMessages[] = 'ID Fattura: '.($changes['bill_identification'] ?? 'Rimosso');
+        // }
+        if (isset($changes['invoice_id'])) {
+            if ($changes['invoice_id']) {
+                $invoice = \App\Models\Invoice::find($changes['invoice_id']);
+                $invoiceText = $invoice ? $invoice->number : 'Non definita';
+                $logMessages[] = 'Fattura associata: '.$invoiceText;
+            } else {
+                $logMessages[] = 'Fattura associata: Rimossa';
+            }
+        }
+
+        if (isset($changes['missing_invoice_note'])) {
+            $logMessages[] = 'Nota fattura mancante: '.($changes['missing_invoice_note'] ? $changes['missing_invoice_note'] : 'Rimossa');
+        } else {
+            if (array_key_exists('missing_invoice_note', $originalValues) && $originalValues['missing_invoice_note'] !== null) {
+                $logMessages[] = 'Nota fattura mancante: Rimossa';
+            }
         }
 
         if (isset($changes['bill_date'])) {
@@ -2003,7 +2086,7 @@ class TicketController extends Controller
         $companyId = $request->query('company') ? intval($request->query('company')) : null;
 
         if ($user['is_superadmin'] == 1) {
-            $ticketsQuery = Ticket::with('stage');
+            $ticketsQuery = Ticket::with('stage')->with('invoice');
         } else {
             $groups = $user->groups;
             $ticketsQuery = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'));
@@ -2047,7 +2130,7 @@ class TicketController extends Controller
             $counters = [
                 'billable_missing' => 0,
                 'billing_validation_missing' => 0,
-                'billed_bill_identification_missing' => 0,
+                'billed_invoice_missing' => 0,
                 'all_validated_billed_missing' => 0,
                 'billable_validated_billed_missing' => 0,
                 'billed_bill_date_missing' => 0,
@@ -2055,7 +2138,7 @@ class TicketController extends Controller
                 'open_billing_validation_missing' => 0,
                 'open_all_validated_billed_missing' => 0,
                 'open_billable_validated_billed_missing' => 0,
-                'open_billed_bill_identification_missing' => 0,
+                'open_billed_invoice_missing' => 0,
                 'open_billed_bill_date_missing' => 0,
             ];
             // Singola query ottimizzata per tutti i contatori
@@ -2063,13 +2146,13 @@ class TicketController extends Controller
                 SELECT 
                     COUNT(CASE WHEN is_billable IS NULL THEN 1 END) as billable_missing,
                     COUNT(CASE WHEN is_billing_validated = 0 THEN 1 END) as billing_validation_missing,
-                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL THEN 1 END) as billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND invoice_id IS NULL AND missing_invoice_note IS NULL THEN 1 END) as billed_invoice_missing,
                     COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as all_validated_billed_missing,
                     COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 THEN 1 END) as billable_validated_billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL THEN 1 END) as billed_bill_date_missing,
                     COUNT(CASE WHEN is_billable IS NULL AND stage_id != ? THEN 1 END) as open_billable_missing,
                     COUNT(CASE WHEN is_billing_validated = 0 AND stage_id != ? THEN 1 END) as open_billing_validation_missing,
-                    COUNT(CASE WHEN is_billed = 1 AND bill_identification IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_identification_missing,
+                    COUNT(CASE WHEN is_billed = 1 AND invoice_id IS NULL AND missing_invoice_note IS NULL AND stage_id != ? THEN 1 END) as open_billed_invoice_missing,
                     COUNT(CASE WHEN is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_all_validated_billed_missing,
                     COUNT(CASE WHEN is_billable = 1 AND is_billing_validated = 1 AND is_billed = 0 AND stage_id != ? THEN 1 END) as open_billable_validated_billed_missing,
                     COUNT(CASE WHEN is_billed = 1 AND bill_date IS NULL AND stage_id != ? THEN 1 END) as open_billed_bill_date_missing
@@ -2081,13 +2164,13 @@ class TicketController extends Controller
                 'billing_validation_missing' => $counters->billing_validation_missing,
                 'all_validated_billed_missing' => $counters->all_validated_billed_missing,
                 'billable_validated_billed_missing' => $counters->billable_validated_billed_missing,
-                'billed_bill_identification_missing' => $counters->billed_bill_identification_missing,
+                'billed_invoice_missing' => $counters->billed_invoice_missing,
                 'billed_bill_date_missing' => $counters->billed_bill_date_missing,
                 'open_billable_missing' => $counters->open_billable_missing,
                 'open_billing_validation_missing' => $counters->open_billing_validation_missing,
                 'open_all_validated_billed_missing' => $counters->open_all_validated_billed_missing,
                 'open_billable_validated_billed_missing' => $counters->open_billable_validated_billed_missing,
-                'open_billed_bill_identification_missing' => $counters->open_billed_bill_identification_missing,
+                'open_billed_invoice_missing' => $counters->open_billed_invoice_missing,
                 'open_billed_bill_date_missing' => $counters->open_billed_bill_date_missing,
             ];
         } else {
@@ -2292,6 +2375,7 @@ class TicketController extends Controller
             'counters' => $counters,
         ], 200);
     }
+
     public function getAvailableSchedulingTickets(Ticket $ticket, Request $request)
     {
         $user = $request->user();
@@ -3988,6 +4072,10 @@ class TicketController extends Controller
      */
     private function canViewTicket($user, $ticket): bool
     {
+        if ($user->is_superadmin) {
+            return true;
+        }
+
         // Admin con accesso al gruppo del ticket
         if ($user->is_admin && $this->userBelongsToTicketGroup($user, $ticket)) {
             return true;

@@ -14,7 +14,7 @@ class InvoiceController extends Controller
     public function index(Request $request): JsonResponse
     {
         $authUser = $request->user();
-        $isAdmin = $authUser['is_admin'] == 1;
+        $isAdmin = $authUser['is_superadmin'] == 1;
 
         if (! $isAdmin) {
             return response()->json([
@@ -58,7 +58,7 @@ class InvoiceController extends Controller
         }
 
         $validated = $request->validate([
-            'number' => 'required|string|max:255|unique:invoices,number',
+            'number' => 'required|string|max:255',
             'description' => 'nullable|string',
             'company_id' => 'nullable|exists:companies,id',
             'payment_stage_id' => 'nullable|exists:invoice_payment_stages,id',
@@ -110,7 +110,7 @@ class InvoiceController extends Controller
         }
 
         $validated = $request->validate([
-            'number' => 'required|string|max:255|unique:invoices,number,'.$invoice->id,
+            'number' => 'required|string|max:255',
             'description' => 'nullable|string',
             'company_id' => 'nullable|exists:companies,id',
             'payment_stage_id' => 'nullable|exists:invoice_payment_stages,id',
@@ -174,7 +174,7 @@ class InvoiceController extends Controller
     public function all(Request $request): JsonResponse
     {
         $authUser = $request->user();
-        $isAdmin = $authUser['is_admin'] == 1;
+        $isAdmin = $authUser['is_superadmin'] == 1;
 
         if (! $isAdmin) {
             return response()->json([
@@ -185,14 +185,21 @@ class InvoiceController extends Controller
         $query = Invoice::withTrashed()->with(['company:id,name', 'paymentStage:id,name,admin_color']);
 
         if ($request->has('company_id')) {
-            $query->where('company_id', $request->company_id);
+            $companyId = $request->company_id;
+            if ($companyId === 'null' || $companyId === null) {
+                $query->whereNull('company_id');
+            } else {
+                $query->where('company_id', $companyId);
+            }
         }
 
         if ($request->has('payment_stage_id')) {
             $query->where('payment_stage_id', $request->payment_stage_id);
         }
 
-        $invoices = $query->orderBy('invoice_date', 'desc')->get();
+        // Ordina sempre per invoice_date desc
+        $query->orderBy('invoice_date', 'desc');
+        $invoices = $query->get();
 
         return response()->json([
             'invoices' => $invoices,

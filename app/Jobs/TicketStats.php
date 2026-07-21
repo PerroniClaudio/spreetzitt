@@ -69,7 +69,7 @@ class TicketStats implements ShouldQueue
         return $nightHours;
     }
 
-    // // Funzione da testare con dove viene utilizzata prima di pubblicarla
+    // // Funzione da testare dove viene utilizzata prima di pubblicarla
     // private function getNightHours($start, $end) {
 
     //     if ($start->diffInDays($end) != 0) {

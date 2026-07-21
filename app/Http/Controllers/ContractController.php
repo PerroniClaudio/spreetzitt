@@ -23,7 +23,7 @@ class ContractController extends Controller
             ], 403);
         }
 
-        $contracts = Contract::with(['status'])->get();
+        $contracts = Contract::with(['status'])->orderBy('start_date', 'desc')->get();
 
         return response([
             'contracts' => $contracts,
@@ -49,6 +49,7 @@ class ContractController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status_id' => 'nullable|exists:contract_stages,id',
+            'company_id' => 'required|exists:companies,id',
         ]);
 
         $contract = Contract::create($data);
@@ -71,7 +72,9 @@ class ContractController extends Controller
             ], 403);
         }
 
-        $contract->load(['status', 'attachments']);
+        $contract->load(['status', 'attachments', 'company' => function ($query) {
+            $query->select('id', 'name');
+        }]);
 
         return response([
             'contract' => $contract,
@@ -97,6 +100,7 @@ class ContractController extends Controller
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'status_id' => 'nullable|exists:contract_stages,id',
+            'company_id' => 'sometimes|required|exists:companies,id',
         ]);
 
         $contract->update($data);
@@ -182,7 +186,9 @@ class ContractController extends Controller
             ], 403);
         }
 
-        $contracts = Contract::withTrashed()->with(['status'])->get();
+        $contracts = Contract::withTrashed()->with(['status', 'company' => function ($query) {
+            $query->select('id', 'name');
+        }])->orderBy('start_date', 'desc')->get();
 
         return response([
             'contracts' => $contracts,

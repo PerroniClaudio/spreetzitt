@@ -19,6 +19,7 @@ class Contract extends Model
         'start_date',
         'end_date',
         'status_id',
+        'company_id',
     ];
 
     protected $casts = [
@@ -50,5 +51,21 @@ class Contract extends Model
         return $this->belongsToMany(Invoice::class)
             ->withPivot('reference_period_start', 'reference_period_end')
             ->withTimestamps();
+    }
+
+    /**
+     * Get the tickets associated with this contract.
+     */
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class);
+    }
+
+    /**
+     * Get the company that owns the contract.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 }

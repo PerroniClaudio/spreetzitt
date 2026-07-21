@@ -41,13 +41,19 @@ Route::middleware(['throttle:5,1', 'auth:sanctum'])->group(function () {
 });
 
 Route::get('/test', function () {
+    $ticket = \App\Models\Ticket::find(15);
+    $selectedGroup = $ticket->group ?? null;
+    $assignUpdate = $ticket->statusUpdates()->where('type', 'assign')->first();
+    dispatch(new \App\Jobs\SendGroupWarningEmail('auto-assign', $selectedGroup, $ticket, $assignUpdate, true));
+
     return response()->json(['message' => 'Test route is working']);
 });
 
 Route::get('/send-assign-email', function () {
     $assignUpdate = \App\Models\TicketStatusUpdate::where('type', 'assign')->first();
     dispatch(new \App\Jobs\SendUpdateEmail($assignUpdate, true));
-    return response()->json(['message' => 'Test route is working. ' . $assignUpdate->id]);
+
+    return response()->json(['message' => 'Test route is working. '.$assignUpdate->id]);
 });
 
 Route::get('/debug/tickets-missing-user', function () {

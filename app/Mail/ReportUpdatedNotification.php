@@ -66,9 +66,9 @@ class ReportUpdatedNotification extends Mailable
 
         if ($this->report->is_generated && $this->report->file_path) {
             $disk = \App\Http\Controllers\FileUploadController::getStorageDisk();
-            
-            if (Storage::disk($disk)->exists($this->report->file_path)) {
-                $attachments[] = Attachment::fromStorage($this->report->file_path)
+            $filePath = \App\Http\Controllers\FileUploadController::storagePathPrefix().$this->report->file_path;
+            if (Storage::disk($disk)->exists($filePath)) {
+                $attachments[] = Attachment::fromStorage($filePath)
                     ->as($this->report->file_name)
                     ->withMime('application/pdf');
             }
