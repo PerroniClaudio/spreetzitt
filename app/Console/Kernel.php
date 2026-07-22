@@ -20,8 +20,7 @@ class Kernel extends ConsoleKernel
             $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt($time);
         }
 
-        // AUTO_ASSIGN_TICKET=true
-        $isAutoAssignEnabled = env('AUTO_ASSIGN_TICKET', false);
+        $isAutoAssignEnabled = config('app.auto_assign_ticket');
 
         if ($isAutoAssignEnabled) {
             $schedule->job(new \App\Jobs\AutoAssignTicket)->everyThirtyMinutes();

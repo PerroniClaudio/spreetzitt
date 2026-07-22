@@ -60,6 +60,8 @@ return [
 
     'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
 
+    'auto_assign_ticket' => env('AUTO_ASSIGN_TICKET', false),
+
     'asset_url' => env('ASSET_URL'),
 
     /*
