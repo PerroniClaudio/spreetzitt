@@ -270,13 +270,16 @@ class CompanyController extends Controller
         $authUser = $request->user();
         $isMassive = $request->query('is_massive');
         $isNewTicket = $request->query('is_new_ticket');
+        $includesMassive = $request->boolean('include_massive');
 
         $ticketTypesQuery = TicketType::query()->where('company_id', $company->id);
 
-        if ($isMassive) {
-            $ticketTypesQuery->where('is_massive_enabled', 1);
-        } else {
-            $ticketTypesQuery->where('is_massive_enabled', 0);
+        if (! $includesMassive) {
+            if ($isMassive) {
+                $ticketTypesQuery->where('is_massive_enabled', 1);
+            } else {
+                $ticketTypesQuery->where('is_massive_enabled', 0);
+            }
         }
 
         if ($isNewTicket) {
