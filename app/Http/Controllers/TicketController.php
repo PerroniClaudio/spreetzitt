@@ -3760,7 +3760,7 @@ class TicketController extends Controller
         $search = trim((string) $request->query('q', ''));
 
         $tickets = Ticket::query()
-            ->with(['messages', 'company', 'user'])
+            ->with(['messages', 'company', 'user', 'ticketType.category'])
             ->when($search !== '', function (Builder $query) use ($search) {
                 $like = '%'.$search.'%';
 
@@ -3786,15 +3786,16 @@ class TicketController extends Controller
 
         $ticket_ids_with_messages = $tickets_messages->pluck('ticket_id')->unique();
         $tickets_with_messages = Ticket::whereIn('id', $ticket_ids_with_messages)
-            ->with(['messages', 'company', 'user'])
+            ->with(['messages', 'company', 'user', 'ticketType.category'])
             ->get();
-        $tickets = $tickets->merge($tickets_with_messages);
+        $tickets = $tickets->merge($tickets_with_messages)->unique('id')->values();
 
         $tickets = $tickets->map(function ($ticket) {
 
             $user = $ticket->user;
             $openedBy = $user ? trim($user->name.' '.$user->surname) : null;
             $companyName = optional($ticket->company)->name;
+            $ticketType = $ticket->ticketType;
 
             $messages_map = $ticket->messages->map(function ($message) {
                 return [
@@ -3807,6 +3808,9 @@ class TicketController extends Controller
                 'id' => $ticket->id,
                 'ticket_opened_by' => $openedBy,
                 'company' => $companyName,
+                'category' => optional($ticketType?->category)->name,
+                'ticket_type' => $ticketType?->name,
+                'opened_at' => $ticket->created_at,
                 'description' => $ticket->description,
                 'messages' => $messages_map,
             ];
