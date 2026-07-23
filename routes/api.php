@@ -574,6 +574,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     // Invoices Management
     Route::get('/invoices/import-template', [App\Http\Controllers\InvoiceController::class, 'exportTemplate']);
     Route::post('/invoices/import', [App\Http\Controllers\InvoiceController::class, 'import']);
+    Route::get('/invoices/ticket-associations-import-template', [App\Http\Controllers\InvoiceController::class, 'exportTicketAssociationsTemplate']);
+    Route::post('/invoices/ticket-associations-import', [App\Http\Controllers\InvoiceController::class, 'importTicketAssociations']);
     Route::apiResource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::post('/invoices/{id}/restore', [App\Http\Controllers\InvoiceController::class, 'restore']);
     Route::get('/all-invoices', [App\Http\Controllers\InvoiceController::class, 'all']);
