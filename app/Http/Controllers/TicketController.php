@@ -1612,6 +1612,13 @@ class TicketController extends Controller
             'workMode' => 'required|string',
             'isRejected' => 'required|boolean',
             'no_user_response' => 'boolean',
+            'ticket_cause_id' => 'required|exists:ticket_causes,id',
+            'is_user_error_problem' => 'sometimes|boolean',
+            'is_billable' => 'sometimes|nullable|boolean',
+            'billable_value_cause_id' => 'sometimes|nullable|exists:billable_value_causes,id',
+            'is_billed' => 'sometimes|nullable|boolean',
+            'invoice_id' => 'sometimes|nullable|exists:invoices,id',
+            'missing_invoice_note' => 'sometimes|nullable|string|max:255',
         ]);
 
         $authUser = $request->user();
@@ -1619,6 +1626,23 @@ class TicketController extends Controller
             return response([
                 'message' => 'Only admins can close tickets.',
             ], 401);
+        }
+
+        $superadminOnlyFields = ['is_billed', 'invoice_id', 'missing_invoice_note'];
+        if (! $authUser->is_superadmin && array_intersect($superadminOnlyFields, array_keys($fields))) {
+            return response([
+                'message' => 'Only superadmins can update billing status, invoice and missing invoice note.',
+            ], 403);
+        }
+
+        if (
+            array_key_exists('is_billable', $fields)
+            && $ticket->is_billing_validated
+            && $fields['is_billable'] != $ticket->is_billable
+        ) {
+            return response([
+                'message' => 'La fatturabilità del ticket è già stata validata. Non può essere modificata.',
+            ], 400);
         }
 
         $closedTicketStageId = TicketStage::where('system_key', 'closed')->value('id');
@@ -1690,6 +1714,13 @@ class TicketController extends Controller
                 'work_mode' => $request->workMode,
                 'is_rejected' => $request->isRejected,
                 'no_user_response' => $fields['no_user_response'] ?? false,
+                'ticket_cause_id' => $fields['ticket_cause_id'],
+                'is_user_error_problem' => $fields['is_user_error_problem'] ?? $ticket->is_user_error_problem,
+                'is_billable' => array_key_exists('is_billable', $fields) ? $fields['is_billable'] : $ticket->is_billable,
+                'billable_value_cause_id' => array_key_exists('billable_value_cause_id', $fields) ? $fields['billable_value_cause_id'] : $ticket->billable_value_cause_id,
+                'is_billed' => array_key_exists('is_billed', $fields) ? $fields['is_billed'] : $ticket->is_billed,
+                'invoice_id' => array_key_exists('invoice_id', $fields) ? $fields['invoice_id'] : $ticket->invoice_id,
+                'missing_invoice_note' => array_key_exists('missing_invoice_note', $fields) ? $fields['missing_invoice_note'] : $ticket->missing_invoice_note,
             ]);
 
             $update = TicketStatusUpdate::create([
