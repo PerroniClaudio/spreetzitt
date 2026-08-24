@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\SendsUniqueEmails;
 use App\Mail\OpenMassiveTicketEmail;
 use App\Models\Group;
 use App\Models\Ticket;
@@ -14,7 +15,7 @@ use Illuminate\Support\Facades\Mail;
 
 class SendOpenMassiveTicketEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SendsUniqueEmails, SerializesModels;
 
     protected $ticketsInfo;
 
@@ -44,19 +45,22 @@ class SendOpenMassiveTicketEmail implements ShouldQueue
         $groupEmail = $group ? $group->email : null;
 
         $supportMail = env('MAIL_TO_ADDRESS');
+        $sentEmails = [];
         // Inviarla anche a tutti i membri del gruppo?
         // In ogni caso invia la mail al supporto ed al gruppo di appartenenza.
-        Mail::to($supportMail)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'admin'));
-        if ($groupEmail) {
-            Mail::to($groupEmail)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'admin'));
-        }
+        $this->sendEmailOnce($sentEmails, $supportMail, function (string $email) use ($company, $ticketType, $category): void {
+            Mail::to($email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'admin'));
+        });
+        $this->sendEmailOnce($sentEmails, $groupEmail, function (string $email) use ($company, $ticketType, $category): void {
+            Mail::to($email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'admin'));
+        });
         // Altrimenti si potrebbe inviare una mail al supporto per avvisare che il gruppo non ha un indirizzo email associato. Utile solo per i gruppi preesistenti.
 
         // Se l'utente che ha creato il ticket non è admin invia la mail anche a lui.
         if (! $ticketUser['is_admin']) {
-            if ($ticketUser['email']) {
-                Mail::to($ticketUser['email'])->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'user'));
-            }
+            $this->sendEmailOnce($sentEmails, $ticketUser['email'], function (string $email) use ($company, $ticketType, $category): void {
+                Mail::to($email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'user'));
+            });
         }
 
         $referer = $sampleTicket->referer;
@@ -64,12 +68,16 @@ class SendOpenMassiveTicketEmail implements ShouldQueue
 
         // Se l'utente interessato (referer) è impostato ed è diverso dall'utente che ha aperto il ticket, gli invia la mail.
         if ($referer && $referer->id !== $ticketUser->id && $referer->email) {
-            Mail::to($referer->email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'referer'));
+            $this->sendEmailOnce($sentEmails, $referer->email, function (string $email) use ($company, $ticketType, $category): void {
+                Mail::to($email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'referer'));
+            });
         }
 
         // Se il {{ strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('referente_it', 'referente IT')) }} è impostato ed è diverso dall'utente e dall'utente interessato (referer), gli invia la mail.
         if ($refererIT && ($referer ? $refererIT->id !== $referer->id : true) && $refererIT->id !== $ticketUser->id && $refererIT->email) {
-            Mail::to($refererIT->email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'referer_it'));
+            $this->sendEmailOnce($sentEmails, $refererIT->email, function (string $email) use ($company, $ticketType, $category): void {
+                Mail::to($email)->send(new OpenMassiveTicketEmail($this->ticketsInfo, $company, $ticketType, $category, $this->brand_url, 'referer_it'));
+            });
         }
 
     }

@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\SendsUniqueEmails;
 use App\Mail\GroupWarningEmail;
 use App\Mail\UpdateEmail;
 use Illuminate\Bus\Queueable;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 
 class SendGroupWarningEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SendsUniqueEmails, SerializesModels;
 
     protected $type;
 
@@ -24,7 +25,7 @@ class SendGroupWarningEmail implements ShouldQueue
     protected $update;
 
     protected $isAutomatic;
-    
+
     /**
      * Create a new job instance.
      */
@@ -52,20 +53,24 @@ class SendGroupWarningEmail implements ShouldQueue
         $link = env('FRONTEND_URL').'/support/admin/ticket/'.$ticket->id;
         $mail = env('MAIL_TO_ADDRESS');
         $handler = $ticket->handler;
+        $sentEmails = [];
         // Inviarla anche a tutti i membri del gruppo?
-        Mail::to($mail)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user, $this->isAutomatic));
-
+        $this->sendEmailOnce($sentEmails, $mail, function (string $email) use ($ticket, $company, $ticketType, $category, $link, $user): void {
+            Mail::to($email)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user, $this->isAutomatic));
+        });
 
         $link = env('FRONTEND_URL').'/support/admin/'.($this->ticket ? 'ticket/'.$this->ticket->id : '');
         if ($this->group->email) {
-            Mail::to($this->group->email)->send(new GroupWarningEmail($this->type, $link, $this->ticket, $this->update));
+            $this->sendEmailOnce($sentEmails, $this->group->email, function (string $email) use ($link): void {
+                Mail::to($email)->send(new GroupWarningEmail($this->type, $link, $this->ticket, $this->update));
+            });
         } else {
             $groupUsers = $this->group->users;
 
             foreach ($groupUsers as $user) {
-                if ($user->email) {
-                    Mail::to($user->email)->send(new GroupWarningEmail($this->type, $link, $this->ticket, $this->update));
-                }
+                $this->sendEmailOnce($sentEmails, $user->email, function (string $email) use ($link): void {
+                    Mail::to($email)->send(new GroupWarningEmail($this->type, $link, $this->ticket, $this->update));
+                });
             }
         }
 

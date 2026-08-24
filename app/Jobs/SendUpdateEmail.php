@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\SendsUniqueEmails;
 use App\Mail\AssignToUserEmail;
 use App\Mail\UpdateEmail;
 use Illuminate\Bus\Queueable;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Mail;
 
 class SendUpdateEmail implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SendsUniqueEmails, SerializesModels;
 
     protected $update;
 
@@ -48,8 +49,11 @@ class SendUpdateEmail implements ShouldQueue
         $link = env('FRONTEND_URL').'/support/admin/ticket/'.$ticket->id;
         $mail = env('MAIL_TO_ADDRESS');
         $handler = $ticket->handler;
+        $sentEmails = [];
         // Inviarla anche a tutti i membri del gruppo?
-        Mail::to($mail)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user, $this->isAutomatic));
+        $this->sendEmailOnce($sentEmails, $mail, function (string $email) use ($ticket, $company, $ticketType, $category, $link, $user): void {
+            Mail::to($email)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user, $this->isAutomatic));
+        });
 
         // Per il gestore
         if ($handler) {
@@ -57,9 +61,13 @@ class SendUpdateEmail implements ShouldQueue
             if (in_array($this->update->type, ['assign', 'sla'])) {
                 // Inviare mail di assegnazione ticket, altrimenti mail di update
                 if ($this->update->type == 'assign') {
-                    Mail::to($handler->email)->send(new AssignToUserEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user));
+                    $this->sendEmailOnce($sentEmails, $handler->email, function (string $email) use ($ticket, $company, $ticketType, $category, $link, $user): void {
+                        Mail::to($email)->send(new AssignToUserEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user));
+                    });
                 } else {
-                    Mail::to($handler->email)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user));
+                    $this->sendEmailOnce($sentEmails, $handler->email, function (string $email) use ($ticket, $company, $ticketType, $category, $link, $user): void {
+                        Mail::to($email)->send(new UpdateEmail($ticket, $company, $ticketType, $category, $link, $this->update, $user));
+                    });
                 }
             }
         }
