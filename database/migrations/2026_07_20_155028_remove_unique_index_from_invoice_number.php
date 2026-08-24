@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (! Schema::hasIndex('invoices', 'invoices_number_unique')) {
+            return;
+        }
+
         Schema::table('invoices', function (Blueprint $table) {
             $table->dropUnique('invoices_number_unique');
         });
@@ -21,6 +25,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (Schema::hasIndex('invoices', 'invoices_number_unique')) {
+            return;
+        }
+
         Schema::table('invoices', function (Blueprint $table) {
             $table->unique('number');
         });
