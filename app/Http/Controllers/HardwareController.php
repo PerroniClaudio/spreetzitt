@@ -20,6 +20,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -433,6 +434,7 @@ class HardwareController extends Controller
             'ownership_type_note' => 'nullable|string',
             'notes' => 'nullable|string',
             'users' => 'nullable|array',
+            'responsible_user_id' => 'nullable|integer',
         ]);
 
         if (isset($data['company_id']) && ! Company::find($data['company_id'])) {
@@ -464,6 +466,28 @@ class HardwareController extends Controller
             }
         }
 
+        if (isset($data['responsible_user_id'])) {
+            if (empty($data['company_id'])) {
+                return response([
+                    'message' => 'A company is required to assign a responsible user',
+                ], 422);
+            }
+
+            $responsibleUserExists = User::query()
+                ->whereKey($data['responsible_user_id'])
+                ->where('is_company_admin', true)
+                ->whereHas('companies', function ($query) use ($data) {
+                    $query->where('companies.id', $data['company_id']);
+                })
+                ->exists();
+
+            if (! $responsibleUserExists) {
+                return response([
+                    'message' => 'The responsible user must be a company administrator of the assigned company',
+                ], 422);
+            }
+        }
+
         if (! $hardware->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
             return response([
                 'message' => 'Exclusive use hardware can be associated to no more than one user. Hardware not updated.',
@@ -471,6 +495,10 @@ class HardwareController extends Controller
         }
 
         $oldCompanyId = $hardware->company_id;
+        $users = $data['users'] ?? [];
+        $responsibleUserId = $data['responsible_user_id'] ?? $authUser->id;
+        $hasResponsibleUserId = array_key_exists('responsible_user_id', $data);
+        unset($data['users'], $data['responsible_user_id']);
 
         // Aggiorna l'hardware
         $hardware->update($data);
@@ -493,14 +521,21 @@ class HardwareController extends Controller
         // Non so perchè ma non crea i log in automatico, quindi devo aggiungerli manualmente
         // $hardware->users()->attach($data['users']);
 
-        $usersToRemove = $hardware->users->pluck('id')->diff($data['users']);
-        $usersToAdd = collect($data['users'])->diff($hardware->users->pluck('id'));
+        $usersToRemove = $hardware->users->pluck('id')->diff($users);
+        $usersToAdd = collect($users)->diff($hardware->users->pluck('id'));
 
         foreach ($usersToAdd as $userId) {
             $hardware->users()->attach($userId, [
                 'created_by' => $authUser->id,
-                'responsible_user_id' => $authUser->id,
+                'responsible_user_id' => $responsibleUserId,
                 'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        }
+
+        if ($hasResponsibleUserId) {
+            $hardware->users()->updateExistingPivot($users, [
+                'responsible_user_id' => $responsibleUserId,
                 'updated_at' => Carbon::now(),
             ]);
         }
@@ -617,55 +652,66 @@ class HardwareController extends Controller
     }
 
     /**
-     * Update the assigned users of the single hardware
+     * Update the assignment details of the single hardware.
      */
     public function updateHardwareUsers(Request $request, Hardware $hardware)
     {
-        $hardware = Hardware::find($hardware->id);
-        if (! $hardware) {
-            return response([
-                'message' => 'Hardware not found',
-            ], 404);
-        }
-
         $authUser = $request->user();
         if (! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $hardware->company_id)->exists()) && ! $authUser->is_admin) {
             return response([
-                'message' => 'You are not allowed to update hardware users',
+                'message' => 'You are not allowed to update hardware assignments',
             ], 403);
         }
 
         $data = $request->validate([
-            'users' => 'nullable|array',
+            'company_id' => 'nullable|integer|exists:companies,id',
+            'users' => 'required|array',
+            'users.*' => 'integer|distinct|exists:users,id',
+            'responsible_user_id' => 'nullable|integer|exists:users,id',
         ]);
 
-        $company = $hardware->company;
-
-        if (! empty($data['users']) && ! $company) {
+        if (! $authUser->is_admin && (int) $data['company_id'] !== (int) $hardware->company_id) {
             return response([
-                'message' => 'Hardware must be associated with a company to add users',
-            ], 404);
+                'message' => 'You are not allowed to change the assigned company',
+            ], 403);
         }
 
-        if ($company && ! empty($data['users'])) {
-            // $isFail = User::whereIn('id', $data['users'])->where('company_id', '!=', $company->id)->exists();
-            $isFail = User::whereIn('id', $data['users'])
+        if (! empty($data['users']) && (empty($data['company_id']) || empty($data['responsible_user_id']))) {
+            return response([
+                'message' => 'An assigned company and a responsible user are required when assigning users',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && empty($data['company_id'])) {
+            return response([
+                'message' => 'A company is required to assign a responsible user',
+            ], 422);
+        }
+
+        if (! empty($data['users'])) {
+            $hasUsersOutsideCompany = User::query()
+                ->whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
                     $query->where('companies.id', $data['company_id']);
                 })
                 ->exists();
-            if ($isFail) {
+            if ($hasUsersOutsideCompany) {
                 return response([
                     'message' => 'One or more selected users do not belong to the specified company',
                 ], 400);
             }
         }
 
-        $users = User::whereIn('id', $data['users'])->get();
-        if ($users->count() != count($data['users'])) {
+        if (! empty($data['responsible_user_id']) && ! User::query()
+            ->whereKey($data['responsible_user_id'])
+            ->where('is_company_admin', true)
+            ->whereHas('companies', function ($query) use ($data) {
+                $query->where('companies.id', $data['company_id']);
+            })
+            ->exists()) {
             return response([
-                'message' => 'One or more users not found',
-            ], 404);
+                'message' => 'The responsible user must be a company administrator of the assigned company',
+            ], 422);
         }
 
         $usersToRemove = $hardware->users->pluck('id')->diff($data['users']);
@@ -691,21 +737,27 @@ class HardwareController extends Controller
             ], 400);
         }
 
-        foreach ($usersToAdd as $userId) {
-            $hardware->users()->attach($userId, [
-                'created_by' => $authUser->id,
-                'responsible_user_id' => $authUser->id,
-                'created_at' => Carbon::now(),
+        DB::transaction(function () use ($authUser, $data, $hardware, $usersToAdd, $usersToRemove) {
+            $hardware->update(['company_id' => $data['company_id']]);
+
+            foreach ($usersToAdd as $userId) {
+                $hardware->users()->attach($userId, [
+                    'created_by' => $authUser->id,
+                    'responsible_user_id' => $data['responsible_user_id'],
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
+
+            $hardware->users()->updateExistingPivot($data['users'], [
+                'responsible_user_id' => $data['responsible_user_id'],
                 'updated_at' => Carbon::now(),
             ]);
-        }
-
-        foreach ($usersToRemove as $userId) {
-            $hardware->users()->detach($userId);
-        }
+            $hardware->users()->detach($usersToRemove);
+        });
 
         return response([
-            'message' => 'Hardware users updated successfully',
+            'message' => 'Hardware assignments updated successfully',
         ], 200);
     }
 

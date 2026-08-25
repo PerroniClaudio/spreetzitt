@@ -7,7 +7,6 @@ use App\Exports\SoftwareDeletionTemplateExport;
 use App\Exports\SoftwareExport;
 use App\Exports\SoftwareLogsExport;
 use App\Exports\SoftwareTemplateExport;
-use App\Http\Controllers\FileUploadController;
 use App\Imports\SoftwareAssignationsImport;
 use App\Imports\SoftwareDeletionsImport;
 use App\Imports\SoftwareImport;
@@ -21,6 +20,7 @@ use App\Models\User;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -34,11 +34,11 @@ class SoftwareController extends Controller
     public function index(Request $request)
     {
         $authUser = $request->user();
-        
+
         if ($authUser->is_admin) {
             $softwareList = Software::with([
-                'softwareType', 
-                'company', 
+                'softwareType',
+                'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
                 },
@@ -51,14 +51,14 @@ class SoftwareController extends Controller
 
         if ($authUser->is_company_admin) {
             $selectedCompany = $authUser->selectedCompany();
-            $softwareList = $selectedCompany 
+            $softwareList = $selectedCompany
                 ? Software::where('company_id', $selectedCompany->id)->with([
-                    'softwareType', 
-                    'company', 
+                    'softwareType',
+                    'company',
                     'users' => function ($query) {
                         $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
                     },
-                ])->get() 
+                ])->get()
                 : collect();
 
             return response([
@@ -67,16 +67,16 @@ class SoftwareController extends Controller
         }
 
         $selectedCompany = $authUser->selectedCompany();
-        $softwareList = $selectedCompany 
+        $softwareList = $selectedCompany
             ? Software::where('company_id', $selectedCompany->id)->whereHas('users', function ($query) use ($authUser) {
                 $query->where('user_id', $authUser->id);
             })->with([
-                'softwareType', 
+                'softwareType',
                 'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
                 },
-            ])->get() 
+            ])->get()
             : collect();
 
         return response([
@@ -87,8 +87,8 @@ class SoftwareController extends Controller
     public function companySoftwareList(Request $request, Company $company)
     {
         $authUser = $request->user();
-        
-        if (!$authUser->is_admin && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+
+        if (! $authUser->is_admin && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to view this software',
             ], 403);
@@ -96,7 +96,7 @@ class SoftwareController extends Controller
 
         $softwareQuery = Software::query();
 
-        if (!!$authUser->is_admin) {
+        if ((bool) $authUser->is_admin) {
             $softwareQuery->withTrashed();
         }
 
@@ -106,7 +106,7 @@ class SoftwareController extends Controller
                 'company',
                 'users' => function ($query) {
                     $query->select('users.id', 'users.name', 'users.surname', 'users.email');
-                }
+                },
             ])
             ->get();
 
@@ -119,7 +119,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
         if (
-            !$authUser->is_admin
+            ! $authUser->is_admin
         ) {
             return response([
                 'message' => 'You are not allowed to view this software list',
@@ -132,9 +132,10 @@ class SoftwareController extends Controller
             ->get()
             ->map(function ($software) {
                 $software->users = $software->users()->pluck('user_id')->toArray();
+
                 return $software;
             });
-        
+
         return response([
             'softwareList' => $softwareList,
         ], 200);
@@ -144,14 +145,14 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        if (!$typeFormField) {
+        if (! $typeFormField) {
             return response([
                 'message' => 'Type form field not found',
             ], 404);
         }
 
         $company = $typeFormField->ticketType->company;
-        if (!$authUser->is_admin && !((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+        if (! $authUser->is_admin && ! ((bool) $company && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to view this software',
             ], 403);
@@ -165,7 +166,7 @@ class SoftwareController extends Controller
         } else {
             $query = $authUser->software();
         }
-        
+
         // Aggiungi le relazioni
         $query->with(['softwareType', 'company']);
 
@@ -181,7 +182,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to view this software',
             ], 403);
@@ -201,7 +202,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to create software',
             ], 403);
@@ -219,7 +220,7 @@ class SoftwareController extends Controller
             'purchase_date' => 'nullable|date',
             'expiration_date' => 'nullable|date',
             'support_expiration_date' => 'nullable|date',
-            'status' => 'required|string|in:' . implode(',', array_keys(config('app.software_statuses'))),
+            'status' => 'required|string|in:'.implode(',', array_keys(config('app.software_statuses'))),
             'notes' => 'nullable|string',
             'company_id' => 'nullable|int|exists:companies,id',
             'software_type_id' => 'nullable|int|exists:software_types,id',
@@ -227,7 +228,7 @@ class SoftwareController extends Controller
         ]);
 
         // Verificare le associazioni utenti
-        if (isset($data['company_id']) && !empty($data['users'])) {
+        if (isset($data['company_id']) && ! empty($data['users'])) {
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
                     $query->where('companies.id', $data['company_id']);
@@ -246,7 +247,7 @@ class SoftwareController extends Controller
         $software = Software::create($data);
 
         // Associare gli utenti
-        if (!empty($users)) {
+        if (! empty($users)) {
             $software->users()->attach($users, [
                 'created_by' => $authUser->id,
                 'responsible_user_id' => $authUser->id,
@@ -274,16 +275,16 @@ class SoftwareController extends Controller
             $software = Software::find($softwareId);
         }
 
-        if (!$software) {
+        if (! $software) {
             return response([
                 'message' => 'Software not found',
             ], 404);
         }
 
         if (
-            !$authUser->is_admin
-            && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
-            && !(in_array($authUser->id, $software->users->pluck('id')->toArray()))
+            ! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
+            && ! (in_array($authUser->id, $software->users->pluck('id')->toArray()))
         ) {
             return response([
                 'message' => 'You are not allowed to view this software',
@@ -312,7 +313,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to edit software',
             ], 403);
@@ -323,22 +324,23 @@ class SoftwareController extends Controller
             'product_name' => 'required|string',
             'version' => 'nullable|string',
             'activation_key' => 'nullable|string',
-            'company_asset_number' => 'nullable|string|unique:software,company_asset_number,' . $software->id,
+            'company_asset_number' => 'nullable|string|unique:software,company_asset_number,'.$software->id,
             'is_exclusive_use' => 'required|boolean',
             'license_type' => 'nullable|string',
             'max_installations' => 'nullable|integer',
             'purchase_date' => 'nullable|date',
             'expiration_date' => 'nullable|date',
             'support_expiration_date' => 'nullable|date',
-            'status' => 'required|string|in:' . implode(',', array_keys(config('app.software_statuses'))),
+            'status' => 'required|string|in:'.implode(',', array_keys(config('app.software_statuses'))),
             'notes' => 'nullable|string',
             'company_id' => 'nullable|int|exists:companies,id',
             'software_type_id' => 'nullable|int|exists:software_types,id',
             'users' => 'nullable|array',
+            'responsible_user_id' => 'nullable|integer',
         ]);
 
         // Verificare le associazioni utenti
-        if (isset($data['company_id']) && !empty($data['users'])) {
+        if (isset($data['company_id']) && ! empty($data['users'])) {
             $isFail = User::whereIn('id', $data['users'])
                 ->whereDoesntHave('companies', function ($query) use ($data) {
                     $query->where('companies.id', $data['company_id']);
@@ -351,7 +353,29 @@ class SoftwareController extends Controller
             }
         }
 
-        if (!$software->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
+        if (isset($data['responsible_user_id'])) {
+            if (empty($data['company_id'])) {
+                return response([
+                    'message' => 'A company is required to assign a responsible user',
+                ], 422);
+            }
+
+            $responsibleUserExists = User::query()
+                ->whereKey($data['responsible_user_id'])
+                ->where('is_company_admin', true)
+                ->whereHas('companies', function ($query) use ($data) {
+                    $query->where('companies.id', $data['company_id']);
+                })
+                ->exists();
+
+            if (! $responsibleUserExists) {
+                return response([
+                    'message' => 'The responsible user must be a company administrator of the assigned company',
+                ], 422);
+            }
+        }
+
+        if (! $software->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
             return response([
                 'message' => 'Exclusive use software can be associated to no more than one user. Software not updated.',
             ], 400);
@@ -359,7 +383,9 @@ class SoftwareController extends Controller
 
         $oldCompanyId = $software->company_id;
         $users = $data['users'] ?? [];
-        unset($data['users']);
+        $responsibleUserId = $data['responsible_user_id'] ?? $authUser->id;
+        $hasResponsibleUserId = array_key_exists('responsible_user_id', $data);
+        unset($data['users'], $data['responsible_user_id']);
 
         // Aggiorna il software
         $software->update($data);
@@ -385,8 +411,15 @@ class SoftwareController extends Controller
         foreach ($usersToAdd as $userId) {
             $software->users()->attach($userId, [
                 'created_by' => $authUser->id,
-                'responsible_user_id' => $authUser->id,
+                'responsible_user_id' => $responsibleUserId,
                 'created_at' => Carbon::now(),
+                'updated_at' => Carbon::now(),
+            ]);
+        }
+
+        if ($hasResponsibleUserId) {
+            $software->users()->updateExistingPivot($users, [
+                'responsible_user_id' => $responsibleUserId,
                 'updated_at' => Carbon::now(),
             ]);
         }
@@ -401,61 +434,73 @@ class SoftwareController extends Controller
     }
 
     /**
-     * Update the assigned users of the single software
+     * Update the assignment details of the single software.
      */
     public function updateSoftwareUsers(Request $request, Software $software)
     {
-        $software = Software::find($software->id);
-        if (!$software) {
-            return response([
-                'message' => 'Software not found',
-            ], 404);
-        }
-
         $authUser = $request->user();
-        if (!($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists()) && !$authUser->is_admin) {
+        if (! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists()) && ! $authUser->is_admin) {
             return response([
-                'message' => 'You are not allowed to update software users',
+                'message' => 'You are not allowed to update software assignments',
             ], 403);
         }
 
         $data = $request->validate([
-            'users' => 'nullable|array',
+            'company_id' => 'nullable|integer|exists:companies,id',
+            'users' => 'required|array',
+            'users.*' => 'integer|distinct|exists:users,id',
+            'responsible_user_id' => 'nullable|integer|exists:users,id',
         ]);
 
-        $company = $software->company;
-
-        if (!empty($data['users']) && !$company) {
+        if (! $authUser->is_admin && (int) $data['company_id'] !== (int) $software->company_id) {
             return response([
-                'message' => 'Software must be associated with a company to add users',
-            ], 404);
+                'message' => 'You are not allowed to change the assigned company',
+            ], 403);
         }
 
-        if ($company && !empty($data['users'])) {
-            $isFail = User::whereIn('id', $data['users'])
-                ->whereDoesntHave('companies', function ($query) use ($company) {
-                    $query->where('companies.id', $company->id);
+        if (! empty($data['users']) && (empty($data['company_id']) || empty($data['responsible_user_id']))) {
+            return response([
+                'message' => 'An assigned company and a responsible user are required when assigning users',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && empty($data['company_id'])) {
+            return response([
+                'message' => 'A company is required to assign a responsible user',
+            ], 422);
+        }
+
+        if (! empty($data['users'])) {
+            $hasUsersOutsideCompany = User::query()
+                ->whereIn('id', $data['users'])
+                ->whereDoesntHave('companies', function ($query) use ($data) {
+                    $query->where('companies.id', $data['company_id']);
                 })
                 ->exists();
-            if ($isFail) {
+            if ($hasUsersOutsideCompany) {
                 return response([
                     'message' => 'One or more selected users do not belong to the specified company',
                 ], 400);
             }
         }
 
-        $users = User::whereIn('id', $data['users'])->get();
-        if ($users->count() != count($data['users'])) {
+        if (! empty($data['responsible_user_id']) && ! User::query()
+            ->whereKey($data['responsible_user_id'])
+            ->where('is_company_admin', true)
+            ->whereHas('companies', function ($query) use ($data) {
+                $query->where('companies.id', $data['company_id']);
+            })
+            ->exists()) {
             return response([
-                'message' => 'One or more users not found',
-            ], 404);
+                'message' => 'The responsible user must be a company administrator of the assigned company',
+            ], 422);
         }
 
         $usersToRemove = $software->users->pluck('id')->diff($data['users']);
         $usersToAdd = collect($data['users'])->diff($software->users->pluck('id'));
 
         // Solo l'admin può rimuovere associazioni software-user
-        if (!$authUser->is_admin && count($usersToRemove) > 0) {
+        if (! $authUser->is_admin && count($usersToRemove) > 0) {
             return response([
                 'message' => 'You are not allowed to remove users from software',
             ], 403);
@@ -473,21 +518,27 @@ class SoftwareController extends Controller
             ], 400);
         }
 
-        foreach ($usersToAdd as $userId) {
-            $software->users()->attach($userId, [
-                'created_by' => $authUser->id,
-                'responsible_user_id' => $authUser->id,
-                'created_at' => Carbon::now(),
+        DB::transaction(function () use ($authUser, $data, $software, $usersToAdd, $usersToRemove) {
+            $software->update(['company_id' => $data['company_id']]);
+
+            foreach ($usersToAdd as $userId) {
+                $software->users()->attach($userId, [
+                    'created_by' => $authUser->id,
+                    'responsible_user_id' => $data['responsible_user_id'],
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
+
+            $software->users()->updateExistingPivot($data['users'], [
+                'responsible_user_id' => $data['responsible_user_id'],
                 'updated_at' => Carbon::now(),
             ]);
-        }
-
-        foreach ($usersToRemove as $userId) {
-            $software->users()->detach($userId);
-        }
+            $software->users()->detach($usersToRemove);
+        });
 
         return response([
-            'message' => 'Software users updated successfully',
+            'message' => 'Software assignments updated successfully',
         ], 200);
     }
 
@@ -497,7 +548,7 @@ class SoftwareController extends Controller
     public function updateUserSoftware(Request $request, User $user)
     {
         $user = User::find($user->id);
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -505,8 +556,8 @@ class SoftwareController extends Controller
 
         $authUser = $request->user();
         if (
-            !$authUser->is_admin &&
-            !(
+            ! $authUser->is_admin &&
+            ! (
                 $authUser->is_company_admin &&
                 $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists()
             )
@@ -522,13 +573,13 @@ class SoftwareController extends Controller
 
         $userHasAtLeastOneCompany = $user->companies()->exists();
 
-        if (!empty($data['software']) && !$userHasAtLeastOneCompany) {
+        if (! empty($data['software']) && ! $userHasAtLeastOneCompany) {
             return response([
                 'message' => 'User must be associated with a company to add software',
             ], 404);
         }
 
-        if ($userHasAtLeastOneCompany && !empty($data['software'])) {
+        if ($userHasAtLeastOneCompany && ! empty($data['software'])) {
             $isFail = Software::whereIn('id', $data['software'])
                 ->whereNotIn('company_id', $user->companies()->pluck('companies.id'))
                 ->exists();
@@ -556,7 +607,7 @@ class SoftwareController extends Controller
         $softwareToAdd = collect($data['software'])->diff($user->software->pluck('id'));
 
         // Solo l'admin può rimuovere associazioni software-user
-        if (!$authUser->is_admin && count($softwareToRemove) > 0) {
+        if (! $authUser->is_admin && count($softwareToRemove) > 0) {
             return response([
                 'message' => 'You are not allowed to remove software from user',
             ], 403);
@@ -567,7 +618,7 @@ class SoftwareController extends Controller
                 $swToAdd = Software::find($softwareId);
                 if ($swToAdd->is_exclusive_use && ($swToAdd->users->count() >= 1)) {
                     return response([
-                        'message' => 'A selected software (' . $swToAdd->id . ') can only be associated to one user and has already been associated.',
+                        'message' => 'A selected software ('.$swToAdd->id.') can only be associated to one user and has already been associated.',
                     ], 400);
                 }
             }
@@ -596,12 +647,12 @@ class SoftwareController extends Controller
         $software = Software::findOrFail($softwareId);
         $user = User::findOrFail($userId);
 
-        if (!$software) {
+        if (! $software) {
             return response([
                 'message' => 'Software not found',
             ], 404);
         }
-        if (!$user) {
+        if (! $user) {
             return response([
                 'message' => 'User not found',
             ], 404);
@@ -609,13 +660,13 @@ class SoftwareController extends Controller
 
         $authUser = $request->user();
         // Adesso può farlo solo l'admin
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete software-user associations.',
             ], 403);
         }
 
-        if (!$software->users->contains($user)) {
+        if (! $software->users->contains($user)) {
             return response([
                 'message' => 'User not associated with software',
             ], 400);
@@ -629,9 +680,9 @@ class SoftwareController extends Controller
     public function userSoftwareList(Request $request, User $user)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin
-            && !$user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists()
-            && !($authUser->id == $user->id)
+        if (! $authUser->is_admin
+            && ! $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists()
+            && ! ($authUser->id == $user->id)
         ) {
             return response([
                 'message' => 'You are not allowed to view this user software',
@@ -651,7 +702,7 @@ class SoftwareController extends Controller
             $softwareList = $user->software()
                 ->where('company_id', $authUser->selectedCompany()->id)
                 ->with([
-                    'softwareType', 
+                    'softwareType',
                     'company',
                     'users' => function ($query) {
                         $query->select('users.id', 'users.name', 'users.surname', 'users.email');
@@ -757,9 +808,9 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
         if (
-            !$authUser->is_admin
-            && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
-            && !($software->users->contains($authUser))
+            ! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $software->company_id)->exists())
+            && ! ($software->users->contains($authUser))
         ) {
             return response([
                 'message' => 'You are not allowed to view this software tickets',
@@ -863,21 +914,21 @@ class SoftwareController extends Controller
 
     public function exportTemplate()
     {
-        $name = 'software_import_template_' . time() . '.xlsx';
+        $name = 'software_import_template_'.time().'.xlsx';
 
         return Excel::download(new SoftwareTemplateExport, $name);
     }
 
     public function exportAssignationTemplate()
     {
-        $name = 'software_assignation_template_' . time() . '.xlsx';
+        $name = 'software_assignation_template_'.time().'.xlsx';
 
         return Excel::download(new SoftwareAssignationTemplateExport, $name);
     }
 
     public function exportDeletionTemplate()
     {
-        $name = 'software_deletion_template_' . time() . '.xlsx';
+        $name = 'software_deletion_template_'.time().'.xlsx';
 
         return Excel::download(new SoftwareDeletionTemplateExport, $name);
     }
@@ -885,7 +936,7 @@ class SoftwareController extends Controller
     public function importSoftware(Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import software',
             ], 403);
@@ -900,7 +951,7 @@ class SoftwareController extends Controller
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX file.',
                 ], 400);
@@ -924,7 +975,7 @@ class SoftwareController extends Controller
     public function importSoftwareAssignations(Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import software assignations',
             ], 403);
@@ -939,7 +990,7 @@ class SoftwareController extends Controller
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX file.',
                 ], 400);
@@ -963,7 +1014,7 @@ class SoftwareController extends Controller
     public function importSoftwareDeletions(Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to import software deletions',
             ], 403);
@@ -978,7 +1029,7 @@ class SoftwareController extends Controller
 
             $extension = $file->getClientOriginalExtension();
 
-            if (!($extension === 'xlsx')) {
+            if (! ($extension === 'xlsx')) {
                 return response([
                     'message' => 'Invalid file type. Please upload an XLSX file.',
                 ], 400);
@@ -1002,8 +1053,8 @@ class SoftwareController extends Controller
     public function downloadUserSoftwareAssignmentPdf(Software $software, User $user, Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin
-            && !($authUser->is_company_admin
+        if (! $authUser->is_admin
+            && ! ($authUser->is_company_admin
                 && (isset($software->company_id) && $software->company_id == ($authUser->selectedCompany()->id ?? null))
             )
         ) {
@@ -1012,7 +1063,7 @@ class SoftwareController extends Controller
             ], 403);
         }
 
-        if (!$software->users->contains($user)) {
+        if (! $software->users->contains($user)) {
             return response([
                 'message' => 'User not associated with software',
             ], 400);
@@ -1068,23 +1119,23 @@ class SoftwareController extends Controller
     public function destroy($softwareId, Request $request)
     {
         $user = $request->user();
-        
-        if (!$user->is_admin) {
+
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete software',
             ], 403);
         }
 
         $software = Software::findOrFail($softwareId);
-        
-        if (!$software) {
+
+        if (! $software) {
             return response([
                 'message' => 'Software not found',
             ], 404);
         }
-        
+
         $software->delete();
-        
+
         SoftwareAuditLog::create([
             'modified_by' => $user->id,
             'software_id' => null,
@@ -1102,23 +1153,23 @@ class SoftwareController extends Controller
     public function destroyTrashed($softwareId, Request $request)
     {
         $user = $request->user();
-        
-        if (!$user->is_admin) {
+
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to delete software',
             ], 403);
         }
 
         $software = Software::withTrashed()->findOrFail($softwareId);
-        
-        if (!$software) {
+
+        if (! $software) {
             return response([
                 'message' => 'Software not found',
             ], 404);
         }
-        
+
         $software->forceDelete();
-        
+
         SoftwareAuditLog::create([
             'modified_by' => $user->id,
             'software_id' => null,
@@ -1136,21 +1187,21 @@ class SoftwareController extends Controller
     public function restoreTrashed($softwareId, Request $request)
     {
         $user = $request->user();
-        
-        if (!$user->is_admin) {
+
+        if (! $user->is_admin) {
             return response([
                 'message' => 'You are not allowed to restore software',
             ], 403);
         }
 
         $software = Software::withTrashed()->findOrFail($softwareId);
-        
-        if (!$software) {
+
+        if (! $software) {
             return response([
                 'message' => 'Software not found',
             ], 404);
         }
-        
+
         $software->restore();
 
         return response([
@@ -1162,8 +1213,8 @@ class SoftwareController extends Controller
     public function getSoftwareLog($softwareId, Request $request)
     {
         $authUser = $request->user();
-        
-        if (!$authUser->is_admin) {
+
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to view this software log',
             ], 403);
@@ -1185,7 +1236,7 @@ class SoftwareController extends Controller
     public function softwareLogsExport($softwareId, Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to export this software log',
             ], 403);
@@ -1202,30 +1253,30 @@ class SoftwareController extends Controller
     public function exportAllSoftware(Request $request)
     {
         $authUser = $request->user();
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             return response([
                 'message' => 'You are not allowed to export all software',
             ], 403);
         }
 
         $includeTrashed = true;
-        $name = 'all_software_export_' . time() . '.xlsx';
+        $name = 'all_software_export_'.time().'.xlsx';
 
         try {
             // Aumenta temporaneamente il limite di memoria
             ini_set('memory_limit', '512M');
             ini_set('max_execution_time', 300);
-            
+
             return Excel::download(new SoftwareExport(null, null, $includeTrashed), $name);
         } catch (\Exception $e) {
-            Log::error('Software export failed: ' . $e->getMessage(), [
+            Log::error('Software export failed: '.$e->getMessage(), [
                 'user_id' => $authUser->id,
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             return response([
                 'message' => 'Export failed. Please try again later.',
-                'error' => app()->environment('local') ? $e->getMessage() : null
+                'error' => app()->environment('local') ? $e->getMessage() : null,
             ], 500);
         }
     }
@@ -1236,8 +1287,8 @@ class SoftwareController extends Controller
     public function exportCompanySoftware(Request $request, Company $company)
     {
         $authUser = $request->user();
-        
-        if (!$authUser->is_admin && !($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
+
+        if (! $authUser->is_admin && ! ($authUser->is_company_admin && $authUser->companies()->where('companies.id', $company->id)->exists())) {
             return response([
                 'message' => 'You are not allowed to export this company\'s software',
             ], 403);
@@ -1245,7 +1296,7 @@ class SoftwareController extends Controller
 
         // Solo gli admin possono includere il trashed
         $includeTrashed = $authUser->is_admin;
-        $name = 'company_' . $company->name . '_software_export_' . time() . '.xlsx';
+        $name = 'company_'.$company->name.'_software_export_'.time().'.xlsx';
 
         return Excel::download(new SoftwareExport($company->id, null, $includeTrashed), $name);
     }
@@ -1256,11 +1307,11 @@ class SoftwareController extends Controller
     public function exportUserSoftware(Request $request, User $user)
     {
         $authUser = $request->user();
-        
+
         // Controllo autorizzazioni
-        if (!$authUser->is_admin 
-            && !($authUser->is_company_admin && $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists())
-            && !($authUser->id == $user->id)
+        if (! $authUser->is_admin
+            && ! ($authUser->is_company_admin && $user->companies()->whereIn('companies.id', $authUser->companies()->pluck('companies.id'))->exists())
+            && ! ($authUser->id == $user->id)
         ) {
             return response([
                 'message' => 'You are not allowed to export this user\'s software',
@@ -1269,11 +1320,11 @@ class SoftwareController extends Controller
 
         // Solo gli admin possono includere il trashed
         $includeTrashed = $authUser->is_admin;
-        
-        $userFileName = $user->surname 
-            ? ($user->name ? $user->surname . '_' . $user->name : $user->surname)
+
+        $userFileName = $user->surname
+            ? ($user->name ? $user->surname.'_'.$user->name : $user->surname)
             : ($user->name ?? $user->id);
-        $name = 'user_' . $userFileName . '_software_export_' . time() . '.xlsx';
+        $name = 'user_'.$userFileName.'_software_export_'.time().'.xlsx';
         $name = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $name);
 
         return Excel::download(new SoftwareExport($authUser->is_admin ? null : $authUser->selectedCompany()?->id, $user->id, $includeTrashed), $name);
@@ -1287,7 +1338,7 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Verifica permessi
-        if (!$authUser->is_admin) {
+        if (! $authUser->is_admin) {
             if ($authUser->is_company_admin) {
                 // Company admin: può vedere solo software della sua azienda
                 if ($software->company_id !== $authUser->selectedCompany()?->id) {
@@ -1295,7 +1346,7 @@ class SoftwareController extends Controller
                 }
             } else {
                 // User normale: può vedere solo se il software è assegnato a lui
-                if (!$software->users()->where('user_id', $authUser->id)->exists()) {
+                if (! $software->users()->where('user_id', $authUser->id)->exists()) {
                     return response(['message' => 'Unauthorized'], 403);
                 }
             }
@@ -1306,13 +1357,14 @@ class SoftwareController extends Controller
         if ($authUser->is_admin) {
             $query->withTrashed();
         }
-        
+
         $attachments = $query->with('uploader:id,name,email,surname,is_superadmin,is_admin,is_company_admin,company_id')->get();
 
         // Aggiungi permessi di modifica per ogni allegato
         $attachments->each(function ($attachment) use ($authUser) {
             $attachment->can_modify = $attachment->canModifyAccessLevel($authUser);
         });
+
         return response(['attachments' => $attachments], 200);
     }
 
@@ -1324,7 +1376,7 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono caricare allegati
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1339,11 +1391,11 @@ class SoftwareController extends Controller
         ]);
 
         $file = $request->file('file');
-        
+
         // Genera nome file univoco
         $extension = $file->getClientOriginalExtension();
-        $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-        $path = 'software/' . $software->id;
+        $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+        $path = 'software/'.$software->id;
 
         // Upload usando FileUploadController
         $filePath = FileUploadController::storeFile($file, $path, $uniqueName);
@@ -1389,7 +1441,7 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono caricare allegati
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1402,7 +1454,7 @@ class SoftwareController extends Controller
             'access_level' => ['nullable', 'string', Rule::in(User::getAccessLevels())],
         ]);
 
-        if (!$request->hasFile('files')) {
+        if (! $request->hasFile('files')) {
             return response(['message' => 'No files uploaded'], 400);
         }
 
@@ -1416,8 +1468,8 @@ class SoftwareController extends Controller
                 if ($file->isValid()) {
                     // Genera nome file univoco
                     $extension = $file->getClientOriginalExtension();
-                    $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-                    $basePath = 'software/' . $software->id;
+                    $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+                    $basePath = 'software/'.$software->id;
 
                     // Upload usando FileUploadController
                     $filePath = FileUploadController::storeFile($file, $basePath, $uniqueName);
@@ -1447,8 +1499,8 @@ class SoftwareController extends Controller
             // Singolo file
             if ($files->isValid()) {
                 $extension = $files->getClientOriginalExtension();
-                $uniqueName = time() . '_' . Str::random(10) . '.' . $extension;
-                $basePath = 'software/' . $software->id;
+                $uniqueName = time().'_'.Str::random(10).'.'.$extension;
+                $basePath = 'software/'.$software->id;
 
                 $filePath = FileUploadController::storeFile($files, $basePath, $uniqueName);
 
@@ -1482,7 +1534,7 @@ class SoftwareController extends Controller
                 'old_data' => null,
                 'new_data' => json_encode([
                     'files_count' => $count,
-                    'attachment_ids' => array_map(fn($a) => $a->id, $uploadedAttachments),
+                    'attachment_ids' => array_map(fn ($a) => $a->id, $uploadedAttachments),
                 ]),
             ]);
         }
@@ -1490,7 +1542,7 @@ class SoftwareController extends Controller
         return response([
             'attachments' => $uploadedAttachments,
             'filesCount' => $count,
-            'message' => $count . ' file caricati con successo',
+            'message' => $count.' file caricati con successo',
         ], 201);
     }
 
@@ -1502,7 +1554,7 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Solo admin e company admin possono modificare
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1521,7 +1573,7 @@ class SoftwareController extends Controller
         ]);
 
         // Verifica permessi per modificare access_level
-        if (isset($fields['access_level']) && !$attachment->canModifyAccessLevel($authUser)) {
+        if (isset($fields['access_level']) && ! $attachment->canModifyAccessLevel($authUser)) {
             return response(['message' => 'Non hai i permessi per modificare il livello di accesso di questo allegato'], 403);
         }
 
@@ -1529,7 +1581,7 @@ class SoftwareController extends Controller
         if (isset($fields['access_level'])) {
             $userLevelValue = $authUser->getUserLevelValue();
             $requestedLevelValue = User::getLevelValue($fields['access_level']);
-            
+
             if ($requestedLevelValue < $userLevelValue) {
                 return response(['message' => 'Non puoi impostare un livello di accesso superiore al tuo'], 403);
             }
@@ -1539,8 +1591,8 @@ class SoftwareController extends Controller
             'display_name' => $attachment->display_name,
             'access_level' => $attachment->access_level,
         ];
-        
-        $attachment->update(array_filter($fields, fn($v) => $v !== null));
+
+        $attachment->update(array_filter($fields, fn ($v) => $v !== null));
 
         // Log audit
         SoftwareAuditLog::create([
@@ -1549,7 +1601,7 @@ class SoftwareController extends Controller
             'modified_by' => $authUser->id,
             'software_id' => $software->id,
             'old_data' => json_encode($oldData),
-            'new_data' => json_encode(array_filter($fields, fn($v) => $v !== null)),
+            'new_data' => json_encode(array_filter($fields, fn ($v) => $v !== null)),
         ]);
 
         return response([
@@ -1566,7 +1618,7 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Verifica permessi di base (software ownership)
-        if (!$authUser->is_admin && !$authUser->is_company_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1580,7 +1632,7 @@ class SoftwareController extends Controller
         }
 
         // Verifica permessi di cancellazione in base al livello
-        if (!$attachment->canDelete($authUser)) {
+        if (! $attachment->canDelete($authUser)) {
             return response(['message' => 'Non hai i permessi per eliminare questo allegato'], 403);
         }
 
@@ -1618,16 +1670,16 @@ class SoftwareController extends Controller
             ->where('software_id', $software->id)
             ->first();
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
         // Solo admin o superadmin può ripristinare. il superadmin tutto, l'admin solo fino al suo livello.
-        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+        if (! $authUser->is_admin || ! $attachment->canDelete($authUser)) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
-        if (!$attachment->trashed()) {
+        if (! $attachment->trashed()) {
             return response(['message' => 'Attachment is not deleted'], 400);
         }
 
@@ -1665,12 +1717,12 @@ class SoftwareController extends Controller
             ->where('software_id', $software->id)
             ->first();
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
         // Solo admin o superadmin può eliminare definitivamente. il superadmin tutto, l'admin solo fino al suo livello.
-        if (!$authUser->is_admin || !$attachment->canDelete($authUser)) {
+        if (! $authUser->is_admin || ! $attachment->canDelete($authUser)) {
             return response(['message' => 'Unauthorized'], 403);
         }
 
@@ -1704,11 +1756,11 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Admin può scaricare anche file soft deleted
-        $attachment = $authUser->is_admin 
+        $attachment = $authUser->is_admin
             ? SoftwareAttachment::withTrashed()->where('id', $attachmentId)->first()
             : SoftwareAttachment::find($attachmentId);
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
@@ -1718,7 +1770,7 @@ class SoftwareController extends Controller
         }
 
         // Verifica permessi di visualizzazione in base al livello di accesso
-        if (!$attachment->canView($authUser)) {
+        if (! $attachment->canView($authUser)) {
             return response(['message' => 'Non hai i permessi per scaricare questo allegato'], 403);
         }
 
@@ -1738,11 +1790,11 @@ class SoftwareController extends Controller
         $authUser = $request->user();
 
         // Admin può vedere preview anche di file soft deleted
-        $attachment = $authUser->is_admin 
+        $attachment = $authUser->is_admin
             ? SoftwareAttachment::withTrashed()->where('id', $attachmentId)->first()
             : SoftwareAttachment::find($attachmentId);
 
-        if (!$attachment) {
+        if (! $attachment) {
             return response(['message' => 'Attachment not found'], 404);
         }
 
@@ -1752,7 +1804,7 @@ class SoftwareController extends Controller
         }
 
         // Verifica permessi di visualizzazione in base al livello di accesso
-        if (!$attachment->canView($authUser)) {
+        if (! $attachment->canView($authUser)) {
             return response(['message' => 'Non hai i permessi per visualizzare questo allegato'], 403);
         }
 

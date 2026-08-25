@@ -118,6 +118,7 @@ class Software extends Model
     public function users()
     {
         return $this->belongsToMany(User::class, 'software_user')
+            ->withPivot('created_by', 'responsible_user_id', 'created_at', 'updated_at')
             ->withTimestamps();
     }
 
