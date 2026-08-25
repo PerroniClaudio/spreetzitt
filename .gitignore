@@ -19,6 +19,7 @@ yarn-error.log
 /.idea
 /.vscode
 /keys
+/zoneinfo
 /storage/fonts/*
 start.sh
 /cloud-run/config/.env.prod
