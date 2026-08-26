@@ -916,14 +916,14 @@ class SoftwareController extends Controller
     {
         $name = 'software_import_template_'.time().'.xlsx';
 
-        return Excel::download(new SoftwareTemplateExport, $name);
+        return Excel::download(new SoftwareTemplateExport(request()->user()), $name);
     }
 
     public function exportAssignationTemplate()
     {
         $name = 'software_assignation_template_'.time().'.xlsx';
 
-        return Excel::download(new SoftwareAssignationTemplateExport, $name);
+        return Excel::download(new SoftwareAssignationTemplateExport(request()->user()), $name);
     }
 
     public function exportDeletionTemplate()

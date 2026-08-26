@@ -2,6 +2,8 @@
 
 use App\Exports\HardwareAssignationTemplateExport;
 use App\Exports\HardwareTemplateExport;
+use App\Exports\SoftwareAssignationTemplateExport;
+use App\Exports\SoftwareTemplateExport;
 use App\Exports\UserTemplateExport;
 use App\Imports\HardwareAssignationsImport;
 use App\Imports\HardwareImport;
@@ -11,6 +13,8 @@ use App\Imports\UsersImport;
 use App\Models\Company;
 use App\Models\Hardware;
 use App\Models\HardwareType;
+use App\Models\Software;
+use App\Models\SoftwareType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Collection;
@@ -57,6 +61,40 @@ it('generates import templates with visible lists and dropdowns limited to the s
         ->and($assignationSheet->getDataValidation('F2')->getFormula1())->toBe('=ResponsabiliAssegnazioni')
         ->and($assignationWorkbook->getSheetByName('Tendine')->getSheetState())->toBe(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
 
+    $softwareType = SoftwareType::query()->create(['name' => 'Gestionale test']);
+    $software = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Suite test',
+        'company_asset_number' => 'CESPITE-'.uniqid(),
+        'company_id' => $allowedCompany->id,
+    ]);
+    $softwareWorkbook = workbookFor(new SoftwareTemplateExport($authUser));
+    $softwareSheet = $softwareWorkbook->getSheetByName('Software');
+    $softwareLists = $softwareWorkbook->getSheetByName('Tendine');
+
+    expect($softwareWorkbook->getSheetNames())->toBe(['Software', 'Tendine'])
+        ->and($softwareSheet->getDataValidation('K2')->getFormula1())->toBe('=SiNoUsoEsclusivoSoftware')
+        ->and($softwareSheet->getDataValidation('L2')->getFormula1())->toBe('=StatiSoftware')
+        ->and($softwareSheet->getDataValidation('N2')->getFormula1())->toBe('=AziendeSoftware')
+        ->and($softwareSheet->getDataValidation('O2')->getFormula1())->toBe('=TipiSoftware')
+        ->and($softwareSheet->getDataValidation('Q2')->getFormula1())->toBe('=ResponsabiliSoftware')
+        ->and($softwareLists->getCell('A2')->getValue())->toBe("{$allowedCompany->id} - {$allowedCompany->name}")
+        ->and(array_filter(array_column($softwareLists->rangeToArray('B2:B100'), 0)))->toContain("{$softwareType->id} - {$softwareType->name}")
+        ->and($softwareLists->rangeToArray('D2:D3'))->toBe([['Si'], ['No']])
+        ->and(array_filter(array_column($softwareLists->rangeToArray('E2:E100'), 0)))->toBe(array_values(config('app.software_statuses')))
+        ->and($softwareLists->getSheetState())->toBe(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+
+    $softwareAssignationWorkbook = workbookFor(new SoftwareAssignationTemplateExport($authUser));
+    $softwareAssignationSheet = $softwareAssignationWorkbook->getSheetByName('Assegnazioni software');
+
+    expect($softwareAssignationWorkbook->getSheetNames())->toBe(['Assegnazioni software', 'Tendine'])
+        ->and($softwareAssignationSheet->getDataValidation('A2')->getFormula1())->toBe('=SoftwareAssegnazioni')
+        ->and($softwareAssignationSheet->getDataValidation('B2')->getFormula1())->toBe('=AziendeSoftwareDaAssociare')
+        ->and($softwareAssignationSheet->getDataValidation('D2')->getFormula1())->toBe('=AziendeSoftwareDaRimuovere')
+        ->and($softwareAssignationSheet->getDataValidation('F2')->getFormula1())->toBe('=ResponsabiliSoftwareAssegnazioni')
+        ->and($softwareAssignationWorkbook->getSheetByName('Tendine')->getCell('A2')->getValue())->toBe("{$software->id} - {$software->vendor} {$software->product_name} ({$software->company_asset_number})")
+        ->and($softwareAssignationWorkbook->getSheetByName('Tendine')->getSheetState())->toBe(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
+
     $usersWorkbook = workbookFor(new UserTemplateExport($authUser));
     $usersSheet = $usersWorkbook->getSheetByName('Utenti');
     $usersLists = $usersWorkbook->getSheetByName('Tendine');
@@ -78,6 +116,8 @@ it('imports only the main worksheet from templates with visible lists', function
         [new HardwareTemplateExport($authUser), new HardwareImport($authUser)],
         [new HardwareAssignationTemplateExport($authUser), new HardwareAssignationsImport($authUser)],
         [new UserTemplateExport($authUser), new UsersImport($authUser)],
+        [new SoftwareTemplateExport($authUser), new SoftwareImport($authUser)],
+        [new SoftwareAssignationTemplateExport($authUser), new SoftwareAssignationsImport($authUser)],
     ] as [$export, $import]) {
         $path = templatePathFor($export);
         Excel::import($import, $path);
@@ -131,8 +171,43 @@ it('creates users from a filled template row and ignores empty dropdown rows', f
         ->city->toBe('Città del Vaticano');
 });
 
+it('imports software and assignations from dropdown labels', function () {
+    $company = Company::factory()->create();
+    $authUser = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $responsibleUser = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $softwareType = SoftwareType::query()->create(['name' => 'Utility test']);
+    $path = templatePathFor(new SoftwareTemplateExport($authUser));
+    $workbook = IOFactory::load($path);
+
+    $workbook->getSheetByName('Software')->fromArray([
+        ['Acme import', 'Prodotto test', null, null, 'CESPITE-'.uniqid(), null, null, null, null, null, 'No', null, null, "{$company->id} - {$company->name}", "{$softwareType->id} - {$softwareType->name}", null, "{$responsibleUser->id} - {$responsibleUser->surname} {$responsibleUser->name} {$responsibleUser->email} ()"],
+    ], null, 'A2');
+    IOFactory::createWriter($workbook, 'Xlsx')->save($path);
+
+    Excel::import(new SoftwareImport($authUser), $path);
+    unlink($path);
+
+    $software = Software::query()->where('vendor', 'Acme import')->firstOrFail();
+
+    expect($software->company_id)->toBe($company->id)
+        ->and($software->software_type_id)->toBe($softwareType->id);
+
+    $newCompany = Company::factory()->create();
+    $assignationPath = templatePathFor(new SoftwareAssignationTemplateExport($authUser));
+    $assignationWorkbook = IOFactory::load($assignationPath);
+    $assignationWorkbook->getSheetByName('Assegnazioni software')->fromArray([
+        ["{$software->id} - {$software->vendor} {$software->product_name} ({$software->company_asset_number})", "{$newCompany->id} - {$newCompany->name}", null, "{$company->id} - {$company->name}", null, "{$responsibleUser->id} - {$responsibleUser->surname} {$responsibleUser->name} {$responsibleUser->email} ()"],
+    ], null, 'A2');
+    IOFactory::createWriter($assignationWorkbook, 'Xlsx')->save($assignationPath);
+
+    Excel::import(new SoftwareAssignationsImport($authUser), $assignationPath);
+    unlink($assignationPath);
+
+    expect($software->fresh()->company_id)->toBe($newCompany->id);
+});
+
 it('extracts IDs from dropdown labels while accepting plain IDs', function () {
-    foreach ([HardwareImport::class, HardwareAssignationsImport::class, UsersImport::class] as $importClass) {
+    foreach ([HardwareImport::class, HardwareAssignationsImport::class, SoftwareImport::class, SoftwareAssignationsImport::class, UsersImport::class] as $importClass) {
         $method = new ReflectionMethod($importClass, 'extractId');
         $method->setAccessible(true);
         $authUser = User::factory()->make(['is_admin' => true, 'password' => Hash::make('password')]);
@@ -171,7 +246,7 @@ it('allows only authorized responsible users for the asset company', function ()
 it('ignores blank rows left by template dropdowns', function () {
     $authUser = User::factory()->make(['is_admin' => true, 'password' => Hash::make('password')]);
 
-    foreach ([HardwareImport::class, HardwareAssignationsImport::class] as $importClass) {
+    foreach ([HardwareImport::class, HardwareAssignationsImport::class, SoftwareImport::class, SoftwareAssignationsImport::class] as $importClass) {
         $method = new ReflectionMethod($importClass, 'isEmptyRow');
         $method->setAccessible(true);
         $import = new $importClass($authUser);

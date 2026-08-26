@@ -9,14 +9,23 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class SoftwareAssignationsImport implements ToCollection
+class SoftwareAssignationsImport implements ToCollection, WithMultipleSheets
 {
     protected $authUser;
 
     public function __construct($authUser)
     {
         $this->authUser = $authUser;
+    }
+
+    /**
+     * @return array<int, self>
+     */
+    public function sheets(): array
+    {
+        return [0 => $this];
     }
 
     public function collection(Collection $rows)
@@ -33,6 +42,10 @@ class SoftwareAssignationsImport implements ToCollection
         try {
 
             foreach ($rows as $row) {
+                if ($this->isEmptyRow($row)) {
+                    continue;
+                }
+
                 // Deve saltare la prima riga contentente i titoli
                 if (strpos(strtolower($row[0]), 'software') !== false) {
                     continue;
@@ -45,7 +58,11 @@ class SoftwareAssignationsImport implements ToCollection
                     throw new \Exception('Tutti i campi azienda e utenti sono vuoti in una delle righe.');
                 }
 
-                $software = Software::find($row[0]);
+                $softwareId = $this->extractId($row[0]);
+                $companyToAddId = $this->extractId($row[1] ?? null);
+                $companyToRemoveId = $this->extractId($row[3] ?? null);
+                $responsibleUserId = $this->extractId($row[5] ?? null);
+                $software = Software::find($softwareId);
 
                 if (! $software) {
                     throw new \Exception('Software con ID '.$row[0].' inesistente.');
@@ -71,9 +88,9 @@ class SoftwareAssignationsImport implements ToCollection
                 }
 
                 // Modifica azienda. Per avere un log migliore nel caso di cambio azienda è meglio collegare l'eliminazione della vecchia azienda e l'assegnazione della nuova
-                if (! empty($row[3])) {
+                if ($companyToRemoveId !== null) {
                     // azienda da rimuovere
-                    $CompanyToRemove = Company::find($row[3]);
+                    $CompanyToRemove = Company::find($companyToRemoveId);
                     if ($software->company_id != null && ! $CompanyToRemove) {
                         throw new \Exception('Azienda con ID '.$row[3].' inesistente.');
                     }
@@ -89,20 +106,20 @@ class SoftwareAssignationsImport implements ToCollection
                             }
                         });
                         // Controlla se va sostituita o solo eliminata
-                        if (! empty($row[1])) {
-                            $software->company_id = $row[1];
+                        if ($companyToAddId !== null) {
+                            $software->company_id = $companyToAddId;
                         } else {
                             $software->company_id = null;
                         }
                         $software->save();
                     }
-                } elseif (! empty($row[1])) {
+                } elseif ($companyToAddId !== null) {
                     // azienda da aggiungere
                     if ($software->company_id) {
                         throw new \Exception('Il software con ID '.$row[0].' è già associato ad un\'azienda.');
                     }
 
-                    $CompanyToAdd = Company::find($row[1]);
+                    $CompanyToAdd = Company::find($companyToAddId);
                     if (! $CompanyToAdd) {
                         throw new \Exception('Azienda con ID '.$row[1].' inesistente.');
                     }
@@ -110,7 +127,7 @@ class SoftwareAssignationsImport implements ToCollection
                     $software->save();
                 }
 
-                if (! empty($row[5]) && ! $this->canBeResponsible(User::find($row[5]), $software->company_id)) {
+                if ($responsibleUserId !== null && ! $this->canBeResponsible(User::find($responsibleUserId), $software->company_id)) {
                     throw new \Exception('L\'utente con ID '.$row[5].' non può essere impostato come responsabile in quanto non è autorizzato per l\'azienda indicata.');
                 }
 
@@ -137,7 +154,7 @@ class SoftwareAssignationsImport implements ToCollection
                             if ($user && ! $software->users->contains($user->id)) {
                                 $software->users()->attach($user->id, [
                                     'created_by' => $this->authUser->id ?? null,
-                                    'responsible_user_id' => $row[5] ?? $this->authUser->id ?? null,
+                                    'responsible_user_id' => $responsibleUserId ?? $this->authUser->id ?? null,
                                 ]);
                             }
                         }
@@ -162,5 +179,26 @@ class SoftwareAssignationsImport implements ToCollection
         return $user->is_admin
             || $user->is_superadmin
             || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    private function extractId(mixed $value): ?int
+    {
+        if (is_numeric($value) && (float) $value === floor((float) $value)) {
+            return (int) $value;
+        }
+
+        if (is_string($value) && preg_match('/^\s*(\d+)\s*-/', $value, $matches)) {
+            return (int) $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $row
+     */
+    private function isEmptyRow(Collection $row): bool
+    {
+        return $row->every(fn (mixed $value): bool => $value === null || trim((string) $value) === '');
     }
 }

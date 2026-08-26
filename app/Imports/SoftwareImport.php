@@ -12,8 +12,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
-class SoftwareImport implements ToCollection
+class SoftwareImport implements ToCollection, WithMultipleSheets
 {
     // TEMPLATE IMPORT:
     // 0 "Fornitore *",
@@ -41,6 +42,14 @@ class SoftwareImport implements ToCollection
         $this->authUser = $authUser;
     }
 
+    /**
+     * @return array<int, self>
+     */
+    public function sheets(): array
+    {
+        return [0 => $this];
+    }
+
     public function collection(Collection $rows)
     {
         DB::beginTransaction();
@@ -50,6 +59,10 @@ class SoftwareImport implements ToCollection
             $normalizedStatuses = array_map('strtolower', $statuses);
 
             foreach ($rows as $row) {
+                if ($this->isEmptyRow($row)) {
+                    continue;
+                }
+
                 // Deve saltare la prima riga contentente i titoli
                 if (strpos(strtolower($row[0]), 'fornitore') !== false) {
                     continue;
@@ -71,8 +84,11 @@ class SoftwareImport implements ToCollection
                 }
 
                 // Verifica tipo software
+                $companyId = $this->extractId($row[13] ?? null);
+                $softwareTypeId = $this->extractId($row[14] ?? null);
+
                 if (! empty($row[14])) {
-                    $softwareType = SoftwareType::find($row[14]);
+                    $softwareType = SoftwareType::find($softwareTypeId);
                     if (! $softwareType) {
                         throw new \Exception('Tipo software non trovato per il software '.$row[1]);
                     }
@@ -80,7 +96,7 @@ class SoftwareImport implements ToCollection
 
                 // Verifica azienda
                 if (! empty($row[13])) {
-                    $isCompanyPresent = Company::find($row[13]);
+                    $isCompanyPresent = Company::find($companyId);
                     if (! $isCompanyPresent) {
                         throw new \Exception('ID Azienda errato per il software '.$row[1]);
                     }
@@ -152,8 +168,8 @@ class SoftwareImport implements ToCollection
                     'is_exclusive_use' => strtolower($row[10]) == 'si' ? 1 : 0,
                     'status' => $statusKey,
                     'notes' => $row[12] ?? null,
-                    'company_id' => $row[13] ?? null,
-                    'software_type_id' => $row[14] ?? null,
+                    'company_id' => $companyId,
+                    'software_type_id' => $softwareTypeId,
                 ]);
 
                 if (isset($software->company_id)) {
@@ -173,15 +189,15 @@ class SoftwareImport implements ToCollection
                 }
 
                 if ($row[15] != null) {
-                    if ($row[13] == null) {
+                    if ($companyId === null) {
                         throw new \Exception('ID Azienda mancante per il software '.$row[1]);
                     }
                     $userIds = explode(',', $row[15]);
                     $usersCount = count($userIds);
                     $isCorrect = User::whereIn('id', $userIds)
                         ->get()
-                        ->filter(function ($user) use ($row) {
-                            return $user->hasCompany($row[13]);
+                        ->filter(function ($user) use ($companyId) {
+                            return $user->hasCompany($companyId);
                         })
                         ->count() == $usersCount;
                     if (! $isCorrect) {
@@ -233,5 +249,13 @@ class SoftwareImport implements ToCollection
         return $user->is_admin
             || $user->is_superadmin
             || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    /**
+     * @param  Collection<int, mixed>  $row
+     */
+    private function isEmptyRow(Collection $row): bool
+    {
+        return $row->every(fn (mixed $value): bool => $value === null || trim((string) $value) === '');
     }
 }
