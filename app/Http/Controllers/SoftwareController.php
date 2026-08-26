@@ -56,7 +56,9 @@ class SoftwareController extends Controller
                     'softwareType',
                     'company',
                     'users' => function ($query) {
-                        $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin');
+                        $query->select('users.id', 'users.name', 'users.surname', 'users.email', 'users.is_admin')
+                            ->where('users.is_admin', false)
+                            ->where('users.is_superadmin', false);
                     },
                 ])->get()
                 : collect();
@@ -104,8 +106,11 @@ class SoftwareController extends Controller
             ->with([
                 'softwareType',
                 'company',
-                'users' => function ($query) {
-                    $query->select('users.id', 'users.name', 'users.surname', 'users.email');
+                'users' => function ($query) use ($authUser) {
+                    $query->select('users.id', 'users.name', 'users.surname', 'users.email')
+                        ->when($authUser->is_company_admin, fn ($query) => $query
+                            ->where('users.is_admin', false)
+                            ->where('users.is_superadmin', false));
                 },
             ])
             ->get();
@@ -202,7 +207,7 @@ class SoftwareController extends Controller
     {
         $authUser = $request->user();
 
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to create software',
             ], 403);
@@ -227,16 +232,33 @@ class SoftwareController extends Controller
             'users' => 'nullable|array',
         ]);
 
+        if ($authUser->is_company_admin && ! $authUser->companies()->where('companies.id', $data['company_id'] ?? null)->exists()) {
+            return response([
+                'message' => 'You can only create software for your company',
+            ], 403);
+        }
+
         // Verificare le associazioni utenti
         if (isset($data['company_id']) && ! empty($data['users'])) {
             $isFail = User::whereIn('id', $data['users'])
-                ->whereDoesntHave('companies', function ($query) use ($data) {
-                    $query->where('companies.id', $data['company_id']);
+                ->when($authUser->is_company_admin, function ($query) use ($data) {
+                    $query->where(function ($query) use ($data) {
+                        $query->where(function ($query) {
+                            $query->where('is_admin', true)
+                                ->orWhere('is_superadmin', true);
+                        })->orWhereDoesntHave('companies', function ($query) use ($data) {
+                            $query->where('companies.id', $data['company_id']);
+                        });
+                    });
+                }, function ($query) use ($data) {
+                    $query->whereDoesntHave('companies', function ($query) use ($data) {
+                        $query->where('companies.id', $data['company_id']);
+                    });
                 })
                 ->exists();
             if ($isFail) {
                 return response([
-                    'message' => 'One or more selected users do not belong to the specified company',
+                    'message' => 'One or more users are not assignable to the specified company',
                 ], 400);
             }
         }
@@ -296,8 +318,11 @@ class SoftwareController extends Controller
                 $query->select('id', 'name');
             },
             'softwareType',
-            'users' => function ($query) {
-                $query->select('user_id as id', 'name', 'surname', 'email', 'is_company_admin', 'is_deleted');
+            'users' => function ($query) use ($authUser) {
+                $query->select('user_id as id', 'name', 'surname', 'email', 'is_company_admin', 'is_deleted')
+                    ->when($authUser->is_company_admin, fn ($query) => $query
+                        ->where('users.is_admin', false)
+                        ->where('users.is_superadmin', false));
             },
         ]);
 
@@ -447,7 +472,7 @@ class SoftwareController extends Controller
 
         $data = $request->validate([
             'company_id' => 'nullable|integer|exists:companies,id',
-            'users' => 'required|array',
+            'users' => 'present|array',
             'users.*' => 'integer|distinct|exists:users,id',
             'responsible_user_id' => 'nullable|integer|exists:users,id',
         ]);
@@ -473,13 +498,20 @@ class SoftwareController extends Controller
         if (! empty($data['users'])) {
             $hasUsersOutsideCompany = User::query()
                 ->whereIn('id', $data['users'])
-                ->whereDoesntHave('companies', function ($query) use ($data) {
-                    $query->where('companies.id', $data['company_id']);
+                ->where(function ($query) use ($authUser, $data) {
+                    $query->whereDoesntHave('companies', function ($query) use ($data) {
+                        $query->where('companies.id', $data['company_id']);
+                    });
+
+                    if ($authUser->is_company_admin) {
+                        $query->orWhere('is_admin', true)
+                            ->orWhere('is_superadmin', true);
+                    }
                 })
                 ->exists();
             if ($hasUsersOutsideCompany) {
                 return response([
-                    'message' => 'One or more selected users do not belong to the specified company',
+                    'message' => 'One or more selected users are not assignable to the specified company',
                 ], 400);
             }
         }
@@ -487,6 +519,9 @@ class SoftwareController extends Controller
         if (! empty($data['responsible_user_id']) && ! User::query()
             ->whereKey($data['responsible_user_id'])
             ->where('is_company_admin', true)
+            ->when($authUser->is_company_admin, fn ($query) => $query
+                ->where('is_admin', false)
+                ->where('is_superadmin', false))
             ->whereHas('companies', function ($query) use ($data) {
                 $query->where('companies.id', $data['company_id']);
             })
@@ -498,13 +533,6 @@ class SoftwareController extends Controller
 
         $usersToRemove = $software->users->pluck('id')->diff($data['users']);
         $usersToAdd = collect($data['users'])->diff($software->users->pluck('id'));
-
-        // Solo l'admin può rimuovere associazioni software-user
-        if (! $authUser->is_admin && count($usersToRemove) > 0) {
-            return response([
-                'message' => 'You are not allowed to remove users from software',
-            ], 403);
-        }
 
         // Il software ad uso esclusivo può essere associato a un solo utente
         if (
@@ -555,6 +583,12 @@ class SoftwareController extends Controller
         }
 
         $authUser = $request->user();
+        if ($authUser->is_company_admin && ($user->is_admin || $user->is_superadmin)) {
+            return response([
+                'message' => 'You are not allowed to manage software for this user',
+            ], 403);
+        }
+
         if (
             ! $authUser->is_admin &&
             ! (
@@ -930,13 +964,13 @@ class SoftwareController extends Controller
     {
         $name = 'software_deletion_template_'.time().'.xlsx';
 
-        return Excel::download(new SoftwareDeletionTemplateExport, $name);
+        return Excel::download(new SoftwareDeletionTemplateExport(request()->user()), $name);
     }
 
     public function importSoftware(Request $request)
     {
         $authUser = $request->user();
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to import software',
             ], 403);
@@ -975,7 +1009,7 @@ class SoftwareController extends Controller
     public function importSoftwareAssignations(Request $request)
     {
         $authUser = $request->user();
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to import software assignations',
             ], 403);
@@ -1014,7 +1048,7 @@ class SoftwareController extends Controller
     public function importSoftwareDeletions(Request $request)
     {
         $authUser = $request->user();
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to import software deletions',
             ], 403);
@@ -1120,7 +1154,7 @@ class SoftwareController extends Controller
     {
         $user = $request->user();
 
-        if (! $user->is_admin) {
+        if (! $user->is_admin && ! $user->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to delete software',
             ], 403);
@@ -1132,6 +1166,11 @@ class SoftwareController extends Controller
             return response([
                 'message' => 'Software not found',
             ], 404);
+        }
+        if (! $user->is_admin && $user->is_company_admin && $software->company_id !== $user->selectedCompany()?->id) {
+            return response([
+                'message' => 'You are not allowed to delete this software',
+            ], 403);
         }
 
         $software->delete();
@@ -1188,7 +1227,7 @@ class SoftwareController extends Controller
     {
         $user = $request->user();
 
-        if (! $user->is_admin) {
+        if (! $user->is_admin && ! $user->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to restore software',
             ], 403);
@@ -1200,6 +1239,11 @@ class SoftwareController extends Controller
             return response([
                 'message' => 'Software not found',
             ], 404);
+        }
+        if (! $user->is_admin && $user->is_company_admin && $software->company_id !== $user->selectedCompany()?->id) {
+            return response([
+                'message' => 'You are not allowed to restore this software',
+            ], 403);
         }
 
         $software->restore();

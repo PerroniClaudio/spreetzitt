@@ -38,16 +38,24 @@ class SoftwareDeletionsImport implements ToCollection
                 if (empty($row[1])) {
                     throw new \Exception('Il campo "Tipo di eliminazione" è vuoto in una delle righe.');
                 }
-                if (!in_array(strtolower($row[1]), ['soft', 'definitiva', 'recupero'])) {
+                if (! in_array(strtolower($row[1]), ['soft', 'definitiva', 'recupero'])) {
                     throw new \Exception('Il valore nel campo "Tipo di eliminazione" non è conforme nella riga con ID software '.$row[0]);
                 }
 
                 $software = Software::withTrashed()->find($row[0]);
+                if (! $software || (! $this->authUser->is_admin && $this->authUser->is_company_admin && $software->company_id !== $this->authUser->selectedCompany()?->id)) {
+                    throw new \Exception('Software non trovato o non autorizzato.');
+                }
+
+                $deletionType = strtolower($row[1]);
+                if (! $this->authUser->is_admin && $this->authUser->is_company_admin && $deletionType === 'definitiva') {
+                    throw new \Exception('I company admin non possono eliminare definitivamente il software.');
+                }
+
                 if ($software) {
-                    $deletionType = strtolower($row[1]);
                     switch ($deletionType) {
                         case 'soft':
-                            if (!$software->trashed()) {
+                            if (! $software->trashed()) {
                                 $software->delete();
                             }
                             break;

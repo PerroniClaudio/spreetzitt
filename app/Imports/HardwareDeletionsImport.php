@@ -43,8 +43,16 @@ class HardwareDeletionsImport implements ToCollection
                 }
 
                 $hardware = Hardware::withTrashed()->find($row[0]);
+                if (! $hardware || (! $this->authUser->is_admin && $this->authUser->is_company_admin && $hardware->company_id !== $this->authUser->selectedCompany()?->id)) {
+                    throw new \Exception('Hardware non trovato o non autorizzato.');
+                }
+
+                $deletionType = strtolower($row[1]);
+                if (! $this->authUser->is_admin && $this->authUser->is_company_admin && $deletionType === 'definitiva') {
+                    throw new \Exception('I company admin non possono eliminare definitivamente l\'hardware.');
+                }
+
                 if ($hardware) {
-                    $deletionType = strtolower($row[1]);
                     switch ($deletionType) {
                         case 'soft':
                             if (! $hardware->trashed()) {

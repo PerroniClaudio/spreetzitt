@@ -22,6 +22,9 @@ class HardwareAssignationTemplateExport implements FromArray, WithEvents
     /** @var array<int, User> */
     private array $responsibleUsers;
 
+    /** @var array<int, User> */
+    private array $assignableUsers;
+
     public function __construct(User $authUser)
     {
         $companiesQuery = Company::query()->orderBy('name');
@@ -55,6 +58,17 @@ class HardwareAssignationTemplateExport implements FromArray, WithEvents
             ->orderBy('name')
             ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
             ->all();
+        $this->assignableUsers = User::query()
+            ->with('companies:id,name')
+            ->where('is_deleted', false)
+            ->whereHas('companies', fn ($query) => $query->whereIn('companies.id', $companyIds))
+            ->when($authUser->is_company_admin, fn ($query) => $query
+                ->where('is_admin', false)
+                ->where('is_superadmin', false))
+            ->orderBy('surname')
+            ->orderBy('name')
+            ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
+            ->all();
     }
 
     public function array(): array
@@ -84,10 +98,13 @@ class HardwareAssignationTemplateExport implements FromArray, WithEvents
         $this->writeColumn($lookupSheet, 1, 'Hardware', array_map(fn (Hardware $hardware): string => "{$hardware->id} - {$hardware->make} {$hardware->model} (".($hardware->support_label ?: $hardware->company_asset_number).')', $this->hardware));
         $this->writeColumn($lookupSheet, 2, 'Aziende', array_map(fn (Company $company): string => "{$company->id} - {$company->name}", $this->companies));
         $this->writeColumn($lookupSheet, 3, 'Responsabili assegnazione', array_map(fn (User $user): string => $this->responsibleUserLabel($user), $this->responsibleUsers));
+        $this->writeColumn($lookupSheet, 4, 'Utenti assegnabili', array_map(fn (User $user): string => $this->responsibleUserLabel($user), $this->assignableUsers));
 
         $this->addListValidation($event, 'A', 'HardwareAssegnazioni', 1, count($this->hardware));
         $this->addListValidation($event, 'B', 'AziendeDaAssociare', 2, count($this->companies));
+        $this->addListValidation($event, 'C', 'UtentiHardwareDaAssociare', 4, count($this->assignableUsers));
         $this->addListValidation($event, 'D', 'AziendeDaRimuovere', 2, count($this->companies));
+        $this->addListValidation($event, 'E', 'UtentiHardwareDaRimuovere', 4, count($this->assignableUsers));
         $this->addListValidation($event, 'F', 'ResponsabiliAssegnazioni', 3, count($this->responsibleUsers));
 
         $lookupSheet->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);

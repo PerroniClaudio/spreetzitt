@@ -21,6 +21,9 @@ class HardwareTemplateExport implements FromArray, WithEvents
     /** @var array<int, User> */
     private array $responsibleUsers;
 
+    /** @var array<int, User> */
+    private array $assignableUsers;
+
     /**
      * @var array<int, string>
      */
@@ -50,6 +53,17 @@ class HardwareTemplateExport implements FromArray, WithEvents
         }
 
         $this->responsibleUsers = $responsibleUsersQuery
+            ->orderBy('surname')
+            ->orderBy('name')
+            ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
+            ->all();
+        $this->assignableUsers = User::query()
+            ->with('companies:id,name')
+            ->where('is_deleted', false)
+            ->whereHas('companies', fn ($query) => $query->whereIn('companies.id', $companyIds))
+            ->when($authUser->is_company_admin, fn ($query) => $query
+                ->where('is_admin', false)
+                ->where('is_superadmin', false))
             ->orderBy('surname')
             ->orderBy('name')
             ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
@@ -101,11 +115,13 @@ class HardwareTemplateExport implements FromArray, WithEvents
         $this->writeColumn($lookupSheet, 6, "Stati all'acquisto", array_values(config('app.hardware_statuses_at_purchase')));
         $this->writeColumn($lookupSheet, 7, 'Stati', array_values(config('app.hardware_statuses')));
         $this->writeColumn($lookupSheet, 8, 'Si/No', ['Si', 'No']);
+        $this->writeColumn($lookupSheet, 9, 'Utenti assegnabili', array_map(fn (User $user): string => $this->responsibleUserLabel($user), $this->assignableUsers));
 
         $this->addListValidation($event, 'D', 'TipiHardware', 1, count($this->hardwareTypeNames));
         $this->addListValidation($event, 'F', 'ProprietaHardware', 2, count(config('app.hardware_ownership_types')));
         $this->addListValidation($event, 'K', 'SiNoUsoEsclusivo', 8, 2);
         $this->addListValidation($event, 'L', 'AziendeHardware', 3, count($this->companies));
+        $this->addListValidation($event, 'M', 'UtentiHardware', 9, count($this->assignableUsers));
         $this->addListValidation($event, 'N', 'UtentiResponsabiliHardware', 4, count($this->responsibleUsers));
         $this->addListValidation($event, 'O', 'PosizioniHardware', 5, count(config('app.hardware_positions')));
         $this->addListValidation($event, 'P', 'StatiAcquistoHardware', 6, count(config('app.hardware_statuses_at_purchase')));

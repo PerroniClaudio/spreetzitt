@@ -102,6 +102,10 @@ class SoftwareImport implements ToCollection, WithMultipleSheets
                     }
                 }
 
+                if (! $this->canManageCompany($companyId)) {
+                    throw new \Exception('Non puoi importare software per l\'azienda indicata.');
+                }
+
                 // Gestione date
                 $purchaseDate = null;
                 if (! empty($row[7])) {
@@ -192,18 +196,18 @@ class SoftwareImport implements ToCollection, WithMultipleSheets
                     if ($companyId === null) {
                         throw new \Exception('ID Azienda mancante per il software '.$row[1]);
                     }
-                    $userIds = explode(',', $row[15]);
+                    $userIds = array_map(fn ($value) => $this->extractId($value), explode(',', $row[15]));
                     $usersCount = count($userIds);
                     $isCorrect = User::whereIn('id', $userIds)
-                        ->get()
-                        ->filter(function ($user) use ($companyId) {
-                            return $user->hasCompany($companyId);
-                        })
+                        ->whereHas('companies', fn ($query) => $query->where('companies.id', $companyId))
+                        ->when($this->authUser->is_company_admin, fn ($query) => $query
+                            ->where('is_admin', false)
+                            ->where('is_superadmin', false))
                         ->count() == $usersCount;
                     if (! $isCorrect) {
                         throw new \Exception('ID utenti errati per il software '.$row[1]);
                     }
-                    $users = explode(',', $row[15]);
+                    $users = $userIds;
                     if ($software->is_exclusive_use && count($users) > 1) {
                         throw new \Exception('Uso esclusivo impostato ma ci sono più utenti per il software '.$row[1]);
                     }
@@ -246,9 +250,28 @@ class SoftwareImport implements ToCollection, WithMultipleSheets
             return false;
         }
 
+        if ($this->authUser->is_company_admin) {
+            return $companyId !== null
+                && $user->is_company_admin
+                && ! $user->is_admin
+                && ! $user->is_superadmin
+                && $user->hasCompany($companyId);
+        }
+
         return $user->is_admin
             || $user->is_superadmin
             || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    private function canManageCompany(?int $companyId): bool
+    {
+        if ($this->authUser->is_admin) {
+            return true;
+        }
+
+        return $companyId !== null
+            && $this->authUser->is_company_admin
+            && $this->authUser->selectedCompany()?->id === $companyId;
     }
 
     /**

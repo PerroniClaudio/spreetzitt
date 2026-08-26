@@ -237,9 +237,15 @@ class CompanyController extends Controller
         ], 200);
     }
 
-    public function admins(Company $company)
+    public function admins(Company $company, Request $request)
     {
-        $users = $company->users()->where('is_company_admin', 1)->get();
+        $users = $company->users()
+            ->where('is_company_admin', true)
+            ->when($request->user()->is_company_admin, function ($query) {
+                $query->where('is_admin', false)
+                    ->where('is_superadmin', false);
+            })
+            ->get();
 
         return response([
             'users' => $users,
@@ -256,8 +262,14 @@ class CompanyController extends Controller
                 'message' => 'Unauthorized',
             ], 401);
         }
-        // Esclude gli utenti disabilitati
-        $users = $company->users()->where('users.is_deleted', false)->get();
+        // Esclude gli utenti disabilitati e gli account di amministrazione non assegnabili.
+        $users = $company->users()
+            ->where('users.is_deleted', false)
+            ->when($user->is_company_admin, function ($query) {
+                $query->where('users.is_admin', false)
+                    ->where('users.is_superadmin', false);
+            })
+            ->get();
         $users->makeHidden('microsoft_token');
 
         return response([

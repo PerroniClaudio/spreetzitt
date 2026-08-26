@@ -1,13 +1,17 @@
 <?php
 
 use App\Exports\HardwareAssignationTemplateExport;
+use App\Exports\HardwareDeletionTemplateExport;
 use App\Exports\HardwareTemplateExport;
 use App\Exports\SoftwareAssignationTemplateExport;
+use App\Exports\SoftwareDeletionTemplateExport;
 use App\Exports\SoftwareTemplateExport;
 use App\Exports\UserTemplateExport;
 use App\Imports\HardwareAssignationsImport;
+use App\Imports\HardwareDeletionsImport;
 use App\Imports\HardwareImport;
 use App\Imports\SoftwareAssignationsImport;
+use App\Imports\SoftwareDeletionsImport;
 use App\Imports\SoftwareImport;
 use App\Imports\UsersImport;
 use App\Models\Company;
@@ -31,11 +35,13 @@ it('generates import templates with visible lists and dropdowns limited to the s
     $unavailableCompany = Company::factory()->create();
     $authUser = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
     $allowedUser = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $supportAdmin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
     $unavailableUser = User::factory()->create(['password' => Hash::make('password')]);
 
     $authUser->companies()->attach($allowedCompany);
     $allowedUser->companies()->attach($allowedCompany);
     $allowedUser->companies()->attach($unavailableCompany);
+    $supportAdmin->companies()->attach($allowedCompany);
     $unavailableUser->companies()->attach($unavailableCompany);
     HardwareType::query()->create(['name' => 'Notebook test']);
     session(['selected_company_id' => $allowedCompany->id]);
@@ -51,13 +57,18 @@ it('generates import templates with visible lists and dropdowns limited to the s
         ->and($hardwareLists->getCell('C3')->getValue())->toBeNull()
         ->and($hardwareLists->getSheetState())->toBe(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN)
         ->and(array_filter(array_column($hardwareLists->rangeToArray('D2:D4'), 0)))->toContain("{$allowedUser->id} - {$allowedUser->surname} {$allowedUser->name} {$allowedUser->email} ({$allowedCompany->name}, {$unavailableCompany->name})")
-        ->not->toContain("{$unavailableUser->id} - {$unavailableUser->surname} {$unavailableUser->name} {$unavailableUser->email} ({$unavailableCompany->name})");
+        ->not->toContain("{$unavailableUser->id} - {$unavailableUser->surname} {$unavailableUser->name} {$unavailableUser->email} ({$unavailableCompany->name})")
+        ->and($hardwareSheet->getDataValidation('M2')->getFormula1())->toBe('=UtentiHardware')
+        ->and(array_filter(array_column($hardwareLists->rangeToArray('I2:I100'), 0)))
+        ->toContain("{$allowedUser->id} - {$allowedUser->surname} {$allowedUser->name} {$allowedUser->email} ({$allowedCompany->name}, {$unavailableCompany->name})")
+        ->not->toContain("{$supportAdmin->id} - {$supportAdmin->surname} {$supportAdmin->name} {$supportAdmin->email} ({$allowedCompany->name})");
 
     $assignationWorkbook = workbookFor(new HardwareAssignationTemplateExport($authUser));
     $assignationSheet = $assignationWorkbook->getSheetByName('Assegnazioni hardware');
 
     expect($assignationWorkbook->getSheetNames())->toBe(['Assegnazioni hardware', 'Tendine'])
         ->and($assignationSheet->getDataValidation('B2')->getFormula1())->toBe('=AziendeDaAssociare')
+        ->and($assignationSheet->getDataValidation('C2')->getFormula1())->toBe('=UtentiHardwareDaAssociare')
         ->and($assignationSheet->getDataValidation('F2')->getFormula1())->toBe('=ResponsabiliAssegnazioni')
         ->and($assignationWorkbook->getSheetByName('Tendine')->getSheetState())->toBe(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
 
@@ -77,6 +88,7 @@ it('generates import templates with visible lists and dropdowns limited to the s
         ->and($softwareSheet->getDataValidation('L2')->getFormula1())->toBe('=StatiSoftware')
         ->and($softwareSheet->getDataValidation('N2')->getFormula1())->toBe('=AziendeSoftware')
         ->and($softwareSheet->getDataValidation('O2')->getFormula1())->toBe('=TipiSoftware')
+        ->and($softwareSheet->getDataValidation('P2')->getFormula1())->toBe('=UtentiSoftware')
         ->and($softwareSheet->getDataValidation('Q2')->getFormula1())->toBe('=ResponsabiliSoftware')
         ->and($softwareLists->getCell('A2')->getValue())->toBe("{$allowedCompany->id} - {$allowedCompany->name}")
         ->and(array_filter(array_column($softwareLists->rangeToArray('B2:B100'), 0)))->toContain("{$softwareType->id} - {$softwareType->name}")
@@ -90,6 +102,7 @@ it('generates import templates with visible lists and dropdowns limited to the s
     expect($softwareAssignationWorkbook->getSheetNames())->toBe(['Assegnazioni software', 'Tendine'])
         ->and($softwareAssignationSheet->getDataValidation('A2')->getFormula1())->toBe('=SoftwareAssegnazioni')
         ->and($softwareAssignationSheet->getDataValidation('B2')->getFormula1())->toBe('=AziendeSoftwareDaAssociare')
+        ->and($softwareAssignationSheet->getDataValidation('C2')->getFormula1())->toBe('=UtentiSoftwareDaAssociare')
         ->and($softwareAssignationSheet->getDataValidation('D2')->getFormula1())->toBe('=AziendeSoftwareDaRimuovere')
         ->and($softwareAssignationSheet->getDataValidation('F2')->getFormula1())->toBe('=ResponsabiliSoftwareAssegnazioni')
         ->and($softwareAssignationWorkbook->getSheetByName('Tendine')->getCell('A2')->getValue())->toBe("{$software->id} - {$software->vendor} {$software->product_name} ({$software->company_asset_number})")
@@ -241,6 +254,142 @@ it('allows only authorized responsible users for the asset company', function ()
             ->and($method->invoke($import, $otherCompanyAdmin, $company->id))->toBeFalse()
             ->and($method->invoke($import, $regularUser, $company->id))->toBeFalse();
     }
+
+    $companyAdminImport = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $companyAdminImport->companies()->attach($company);
+    session(['selected_company_id' => $company->id]);
+
+    foreach ([HardwareImport::class, HardwareAssignationsImport::class, SoftwareImport::class, SoftwareAssignationsImport::class] as $importClass) {
+        $method = new ReflectionMethod($importClass, 'canBeResponsible');
+        $method->setAccessible(true);
+        $import = new $importClass($companyAdminImport);
+
+        expect($method->invoke($import, $supportAdmin, $company->id))->toBeFalse()
+            ->and($method->invoke($import, $companyAdmin, $company->id))->toBeTrue();
+    }
+});
+
+it('rejects company admin imports outside the selected company or for privileged users', function () {
+    $company = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $companyAdmin = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $supportAdmin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $companyAdmin->companies()->attach($company);
+    $supportAdmin->companies()->attach($company);
+    session(['selected_company_id' => $company->id]);
+
+    $hardwareRow = collect([
+        'Acme', 'Notebook', 'IMPORT-'.uniqid(), null, null, null, null, 'ASSET-'.uniqid(), null, null, 'No', $otherCompany->id, null, null, 'Azienda', 'Nuovo', 'Condizioni all\'acquisto', 'No',
+    ]);
+    expect(fn () => (new HardwareImport($companyAdmin))->collection(collect([$hardwareRow])))
+        ->toThrow(Exception::class, 'Non puoi importare hardware per l\'azienda indicata.');
+
+    $softwareRow = collect([
+        'Acme', 'Suite', null, null, 'SOFTWARE-'.uniqid(), null, null, null, null, null, 'No', 'Attiva', null, $otherCompany->id, null, null, null,
+    ]);
+    expect(fn () => (new SoftwareImport($companyAdmin))->collection(collect([$softwareRow])))
+        ->toThrow(Exception::class, 'Non puoi importare software per l\'azienda indicata.');
+
+    $hardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'OWN-'.uniqid(),
+        'company_asset_number' => 'OWN-ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $software = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Suite',
+        'company_asset_number' => 'OWN-SOFTWARE-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+
+    expect(fn () => (new HardwareAssignationsImport($companyAdmin))->collection(collect([
+        collect([$hardware->id, null, (string) $supportAdmin->id, null, null, $companyAdmin->id]),
+    ])))->toThrow(Exception::class, 'non è assegnato alla stessa azienda');
+
+    expect(fn () => (new SoftwareAssignationsImport($companyAdmin))->collection(collect([
+        collect([$software->id, null, (string) $supportAdmin->id, null, null, $companyAdmin->id]),
+    ])))->toThrow(Exception::class, 'non è assegnato alla stessa azienda');
+});
+
+it('allows company admins to import only soft deletion and recovery for their company', function () {
+    $company = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $companyAdmin = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $companyAdmin->companies()->attach($company);
+    session(['selected_company_id' => $company->id]);
+
+    expect((new HardwareDeletionTemplateExport($companyAdmin))->array()[0][1])
+        ->toBe('Tipo di eliminazione Soft/Recupero *')
+        ->and((new SoftwareDeletionTemplateExport($companyAdmin))->array()[0][1])
+        ->toBe('Tipo di eliminazione Soft/Recupero *');
+
+    $hardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'DELETE-'.uniqid(),
+        'company_asset_number' => 'DELETE-ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $software = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Suite',
+        'company_asset_number' => 'DELETE-SOFTWARE-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+
+    (new HardwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$hardware->id, 'Soft']),
+    ]));
+    (new SoftwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$software->id, 'Soft']),
+    ]));
+
+    expect($hardware->fresh()->trashed())->toBeTrue()
+        ->and($software->fresh()->trashed())->toBeTrue();
+
+    expect(fn () => (new HardwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$hardware->id, 'Definitiva']),
+    ])))->toThrow(Exception::class, 'non possono eliminare definitivamente');
+    expect(fn () => (new SoftwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$software->id, 'Definitiva']),
+    ])))->toThrow(Exception::class, 'non possono eliminare definitivamente');
+
+    (new HardwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$hardware->id, 'Recupero']),
+    ]));
+    (new SoftwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$software->id, 'Recupero']),
+    ]));
+
+    $otherHardware = Hardware::query()->create([
+        'make' => 'External',
+        'model' => 'Notebook',
+        'serial_number' => 'OTHER-DELETE-'.uniqid(),
+        'company_asset_number' => 'OTHER-ASSET-'.uniqid(),
+        'company_id' => $otherCompany->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+
+    expect(fn () => (new HardwareDeletionsImport($companyAdmin))->collection(collect([
+        collect([$otherHardware->id, 'Soft']),
+    ])))->toThrow(Exception::class, 'non trovato o non autorizzato');
 });
 
 it('ignores blank rows left by template dropdowns', function () {

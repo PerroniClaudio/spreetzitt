@@ -68,6 +68,10 @@ class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
                     throw new \Exception('Hardware con ID '.$row[0].' inesistente.');
                 }
 
+                if ($this->authUser->is_company_admin && ! $this->canManageAsset($hardware, $companyToAddId, $companyToRemoveId)) {
+                    throw new \Exception('Non puoi modificare le assegnazioni dell\'hardware indicato.');
+                }
+
                 // Per ogni colonna verificare che la modifica sia possibile (partire dalle rimozioni)
 
                 // Essendo in una transaction le relazioni non si aggiornano subito, quindi si devono salvare i dati per poter fare le verifiche prima di creare nuove associazioni.
@@ -75,9 +79,12 @@ class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
 
                 // utenti da rimuovere
                 if (! empty($row[4])) {
-                    $usersToRemove = explode(',', $row[4]);
+                    $usersToRemove = array_map(fn ($value) => $this->extractId($value), explode(',', $row[4]));
                     foreach ($usersToRemove as $userToRemove) {
                         $user = User::find($userToRemove);
+                        if ($this->authUser->is_company_admin && ! $this->canAssignUser($user, $hardware->company_id)) {
+                            throw new \Exception('L\'utente con ID '.$userToRemove.' non può essere gestito dal company admin.');
+                        }
                         if ($user && $hardware->users->contains($user->id)) {
                             $hardware->users()->detach($user->id);
                             if (! in_array($user->id, $removedUsers)) {
@@ -133,7 +140,7 @@ class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
 
                 // utenti da aggiungere
                 if (! empty($row[2])) {
-                    $usersToAdd = explode(',', $row[2]);
+                    $usersToAdd = array_map(fn ($value) => $this->extractId($value), explode(',', $row[2]));
                     if (count($usersToAdd) > 0) {
                         $remainingUsersCount = $hardware->users->filter(function ($user) use ($removedUsers) {
                             return ! in_array($user->id, $removedUsers);
@@ -148,7 +155,7 @@ class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
                         }
                         foreach ($usersToAdd as $userToAdd) {
                             $user = User::find($userToAdd);
-                            if ($user && ! $user->hasCompany($hardware->company_id)) {
+                            if (! $this->canAssignUser($user, $hardware->company_id)) {
                                 throw new \Exception('L\'utente con ID '.$userToAdd.' non è assegnato alla stessa azienda dell\'hardware con ID '.$row[0]);
                             }
                             if ($user && ! $hardware->users->contains($user->id)) {
@@ -187,9 +194,36 @@ class HardwareAssignationsImport implements ToCollection, WithMultipleSheets
             return false;
         }
 
+        if ($this->authUser->is_company_admin) {
+            return $companyId !== null
+                && $user->is_company_admin
+                && ! $user->is_admin
+                && ! $user->is_superadmin
+                && $user->hasCompany($companyId);
+        }
+
         return $user->is_admin
             || $user->is_superadmin
             || ($companyId !== null && $user->is_company_admin && $user->hasCompany($companyId));
+    }
+
+    private function canManageAsset(Hardware $hardware, ?int $companyToAddId, ?int $companyToRemoveId): bool
+    {
+        $companyId = $this->authUser->selectedCompany()?->id;
+
+        return $companyId !== null
+            && $hardware->company_id === $companyId
+            && $companyToAddId === null
+            && $companyToRemoveId === null;
+    }
+
+    private function canAssignUser(?User $user, ?int $companyId): bool
+    {
+        if (! $user || $companyId === null || ! $user->hasCompany($companyId)) {
+            return false;
+        }
+
+        return ! $this->authUser->is_company_admin || (! $user->is_admin && ! $user->is_superadmin);
     }
 
     /**

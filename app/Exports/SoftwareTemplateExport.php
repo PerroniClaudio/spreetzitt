@@ -22,6 +22,9 @@ class SoftwareTemplateExport implements FromArray, WithEvents
     /** @var array<int, User> */
     private array $responsibleUsers;
 
+    /** @var array<int, User> */
+    private array $assignableUsers;
+
     public function __construct(User $authUser)
     {
         $companiesQuery = Company::query()->orderBy('name');
@@ -47,6 +50,17 @@ class SoftwareTemplateExport implements FromArray, WithEvents
         }
 
         $this->responsibleUsers = $responsibleUsersQuery
+            ->orderBy('surname')
+            ->orderBy('name')
+            ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
+            ->all();
+        $this->assignableUsers = User::query()
+            ->with('companies:id,name')
+            ->where('is_deleted', false)
+            ->whereHas('companies', fn ($query) => $query->whereIn('companies.id', $companyIds))
+            ->when($authUser->is_company_admin, fn ($query) => $query
+                ->where('is_admin', false)
+                ->where('is_superadmin', false))
             ->orderBy('surname')
             ->orderBy('name')
             ->get(['id', 'name', 'surname', 'email', 'is_admin', 'is_superadmin', 'is_company_admin'])
@@ -96,11 +110,13 @@ class SoftwareTemplateExport implements FromArray, WithEvents
         $this->writeColumn($lookupSheet, 3, 'Responsabili assegnazione', array_map(fn (User $user): string => $this->responsibleUserLabel($user), $this->responsibleUsers));
         $this->writeColumn($lookupSheet, 4, 'Si/No', ['Si', 'No']);
         $this->writeColumn($lookupSheet, 5, 'Stati', array_values(config('app.software_statuses')));
+        $this->writeColumn($lookupSheet, 6, 'Utenti assegnabili', array_map(fn (User $user): string => $this->responsibleUserLabel($user), $this->assignableUsers));
 
         $this->addListValidation($event, 'K', 'SiNoUsoEsclusivoSoftware', 4, 2);
         $this->addListValidation($event, 'L', 'StatiSoftware', 5, count(config('app.software_statuses')));
         $this->addListValidation($event, 'N', 'AziendeSoftware', 1, count($this->companies));
         $this->addListValidation($event, 'O', 'TipiSoftware', 2, count($this->softwareTypes));
+        $this->addListValidation($event, 'P', 'UtentiSoftware', 6, count($this->assignableUsers));
         $this->addListValidation($event, 'Q', 'ResponsabiliSoftware', 3, count($this->responsibleUsers));
 
         $lookupSheet->setSheetState(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet::SHEETSTATE_HIDDEN);
