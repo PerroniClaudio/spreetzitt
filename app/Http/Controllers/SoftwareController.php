@@ -186,14 +186,33 @@ class SoftwareController extends Controller
     public function softwareListWithTrashed(Request $request)
     {
         $authUser = $request->user();
+        $data = $request->validate([
+            'company_id' => 'nullable|int|exists:companies,id',
+        ]);
 
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to view this software',
             ], 403);
         }
 
-        $softwareList = Software::withTrashed()->with(['softwareType', 'company'])->get();
+        if ($authUser->is_company_admin) {
+            $data['company_id'] = $authUser->selectedCompany()?->id;
+
+            if (! $data['company_id']) {
+                return response([
+                    'message' => 'You are not allowed to view this software',
+                ], 403);
+            }
+        }
+
+        $softwareQuery = Software::withTrashed()->with(['softwareType', 'company']);
+
+        if (isset($data['company_id'])) {
+            $softwareQuery->where('company_id', $data['company_id']);
+        }
+
+        $softwareList = $softwareQuery->get();
 
         return response([
             'softwareList' => $softwareList,

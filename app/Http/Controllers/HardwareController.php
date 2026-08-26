@@ -214,14 +214,33 @@ class HardwareController extends Controller
     {
 
         $authUser = $request->user();
+        $data = $request->validate([
+            'company_id' => 'nullable|int|exists:companies,id',
+        ]);
 
-        if (! $authUser->is_admin) {
+        if (! $authUser->is_admin && ! $authUser->is_company_admin) {
             return response([
                 'message' => 'You are not allowed to view this hardware',
             ], 403);
         }
 
-        $hardwareList = Hardware::withTrashed()->with(['hardwareType', 'company'])->get();
+        if ($authUser->is_company_admin) {
+            $data['company_id'] = $authUser->selectedCompany()?->id;
+
+            if (! $data['company_id']) {
+                return response([
+                    'message' => 'You are not allowed to view this hardware',
+                ], 403);
+            }
+        }
+
+        $hardwareQuery = Hardware::withTrashed()->with(['hardwareType', 'company']);
+
+        if (isset($data['company_id'])) {
+            $hardwareQuery->where('company_id', $data['company_id']);
+        }
+
+        $hardwareList = $hardwareQuery->get();
 
         return response([
             'hardwareList' => $hardwareList,
@@ -359,7 +378,7 @@ class HardwareController extends Controller
         $authUser = $request->user();
         $hardware = null;
 
-        if ($authUser->is_admin) {
+        if ($authUser->is_admin || $authUser->is_company_admin) {
             $hardware = Hardware::withTrashed()->find($hardwareId);
         } else {
             $hardware = Hardware::find($hardwareId);

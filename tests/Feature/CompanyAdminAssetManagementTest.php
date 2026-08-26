@@ -172,3 +172,140 @@ it('allows a company admin to create hardware only for assignable users in their
     $this->deleteJson("/api/software/{$otherSoftware->id}")
         ->assertForbidden();
 });
+
+it('allows a company admin to view trashed assets only for their company', function () {
+    $company = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $companyAdmin = User::factory()->create([
+        'is_company_admin' => true,
+        'password' => Hash::make('password'),
+    ]);
+
+    $companyAdmin->companies()->attach($company);
+    Sanctum::actingAs($companyAdmin);
+
+    $companyHardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'COMPANY-TRASHED-'.uniqid(),
+        'company_asset_number' => 'COMPANY-ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $otherHardware = Hardware::query()->create([
+        'make' => 'External',
+        'model' => 'Notebook',
+        'serial_number' => 'OTHER-TRASHED-'.uniqid(),
+        'company_asset_number' => 'OTHER-ASSET-'.uniqid(),
+        'company_id' => $otherCompany->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $companyHardware->delete();
+    $otherHardware->delete();
+
+    $companySoftware = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Company Suite',
+        'company_asset_number' => 'COMPANY-SOFTWARE-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+    $otherSoftware = Software::query()->create([
+        'vendor' => 'External',
+        'product_name' => 'External Suite',
+        'company_asset_number' => 'OTHER-SOFTWARE-'.uniqid(),
+        'company_id' => $otherCompany->id,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+    $companySoftware->delete();
+    $otherSoftware->delete();
+
+    $this->getJson('/api/hardware-list-full')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companyHardware->id])
+        ->assertJsonMissing(['id' => $otherHardware->id]);
+
+    $this->getJson('/api/software-list-full')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companySoftware->id])
+        ->assertJsonMissing(['id' => $otherSoftware->id]);
+
+    $this->getJson('/api/hardware-list-full?company_id='.$otherCompany->id)
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companyHardware->id])
+        ->assertJsonMissing(['id' => $otherHardware->id]);
+
+    $this->getJson('/api/software-list-full?company_id='.$otherCompany->id)
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companySoftware->id])
+        ->assertJsonMissing(['id' => $otherSoftware->id]);
+
+    $supportAdmin = User::factory()->create([
+        'is_admin' => true,
+        'password' => Hash::make('password'),
+    ]);
+    Sanctum::actingAs($supportAdmin);
+
+    $this->getJson('/api/hardware-list-full')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companyHardware->id])
+        ->assertJsonFragment(['id' => $otherHardware->id]);
+
+    $this->getJson('/api/software-list-full')
+        ->assertOk()
+        ->assertJsonFragment(['id' => $companySoftware->id])
+        ->assertJsonFragment(['id' => $otherSoftware->id]);
+});
+
+it('allows a company admin to view the detail of deleted hardware in their company', function () {
+    $company = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $companyAdmin = User::factory()->create([
+        'is_company_admin' => true,
+        'password' => Hash::make('password'),
+    ]);
+
+    $companyAdmin->companies()->attach($company);
+    Sanctum::actingAs($companyAdmin);
+
+    $hardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'DETAIL-TRASHED-'.uniqid(),
+        'company_asset_number' => 'DETAIL-ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $otherHardware = Hardware::query()->create([
+        'make' => 'External',
+        'model' => 'Notebook',
+        'serial_number' => 'OTHER-DETAIL-TRASHED-'.uniqid(),
+        'company_asset_number' => 'OTHER-DETAIL-ASSET-'.uniqid(),
+        'company_id' => $otherCompany->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $hardware->delete();
+    $otherHardware->delete();
+
+    $this->getJson('/api/hardware/'.$hardware->id)
+        ->assertOk()
+        ->assertJsonPath('hardware.id', $hardware->id)
+        ->assertJsonPath('hardware.deleted_at', $hardware->deleted_at->toJSON());
+
+    $this->getJson('/api/hardware/'.$otherHardware->id)
+        ->assertForbidden();
+});
