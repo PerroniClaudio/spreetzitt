@@ -39,7 +39,7 @@ class TicketsExport implements FromArray, WithColumnFormatting, WithEvents
         // $tickets = Ticket::where('company_id', $this->company->id)->whereBetween('created_at', [now()->subDays(30)->startOfMonth(), now()->subDays(30)->endOfMonth()])->get();
         $tickets = Ticket::where('company_id', $this->company_id)->whereBetween('created_at', [
             $this->start_date,
-            $this->end_date . ' 23:59:59'
+            $this->end_date.' 23:59:59',
         ])->get();
 
         $ticket_data = [];
@@ -59,8 +59,6 @@ class TicketsExport implements FromArray, WithColumnFormatting, WithEvents
             'Modalità di lavoro',
             'Form corretto',
             'Cliente autonomo',
-            'Responsabilità del dato', // nel db per ora è is_user_error perchè veniva usato in un altro modo
-            'Responsabilità del problema',
         ];
 
         foreach ($tickets as $ticket) {
@@ -183,8 +181,6 @@ class TicketsExport implements FromArray, WithColumnFormatting, WithEvents
                 $workModes && $ticket->work_mode ? $workModes[$ticket->work_mode] : $ticket->work_mode,
                 $ticket->is_form_correct ? 'Si' : 'No',
                 $ticket->was_user_self_sufficient ? 'Si' : 'No',
-                $ticket->is_user_error ? 'Cliente' : 'Supporto', // nel db per ora è is_user_error perchè veniva usato in un altro modo
-                $ticket->ticketType->is_problem ? ($ticket->is_user_error_problem ? 'Cliente' : 'Supporto') : '-',
             ];
 
             foreach ($ticket->messages as $message) {

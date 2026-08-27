@@ -418,7 +418,7 @@ class CompanyController extends Controller
 
         if ($user['is_admin'] != 1) {
             foreach ($tickets as $ticket) {
-                $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+                $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
             }
         }
 
@@ -440,7 +440,7 @@ class CompanyController extends Controller
 
         if ($user['is_admin'] != 1) {
             foreach ($projects as $project) {
-                $project->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+                $project->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
             }
         }
 

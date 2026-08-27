@@ -58,7 +58,6 @@ class StoreDgveryLive implements ShouldQueue
             'unread_mess_for_adm' => 1,
             'unread_mess_for_usr' => 0,
             'source' => 'automatic',
-            'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
             'is_billable' => $ticketType['expected_is_billable'],
         ]);
 

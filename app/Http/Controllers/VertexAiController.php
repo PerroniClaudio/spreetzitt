@@ -211,7 +211,6 @@ class VertexAiController extends Controller
             'Content-Type' => 'application/json',
         ])->timeout(500)->post($url, $payload);
 
-
         if (! $response->successful()) {
             throw new Exception('Errore chiamata Gemini: '.$response->body());
         }
@@ -422,7 +421,7 @@ class VertexAiController extends Controller
         return false;
     }
 
-    // $isPdfGeneration significa che si sta generando un report PDF normale o per progetto. Quindi la query dov solo isolare i ticket. non usare campi a piacere o selezionare tabelle inutili alla crazione del PDF. 
+    // $isPdfGeneration significa che si sta generando un report PDF normale o per progetto. Quindi la query dov solo isolare i ticket. non usare campi a piacere o selezionare tabelle inutili alla crazione del PDF.
     private function generateSqlFromPrompt(string $userPrompt, string $pdfGenerationType = 'csv'): ?string
     {
         $allowedSchema = $this->buildEnhancedDatabaseSchema();
@@ -455,7 +454,7 @@ class VertexAiController extends Controller
         return [
             // USERS
             'users.company_id' => 'companies.id',
-            
+
             // TICKETS (core relations)
             'tickets.user_id' => 'users.id',
             'tickets.company_id' => 'companies.id',
@@ -464,34 +463,34 @@ class VertexAiController extends Controller
             'tickets.type_id' => 'ticket_types.id',
             'tickets.group_id' => 'groups.id',
             'tickets.ticket_cause_id' => 'ticket_causes.id',
-            
+
             // TICKETS (self-referencing)
             'tickets.project_id' => 'tickets.id (progetto padre)',
             'tickets.master_id' => 'tickets.id (ticket master)',
             'tickets.scheduling_id' => 'tickets.id (scheduling padre)',
             'tickets.parent_ticket_id' => 'tickets.id (ticket padre)',
-            
+
             // TICKET TYPES
             'ticket_types.category_id' => 'ticket_type_categories.id',
-            
+
             // TICKET MESSAGES
             'ticket_messages.ticket_id' => 'tickets.id',
             'ticket_messages.user_id' => 'users.id',
             'ticket_messages.admin_user_id' => 'users.id',
-            
+
             // TICKET FILES
             'ticket_files.ticket_id' => 'tickets.id',
             'ticket_files.user_id' => 'users.id',
-            
+
             // TICKET STATUS UPDATES
             'ticket_status_updates.ticket_id' => 'tickets.id',
             'ticket_status_updates.stage_id' => 'ticket_stages.id',
             'ticket_status_updates.user_id' => 'users.id',
-            
+
             // TICKET REPORT PDF EXPORTS
             'ticket_report_pdf_exports.company_id' => 'companies.id',
             'ticket_report_pdf_exports.user_id' => 'users.id',
-            
+
             // HARDWARE SYSTEM
             'hardware.company_id' => 'companies.id',
             'hardware.supplier_id' => 'suppliers.id',
@@ -499,45 +498,45 @@ class VertexAiController extends Controller
             'hardware.hardware_category_id' => 'hardware_categories.id',
             'hardware.hardware_type_id' => 'hardware_types.id',
             'hardware.operating_system_id' => 'operating_systems.id',
-            
+
             'hardware_assignations.hardware_id' => 'hardware.id',
             'hardware_assignations.user_id' => 'users.id',
             'hardware_assignations.company_id' => 'companies.id',
-            
+
             'hardware_logs.hardware_id' => 'hardware.id',
             'hardware_logs.user_id' => 'users.id',
-            
+
             // SOFTWARE SYSTEM
             'software.company_id' => 'companies.id',
             'software.supplier_id' => 'suppliers.id',
             'software.software_category_id' => 'software_categories.id',
-            
+
             'software_assignations.software_id' => 'software.id',
             'software_assignations.user_id' => 'users.id',
             'software_assignations.company_id' => 'companies.id',
-            
+
             'software_logs.software_id' => 'software.id',
             'software_logs.user_id' => 'users.id',
-            
+
             // GROUPS
             'groups.company_id' => 'companies.id',
-            
+
             // DOCUMENTS
             'documents.company_id' => 'companies.id',
-            
+
             // PROPERTIES
             'properties.company_id' => 'companies.id',
             'properties.property_type_id' => 'property_types.id',
-            
+
             'property_logs.property_id' => 'properties.id',
             'property_logs.user_id' => 'users.id',
-            
+
             // NEWS
             'news.author_id' => 'users.id',
-            
+
             // OFFICES
             'offices.company_id' => 'companies.id',
-            
+
             // STATS
             'stats_monthly_priority.company_id' => 'companies.id',
             'stats_monthly_company.company_id' => 'companies.id',
@@ -572,7 +571,7 @@ class VertexAiController extends Controller
             'tickets' => [
                 'id', 'user_id', 'company_id', 'status', 'stage_id', 'description', 'priority',
                 'due_date', 'created_at', 'updated_at', 'type_id', 'admin_user_id', 'group_id',
-                'assigned', 'sla_take', 'sla_solve', 'is_user_error', 'actual_processing_time',
+                'assigned', 'sla_take', 'sla_solve', 'actual_processing_time',
                 'is_billable', 'source', 'is_rejected', 'parent_ticket_id', 'ticket_cause_id',
                 'project_id', 'master_id', 'scheduling_id', 'scheduled_duration', 'work_mode',
             ],
@@ -759,11 +758,11 @@ class VertexAiController extends Controller
         }
 
         $extraRules = '';
-        if($pdfGenerationType == 'project_pdf'){
-            $extraRules = "6. Poiché questa query è per generare un report PDF di progetto, assicurati che la query si concentri SOLO sui ticket relativi al progetto specifico (progetto piuù quelli a lui collegati tramite project_id) e che recuperi tutti i campi, senza isolarne nessuno. Non includere dati non necessari da altre tabelle.";
+        if ($pdfGenerationType == 'project_pdf') {
+            $extraRules = '6. Poiché questa query è per generare un report PDF di progetto, assicurati che la query si concentri SOLO sui ticket relativi al progetto specifico (progetto piuù quelli a lui collegati tramite project_id) e che recuperi tutti i campi, senza isolarne nessuno. Non includere dati non necessari da altre tabelle.';
         }
-        if($pdfGenerationType == 'normal_pdf'){
-            $extraRules = "6. Poiché questa query è per generare un report PDF standard, assicurati che la query si concentri SOLO sui ticket richiesti e che recuperi tutti i campi, senza isolarne nessuno. Non includere dati non necessari da altre tabelle. escludi i ticket di tipo progetto o collegati a un progetto trattraverso project_id.";
+        if ($pdfGenerationType == 'normal_pdf') {
+            $extraRules = '6. Poiché questa query è per generare un report PDF standard, assicurati che la query si concentri SOLO sui ticket richiesti e che recuperi tutti i campi, senza isolarne nessuno. Non includere dati non necessari da altre tabelle. escludi i ticket di tipo progetto o collegati a un progetto trattraverso project_id.';
         }
 
         return "Sei un esperto SQL analyst. Il tuo compito è interpretare le richieste degli utenti e generare query SQL SELECT utili e sicure.
@@ -946,7 +945,7 @@ class VertexAiController extends Controller
 
         try {
             // Solo admin possono generare report PDF
-            if (!$user || $user->is_admin != 1) {
+            if (! $user || $user->is_admin != 1) {
                 return response()->json(['error' => 'Unauthorized. Solo gli admin possono generare report PDF.'], 401);
             }
 
@@ -967,9 +966,9 @@ class VertexAiController extends Controller
                 'was_successful' => false,
             ];
 
-            // Dato che questa funzione serve a generare un report specifico, qui si potrebbe inserire del testo iniziale per specificare il contesto, 
-            // es. come deve usare le date nella query (da - a, non devono essere created_at del ticket e basta, ma created_at del ticket deve essere 
-            // inferiore alla data di fine e la data di inizio si deve usare per escludere i ticket che sono stati chiusi prima di quella data). 
+            // Dato che questa funzione serve a generare un report specifico, qui si potrebbe inserire del testo iniziale per specificare il contesto,
+            // es. come deve usare le date nella query (da - a, non devono essere created_at del ticket e basta, ma created_at del ticket deve essere
+            // inferiore alla data di fine e la data di inizio si deve usare per escludere i ticket che sono stati chiusi prima di quella data).
             // Poi nel caso gli si può passare anche la query utilizzata dalla funzione normale come riferimento.
 
             $logEntry = VertexAiQueryLog::create($logData);
@@ -988,7 +987,7 @@ class VertexAiController extends Controller
             // Genera query SQL dal prompt
             $sqlQuery = $this->generateSqlFromPrompt($userPrompt, 'normal_pdf');
 
-            if (!$sqlQuery) {
+            if (! $sqlQuery) {
                 $this->updateLogEntry($logId, [
                     'error_message' => 'Impossibile generare query SQL dal prompt fornito',
                     'execution_time' => microtime(true) - $startTime,
@@ -1020,8 +1019,8 @@ class VertexAiController extends Controller
 
             // Estrae le date dal prompt (OBBLIGATORIE)
             $dates = $this->extractDatesFromPrompt($userPrompt, $sqlQuery);
-            
-            if (!$dates['start_date'] || !$dates['end_date']) {
+
+            if (! $dates['start_date'] || ! $dates['end_date']) {
                 $this->updateLogEntry($logId, [
                     'error_message' => 'Impossibile estrarre le date dal prompt. Le date sono obbligatorie.',
                     'execution_time' => microtime(true) - $startTime,
@@ -1047,7 +1046,7 @@ class VertexAiController extends Controller
                 $companyName = $company ? Str::slug($company->name) : 'company_'.$companyId;
             }
 
-            $name = time().'_ai_report_'.(!!$companyName ? $companyName.'_' : '').$dates['start_date'].'_'.$dates['end_date'].'.pdf';
+            $name = time().'_ai_report_'.((bool) $companyName ? $companyName.'_' : '').$dates['start_date'].'_'.$dates['end_date'].'.pdf';
 
             // Crea il record TicketReportPdfExport
             $pdfExport = TicketReportPdfExport::create([
@@ -1100,7 +1099,7 @@ class VertexAiController extends Controller
             ], 202); // 202 Accepted
 
         } catch (Exception $e) {
-            $errorMessage = 'Errore durante la creazione del report PDF: ' . $e->getMessage();
+            $errorMessage = 'Errore durante la creazione del report PDF: '.$e->getMessage();
 
             if ($logId) {
                 $this->updateLogEntry($logId, [
@@ -1119,7 +1118,7 @@ class VertexAiController extends Controller
             return response()->json(['error' => 'Errore durante la creazione del report PDF.'], 500);
         }
     }
-    
+
     /**
      * Genera un report PDF da un prompt AI.
      * Crea un record in TicketReportPdfExport con la query generata dall'AI,
@@ -1134,7 +1133,7 @@ class VertexAiController extends Controller
 
         try {
             // Solo admin possono generare report PDF
-            if (!$user || $user->is_admin != 1) {
+            if (! $user || $user->is_admin != 1) {
                 return response()->json(['error' => 'Unauthorized. Solo gli admin possono generare report PDF.'], 401);
             }
 
@@ -1155,9 +1154,9 @@ class VertexAiController extends Controller
                 'was_successful' => false,
             ];
 
-            // Dato che questa funzione serve a generare un report specifico, qui si potrebbe inserire del testo iniziale per specificare il contesto, 
-            // es. come deve usare le date nella query (da - a, non devono essere created_at del ticket e basta, ma created_at del ticket deve essere 
-            // inferiore alla data di fine e la data di inizio si deve usare per escludere i ticket che sono stati chiusi prima di quella data). 
+            // Dato che questa funzione serve a generare un report specifico, qui si potrebbe inserire del testo iniziale per specificare il contesto,
+            // es. come deve usare le date nella query (da - a, non devono essere created_at del ticket e basta, ma created_at del ticket deve essere
+            // inferiore alla data di fine e la data di inizio si deve usare per escludere i ticket che sono stati chiusi prima di quella data).
             // Poi nel caso gli si può passare anche la query utilizzata dalla funzione normale come riferimento.
 
             $logEntry = VertexAiQueryLog::create($logData);
@@ -1176,7 +1175,7 @@ class VertexAiController extends Controller
             // Genera query SQL dal prompt
             $sqlQuery = $this->generateSqlFromPrompt($userPrompt, 'project_pdf');
 
-            if (!$sqlQuery) {
+            if (! $sqlQuery) {
                 $this->updateLogEntry($logId, [
                     'error_message' => 'Impossibile generare query SQL dal prompt fornito',
                     'execution_time' => microtime(true) - $startTime,
@@ -1202,11 +1201,11 @@ class VertexAiController extends Controller
 
             // Valida la query (senza eseguirla per ora)
             $this->validateSqlQuery($sqlQuery);
-            
+
             // Estrae project_id dal prompt se presente in modo univoco
             $projectId = $this->extractProjectIdFromPrompt($userPrompt);
 
-            if(!$projectId){
+            if (! $projectId) {
                 return response()->json([
                     'error' => 'Non riesco a identificare il progetto richiesto.',
                     'suggestion' => 'Per favore specifica un progetto nel prompt.',
@@ -1217,29 +1216,28 @@ class VertexAiController extends Controller
                     ],
                 ], 400);
             }
-            
+
             $project = Ticket::find($projectId);
 
-            if(!$project){
+            if (! $project) {
                 return response()->json([
                     'error' => 'Il progetto specificato non esiste.',
                     'suggestion' => 'Per favore verifica l\'ID o il nome del progetto e riprova.',
                 ], 400);
             }
 
-
             // Estrae company_id dalla query se presente in modo univoco
             $companyId = $this->extractCompanyIdFromQuery($sqlQuery);
 
-            if(!$companyId){
-                // Recupera il company_id dal progetto                
+            if (! $companyId) {
+                // Recupera il company_id dal progetto
                 $companyId = $project->company_id;
             }
-            
+
             // Estrae le date dal prompt (OBBLIGATORIE)
             $dates = $this->extractDatesFromPrompt($userPrompt, $sqlQuery);
-            
-            if (!$dates['start_date'] || !$dates['end_date']) {
+
+            if (! $dates['start_date'] || ! $dates['end_date']) {
                 $this->updateLogEntry($logId, [
                     'error_message' => 'Impossibile estrarre le date dal prompt. Le date sono obbligatorie.',
                     'execution_time' => microtime(true) - $startTime,
@@ -1265,7 +1263,7 @@ class VertexAiController extends Controller
                 $companyName = $company ? Str::slug($company->name) : 'company_'.$companyId;
             }
 
-            $name = time().'_ai_report_'.(!!$companyName ? $companyName.'_' : '').$dates['start_date'].'_'.$dates['end_date'].'.pdf';
+            $name = time().'_ai_report_'.((bool) $companyName ? $companyName.'_' : '').$dates['start_date'].'_'.$dates['end_date'].'.pdf';
 
             // Crea il record ProjectReportPdfExport
             $pdfProjectExport = ProjectReportPdfExport::create([
@@ -1315,7 +1313,7 @@ class VertexAiController extends Controller
             ], 202); // 202 Accepted
 
         } catch (Exception $e) {
-            $errorMessage = 'Errore durante la creazione del report PDF: ' . $e->getMessage();
+            $errorMessage = 'Errore durante la creazione del report PDF: '.$e->getMessage();
 
             if ($logId) {
                 $this->updateLogEntry($logId, [
@@ -1341,13 +1339,13 @@ class VertexAiController extends Controller
     public function validateSqlQuery(string $sqlQuery): void
     {
         // Usa gli stessi controlli di sicurezza di executeSecureQuery
-        if (!preg_match('/^\s*SELECT\s+/i', $sqlQuery)) {
+        if (! preg_match('/^\s*SELECT\s+/i', $sqlQuery)) {
             throw new Exception('Solo query SELECT sono permesse');
         }
 
         $dangerousOperations = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'ALTER', 'CREATE', 'TRUNCATE', 'REPLACE'];
         foreach ($dangerousOperations as $op) {
-            if (preg_match('/\b' . $op . '\s+/i', $sqlQuery)) {
+            if (preg_match('/\b'.$op.'\s+/i', $sqlQuery)) {
                 throw new Exception("Operazione $op non permessa");
             }
         }
@@ -1362,7 +1360,7 @@ class VertexAiController extends Controller
         ];
 
         foreach ($sensitiveColumns as $column) {
-            if (preg_match('/\b' . $column . '\b/i', $sqlQuery)) {
+            if (preg_match('/\b'.$column.'\b/i', $sqlQuery)) {
                 throw new Exception("Colonna sensibile '$column' non permessa nelle query");
             }
         }
@@ -1378,19 +1376,20 @@ class VertexAiController extends Controller
         // Esempi: company_id = 5, company_id=5, tickets.company_id = 5
         if (preg_match_all('/(?:tickets\.)?company_id\s*=\s*(\d+)/i', $sqlQuery, $matches)) {
             $companyIds = array_unique($matches[1]);
-            
+
             // Se c'è esattamente un company_id univoco nella query, lo usiamo
             if (count($companyIds) === 1) {
                 $companyId = (int) $companyIds[0];
-                
+
                 // Verifica che la company esista
                 $companyExists = DB::table('companies')->where('id', $companyId)->exists();
-                
+
                 if ($companyExists) {
                     Log::info('Company ID estratto dalla query AI', [
                         'company_id' => $companyId,
-                        'query' => $sqlQuery
+                        'query' => $sqlQuery,
                     ]);
+
                     return $companyId;
                 }
             }
@@ -1398,9 +1397,9 @@ class VertexAiController extends Controller
 
         // Se non troviamo un company_id univoco o valido, ritorniamo null
         Log::info('Nessun company_id univoco trovato nella query AI', [
-            'query' => $sqlQuery
+            'query' => $sqlQuery,
         ]);
-        
+
         return null;
     }
 
@@ -1430,58 +1429,61 @@ class VertexAiController extends Controller
                     [
                         'role' => 'user',
                         'parts' => [
-                            ['text' => $systemPrompt]
-                        ]
-                    ]
+                            ['text' => $systemPrompt],
+                        ],
+                    ],
                 ],
                 'generationConfig' => [
                     'temperature' => 0,
                     'maxOutputTokens' => 200,
                     'candidateCount' => 1,
-                ]
+                ],
             ];
 
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->accessToken,
+                'Authorization' => 'Bearer '.$this->accessToken,
                 'Content-Type' => 'application/json',
             ])->post($endpoint, $requestBody);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('Errore nella chiamata a Vertex AI per extractProjectIdFromPrompt', [
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return null;
             }
 
             $responseData = $response->json();
             $aiText = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? null;
 
-            if (!$aiText) {
+            if (! $aiText) {
                 Log::warning('Nessuna risposta dall\'AI per extractProjectIdFromPrompt');
+
                 return null;
             }
 
             // Pulisce la risposta
             $aiText = trim($aiText);
-            
+
             Log::info('Risposta AI per extractProjectIdFromPrompt', [
                 'ai_text' => $aiText,
-                'prompt' => $userPrompt
+                'prompt' => $userPrompt,
             ]);
 
             // Caso 1: NONE - nessun progetto trovato
             if (strtoupper($aiText) === 'NONE') {
                 Log::info('Nessun progetto specificato nel prompt', [
-                    'prompt' => $userPrompt
+                    'prompt' => $userPrompt,
                 ]);
+
                 return null;
             }
 
             // Caso 2: ID:numero (anche se manca il numero, proviamo a estrarre dal prompt originale)
             if (preg_match('/ID:(\d+)/i', $aiText, $matches)) {
                 $projectId = (int) $matches[1];
-                
+
                 // Verifica che il progetto esista ed è effettivamente un progetto
                 $isProject = DB::table('tickets')
                     ->join('ticket_types', 'tickets.type_id', '=', 'ticket_types.id')
@@ -1492,22 +1494,24 @@ class VertexAiController extends Controller
                 if ($isProject) {
                     Log::info('ID progetto estratto dal prompt tramite AI', [
                         'project_id' => $projectId,
-                        'prompt' => $userPrompt
+                        'prompt' => $userPrompt,
                     ]);
+
                     return $projectId;
                 } else {
                     Log::warning('Il ticket specificato non esiste o non è un progetto', [
                         'ticket_id' => $projectId,
-                        'prompt' => $userPrompt
+                        'prompt' => $userPrompt,
                     ]);
+
                     return null;
                 }
             }
-            
+
             // Caso 2b: Se l'AI ha risposto solo "ID:" senza numero, prova estrazione diretta dal prompt
             if (preg_match('/^ID:\s*$/i', $aiText) && preg_match('/\b(?:id|progetto)\s*(\d+)\b/i', $userPrompt, $matches)) {
                 $projectId = (int) $matches[1];
-                
+
                 // Verifica che il progetto esista ed è effettivamente un progetto
                 $isProject = DB::table('tickets')
                     ->join('ticket_types', 'tickets.type_id', '=', 'ticket_types.id')
@@ -1519,14 +1523,16 @@ class VertexAiController extends Controller
                     Log::info('ID progetto estratto dal prompt tramite fallback regex', [
                         'project_id' => $projectId,
                         'prompt' => $userPrompt,
-                        'ai_text' => $aiText
+                        'ai_text' => $aiText,
                     ]);
+
                     return $projectId;
                 } else {
                     Log::warning('Il ticket specificato (fallback) non esiste o non è un progetto', [
                         'ticket_id' => $projectId,
-                        'prompt' => $userPrompt
+                        'prompt' => $userPrompt,
                     ]);
+
                     return null;
                 }
             }
@@ -1534,7 +1540,7 @@ class VertexAiController extends Controller
             // Caso 3: NAME:nome
             if (preg_match('/^NAME:(.+)$/i', $aiText, $matches)) {
                 $projectName = trim($matches[1]);
-                
+
                 // Cerca il progetto per nome nella tabella tickets
                 $project = DB::table('tickets')
                     ->join('ticket_types', 'tickets.type_id', '=', 'ticket_types.id')
@@ -1545,18 +1551,20 @@ class VertexAiController extends Controller
 
                 if ($project) {
                     $projectId = (int) $project->id;
-                    
+
                     Log::info('ID progetto estratto dal prompt tramite nome', [
                         'project_id' => $projectId,
                         'project_name' => $projectName,
-                        'prompt' => $userPrompt
+                        'prompt' => $userPrompt,
                     ]);
+
                     return $projectId;
                 } else {
                     Log::warning('Progetto non trovato con il nome specificato', [
                         'project_name' => $projectName,
-                        'prompt' => $userPrompt
+                        'prompt' => $userPrompt,
                     ]);
+
                     return null;
                 }
             }
@@ -1564,21 +1572,21 @@ class VertexAiController extends Controller
             // Risposta non riconosciuta
             Log::warning('Risposta AI non riconosciuta per extractProjectIdFromPrompt', [
                 'ai_response' => $aiText,
-                'prompt' => $userPrompt
+                'prompt' => $userPrompt,
             ]);
+
             return null;
 
         } catch (Exception $e) {
             Log::error('Errore in extractProjectIdFromPrompt', [
                 'error' => $e->getMessage(),
                 'prompt' => $userPrompt,
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return null;
         }
     }
-
-    
 
     /**
      * Estrae le date di inizio e fine dal prompt o dalla query SQL.
@@ -1608,9 +1616,9 @@ class VertexAiController extends Controller
                 Log::debug('Pattern date matched', [
                     'pattern' => $pattern,
                     'matches' => $matches,
-                    'prompt' => $prompt
+                    'prompt' => $prompt,
                 ]);
-                
+
                 // Determina il formato in base al pattern
                 if (strpos($pattern, 'YYYY') !== false) {
                     // Formato YYYY-MM-DD
@@ -1625,16 +1633,16 @@ class VertexAiController extends Controller
                 break;
             }
         }
-        
+
         Log::debug('extractDatesFromPrompt result', [
             'dateFound' => $dateFound,
             'startDate' => $startDate,
             'endDate' => $endDate,
-            'prompt' => $prompt
+            'prompt' => $prompt,
         ]);
 
         // Se non trovate date esplicite, cerca periodi relativi
-        if (!$dateFound && (!$startDate || !$endDate)) {
+        if (! $dateFound && (! $startDate || ! $endDate)) {
             $now = \Carbon\Carbon::now();
 
             // Ultimo mese / last month
@@ -1644,7 +1652,7 @@ class VertexAiController extends Controller
             }
             // Ultimi X giorni
             elseif (preg_match('/ultim[oi]\s+(\d+)\s+giorni?|last\s+(\d+)\s+days?/i', $prompt, $matches)) {
-                $days = (int)($matches[1] ?? $matches[2]);
+                $days = (int) ($matches[1] ?? $matches[2]);
                 $startDate = $now->copy()->subDays($days)->format('Y-m-d');
                 $endDate = $now->format('Y-m-d');
             }
@@ -1670,7 +1678,7 @@ class VertexAiController extends Controller
                     'dicembre' => 12, 'dic' => 12, 'december' => 12,
                 ];
                 $month = $monthMap[strtolower($matches[1])] ?? null;
-                $year = (int)$matches[2];
+                $year = (int) $matches[2];
                 if ($month) {
                     $date = \Carbon\Carbon::create($year, $month, 1);
                     $startDate = $date->copy()->startOfMonth()->format('Y-m-d');
@@ -1679,14 +1687,14 @@ class VertexAiController extends Controller
             }
             // Anno specifico: 2024, anno 2024, year 2024 (solo se non c'è uno slash/dash prima)
             elseif (preg_match('/(?:anno|year)\s+(\d{4})|^(\d{4})$/i', $prompt, $matches)) {
-                $year = (int)($matches[1] ?? $matches[2]);
+                $year = (int) ($matches[1] ?? $matches[2]);
                 $startDate = \Carbon\Carbon::create($year, 1, 1)->format('Y-m-d');
                 $endDate = \Carbon\Carbon::create($year, 12, 31)->format('Y-m-d');
             }
         }
 
         // Fallback: cerca date nella query SQL
-        if ((!$startDate || !$endDate) && $sqlQuery) {
+        if ((! $startDate || ! $endDate) && $sqlQuery) {
             // Pattern per created_at >= 'YYYY-MM-DD' AND created_at <= 'YYYY-MM-DD'
             if (preg_match('/created_at\s*>=\s*[\'"](\d{4}-\d{2}-\d{2})[\'"].*created_at\s*<=\s*[\'"](\d{4}-\d{2}-\d{2})[\'\"]/i', $sqlQuery, $matches)) {
                 $startDate = $matches[1];
@@ -1711,4 +1719,3 @@ class VertexAiController extends Controller
         ];
     }
 }
-

@@ -319,7 +319,6 @@ class TicketController extends Controller
                 'unread_mess_for_adm' => $user['is_admin'] == 1 ? 0 : 1,
                 'unread_mess_for_usr' => $user['is_admin'] == 1 ? 1 : 0,
                 'source' => $user['is_admin'] == 1 ? ($request->source ?? null) : 'platform',
-                'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
                 'is_billable' => $ticketType['expected_is_billable'],
                 'referer_it_id' => $request->referer_it ?? null,
                 'referer_id' => $request->referer ?? null,
@@ -558,7 +557,6 @@ class TicketController extends Controller
                 'unread_mess_for_adm' => $user['is_admin'] == 1 ? 0 : 1,
                 'unread_mess_for_usr' => $user['is_admin'] == 1 ? 1 : 0,
                 'source' => $user['is_admin'] == 1 ? ($masterTicket->source ?? null) : 'platform',
-                'is_user_error' => 1, // is_user_error viene usato per la responsabilità del dato e di default è assegnata al cliente.
                 'is_billable' => $ticketType['expected_is_billable'],
                 'referer_it_id' => $masterTicket->referer_it_id ?? null,
                 'referer_id' => $masterTicket->referer_id ?? null,
@@ -1414,10 +1412,8 @@ class TicketController extends Controller
     public function getTicketBlame(Ticket $ticket)
     {
         return response([
-            'is_user_error' => $ticket['is_user_error'],
             'is_form_correct' => $ticket['is_form_correct'],
             'was_user_self_sufficient' => $ticket['was_user_self_sufficient'],
-            'is_user_error_problem' => $ticket['is_user_error_problem'],
             'ticket_cause_id' => $ticket['ticket_cause_id'],
         ], 200);
     }
@@ -1425,10 +1421,8 @@ class TicketController extends Controller
     public function updateTicketBlame(Ticket $ticket, Request $request)
     {
         $fields = $request->validate([
-            'is_user_error' => 'required|boolean',
             'was_user_self_sufficient' => 'required|boolean',
             'is_form_correct' => 'required|boolean',
-            'is_user_error_problem' => 'boolean',
             'ticket_cause_id' => 'nullable|exists:ticket_causes,id',
         ]);
 
@@ -1449,10 +1443,6 @@ class TicketController extends Controller
             $propertyText = '';
             $newValue = '';
             switch ($key) {
-                case 'is_user_error':
-                    $propertyText = 'Responsabilità del dato assegnata a: ';
-                    $newValue = $value ? 'Cliente' : 'Supporto';
-                    break;
                 case 'was_user_self_sufficient':
                     $propertyText = 'Cliente autonomo impostato su: ';
                     $newValue = $value ? 'Si' : 'No';
@@ -1460,10 +1450,6 @@ class TicketController extends Controller
                 case 'is_form_correct':
                     $propertyText = 'Form corretto impostato su: ';
                     $newValue = $value ? 'Si' : 'No';
-                    break;
-                case 'is_user_error_problem':
-                    $propertyText = 'Responsabilità del problema assegnata a: ';
-                    $newValue = $value ? 'Cliente' : 'Supporto';
                     break;
                 case 'ticket_cause_id':
                     $propertyText = 'Causa del ticket impostata su: ';
@@ -1613,7 +1599,6 @@ class TicketController extends Controller
             'isRejected' => 'required|boolean',
             'no_user_response' => 'boolean',
             'ticket_cause_id' => 'required|exists:ticket_causes,id',
-            'is_user_error_problem' => 'sometimes|boolean',
             'is_billable' => 'sometimes|nullable|boolean',
             'billable_value_cause_id' => 'sometimes|nullable|exists:billable_value_causes,id',
             'is_billed' => 'sometimes|nullable|boolean',
@@ -1715,7 +1700,6 @@ class TicketController extends Controller
                 'is_rejected' => $request->isRejected,
                 'no_user_response' => $fields['no_user_response'] ?? false,
                 'ticket_cause_id' => $fields['ticket_cause_id'],
-                'is_user_error_problem' => $fields['is_user_error_problem'] ?? $ticket->is_user_error_problem,
                 'is_billable' => array_key_exists('is_billable', $fields) ? $fields['is_billable'] : $ticket->is_billable,
                 'billable_value_cause_id' => array_key_exists('billable_value_cause_id', $fields) ? $fields['billable_value_cause_id'] : $ticket->billable_value_cause_id,
                 'is_billed' => array_key_exists('is_billed', $fields) ? $fields['is_billed'] : $ticket->is_billed,
@@ -3570,7 +3554,7 @@ class TicketController extends Controller
         // Nasconde i dati per gli admin se l'utente non è admin
         if ($user['is_admin'] != 1) {
             $ticket->setRelation('status_updates', null);
-            $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+            $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
         }
 
         $ticket['is_form_correct'] = $ticket->is_form_correct !== null ? $ticket->is_form_correct : 2;
@@ -3748,7 +3732,7 @@ class TicketController extends Controller
                 if ($user['is_admin'] != 1) {
 
                     $ticket->setRelation('status_updates', null);
-                    $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+                    $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
                 }
 
                 $ticket['messages'] = $ticket->messages()->with('user')->get();

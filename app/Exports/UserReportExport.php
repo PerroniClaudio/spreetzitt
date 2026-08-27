@@ -42,7 +42,6 @@ class UserReportExport implements FromArray
             'Modalità di lavoro',
             // "Form corretto",
             // "Cliente autonomo",
-            // "Responsabilità del dato", // nel db per ora è is_user_error perchè veniva usato in un altro modo
             // "Responsabilità del problema"
         ];
 
@@ -179,8 +178,6 @@ class UserReportExport implements FromArray
                 $workModes && $ticket->work_mode ? $workModes[$ticket->work_mode] : $ticket->work_mode,
                 // $ticket->is_form_correct ? "Si" : "No",
                 // $ticket->was_user_self_sufficient ? "Si" : "No",
-                // $ticket->is_user_error ? "Cliente" : "Supporto", // nel db per ora è is_user_error perchè veniva usato in un altro modo
-                // $ticket->ticketType->is_problem ? ($ticket->is_user_error_problem ? "Cliente" : "Supporto") : "-"
             ];
 
             $ticket_data[] = $this_ticket;

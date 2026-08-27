@@ -94,12 +94,6 @@
         <tbody>
             <tr>
                 <td style="vertical-align: top; width:50%;" class="box">
-                    <p class="box-heading"><b>Responsabilità del dato<b></p>
-                    <p>
-                        {{ $ticket->is_user_error ? 'Cliente' : 'Supporto' }}
-                    </p>
-                </td>
-                <td style="vertical-align: top; width:50%;" class="box">
                     <p class="box-heading"><b>Form corretto<b></p>
                     <p>
                         {{ $ticket->is_form_correct ? 'Si' : 'No' }}
@@ -114,14 +108,6 @@
                         {{ $ticket->was_user_self_sufficient ? 'Si' : 'No' }}
                     </p>
                 </td>
-                @if ($ticket->ticketType->category->is_problem)
-                    <td style="vertical-align: top; width:50%;" class="box">
-                        <p class="box-heading"><b>Responsabilità del problema<b></p>
-                        <p>
-                            {{ $ticket->is_user_error_problem ? 'Cliente' : 'Supporto' }}
-                        </p>
-                    </td>
-                @endif
             </tr>
             <tr>
                 <td style="vertical-align: top; width:50%;" class="box">

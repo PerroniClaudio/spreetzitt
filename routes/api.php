@@ -128,7 +128,6 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::post('/ticket/{ticket}/billing-info-update', [App\Http\Controllers\TicketController::class, 'updateTicketBillingInfo']);
     Route::get('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'getTicketBlame']);
     Route::post('/ticket/{ticket}/blame', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
-    Route::post('/ticket/{ticket}/blame-update', [App\Http\Controllers\TicketController::class, 'updateTicketBlame']);
     Route::post('/ticket/{ticket}/status-update', [App\Http\Controllers\TicketController::class, 'updateStatus']);
     Route::post('/ticket/{ticket}/time-update', [App\Http\Controllers\TicketController::class, 'updateTicketActualProcessingTime']);
     Route::post('/ticket/{ticket}/work-mode-update', [App\Http\Controllers\TicketController::class, 'updateTicketWorkMode']);

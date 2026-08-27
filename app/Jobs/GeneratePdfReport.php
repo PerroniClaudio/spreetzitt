@@ -2,13 +2,13 @@
 
 namespace App\Jobs;
 
+use App\Http\Controllers\VertexAiController;
 use App\Models\Company;
 use App\Models\Ticket;
 use App\Models\TicketReportPdfExport;
 use App\Models\TicketStage;
 use App\Models\TicketStatusUpdate;
 use App\Models\User;
-use App\Http\Controllers\VertexAiController;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Exception as Exception;
 use Illuminate\Bus\Queueable;
@@ -17,7 +17,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 
 class GeneratePdfReport implements ShouldQueue
@@ -38,7 +37,7 @@ class GeneratePdfReport implements ShouldQueue
     public function __construct(TicketReportPdfExport $report, bool $isRegeneration = false)
     {
         //
-        $this->report = $report;
+        $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
         $this->isRegeneration = $isRegeneration;
 
         // Aumenta il limite di memoria a 512MB per questo job
@@ -66,13 +65,13 @@ class GeneratePdfReport implements ShouldQueue
             // I progetti e i ticket a loro associati vanno esclusi da questo report.
 
             $queryTo = \Carbon\Carbon::parse($report->end_date)->endOfDay()->toDateTimeString();
-            
+
             // === RECUPERO TICKET: AI o STANDARD ===
             if ($report->is_ai_generated && $report->ai_query) {
                 // Report AI: esegue query SQL generata dall'AI e converte in Collection di Ticket.
                 // Rivalidazione sicurezza query (potrebbe essere stata modificata dopo la creazione)
-                (new VertexAiController())->validateSqlQuery($report->ai_query);
-                
+                (new VertexAiController)->validateSqlQuery($report->ai_query);
+
                 // Questa poi viene filtrata ulteriormente con Eloquent per escludere progetti e ticket chiusi prima della data di inizio
                 $ticketIds = collect(DB::select($report->ai_query))->pluck('id')->toArray();
                 $tickets = Ticket::whereIn('id', $ticketIds)
@@ -106,10 +105,10 @@ class GeneratePdfReport implements ShouldQueue
                     })
                     // Parte aggiunta per usare meno memoria (va modificato anche il resto del codice per usare questo approccio, perchè rende inutilizzabili alcuni metodi)
                     // ->select([
-                    //     'id', 'company_id', 'created_at', 'description', 'stage_id', 
+                    //     'id', 'company_id', 'created_at', 'description', 'stage_id',
                     //     'actual_processing_time', 'is_billable', 'is_billing_validated',
                     //     'work_mode', 'admin_user_id', 'master_id', 'user_id', 'source',
-                    //     'priority', 'is_user_error', 'is_form_correct', 'updated_at'
+                    //     'priority', 'is_form_correct', 'updated_at'
                     // ])
                     // ->with([
                     //     'ticketType:id,name,is_master,category_id',
@@ -197,14 +196,14 @@ class GeneratePdfReport implements ShouldQueue
                         continue;
                     }
 
-                    if($ticket->ticketType->is_scheduling && !$ticket->is_scheduling_time_approved) {
+                    if ($ticket->ticketType->is_scheduling && ! $ticket->is_scheduling_time_approved) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' è un\'attività programmata senza approvazione dei tempi.';
 
                         continue;
                     }
 
-                    if (! $ticket->actual_processing_time && !$ticket->ticketType->is_master) {
+                    if (! $ticket->actual_processing_time && ! $ticket->ticketType->is_master) {
                         $loadErrorsOnly = true;
                         $errorsString .= '- #'.$ticket->id.' non ha il tempo di lavoro.';
 
@@ -247,12 +246,12 @@ class GeneratePdfReport implements ShouldQueue
                     // CALCOLO TEMPI E CONTEGGI FATTURABILI/NO REMOTO/ON_SITE
 
                     // Le operazioni strutturate non si contano.
-                    if($ticket->ticketType->is_master == 0) {
+                    if ($ticket->ticketType->is_master == 0) {
                         // Dei ticket da includere bisogna contare separatamente quanti sono quelli fatturabili e quelli no, oltre ai tempi di gestione.
                         if ($ticket->is_billable == 0) {
                             // Anche qui vogliamo escludere i collegati ad attività strutturata? per ora non faccio niente, poi si vedrà
                             if ($ticket->work_mode == 'on_site') {
-                                if($ticket->scheduling_id != null) {
+                                if ($ticket->scheduling_id != null) {
                                     // Ticket collegati ad attività programmata
                                     $unbillable_on_site_activity_tickets_count++;
                                     $unbillable_on_site_activity_work_time += $ticket->actual_processing_time ?? 0;
@@ -264,7 +263,7 @@ class GeneratePdfReport implements ShouldQueue
                             } elseif ($ticket->work_mode == 'remote') {
                                 // $unbillable_remote_tickets_count++;
                                 // $unbillable_remote_work_time += $ticket->actual_processing_time ?? 0;
-                                if($ticket->scheduling_id != null) {
+                                if ($ticket->scheduling_id != null) {
                                     // Ticket collegati ad attività programmata
                                     $unbillable_remote_activity_tickets_count++;
                                     $unbillable_remote_activity_work_time += $ticket->actual_processing_time ?? 0;
@@ -347,12 +346,12 @@ class GeneratePdfReport implements ShouldQueue
                                             'company_asset_number' => $hardware->company_asset_number,
                                             'support_label' => $hardware->support_label,
                                         ];
-                                        
-                                            // $hardware->id.' ('.$hardware->make.' '
-                                            // .$hardware->model.' '.$hardware->serial_number
-                                            // .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
-                                            // .($hardware->support_label ? ' '.$hardware->support_label : '')
-                                            // .')';
+
+                                        // $hardware->id.' ('.$hardware->make.' '
+                                        // .$hardware->model.' '.$hardware->serial_number
+                                        // .($hardware->company_asset_number ? ' '.$hardware->company_asset_number : '')
+                                        // .($hardware->support_label ? ' '.$hardware->support_label : '')
+                                        // .')';
                                     } else {
                                         $webform_data->$key[$index] = [
                                             'id' => $hardware_id,
@@ -407,7 +406,7 @@ class GeneratePdfReport implements ShouldQueue
                     if ($user ? $user['is_admin'] != 1 : $report->is_user_generated == 1) {
 
                         $ticket->setRelation('status_updates', null);
-                        $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'is_user_error', 'actual_processing_time']);
+                        $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
                     }
 
                     $ticket['messages'] = $ticket->messages()->with('user')->get();
@@ -502,7 +501,7 @@ class GeneratePdfReport implements ShouldQueue
 
             $tickets_average_time_to_take = collect($tickets_data)
                 ->pluck('data.time_to_take')
-                ->filter(fn($time) => is_numeric($time))
+                ->filter(fn ($time) => is_numeric($time))
                 ->avg() ?? 0;
 
             foreach ($tickets_data as $ticket) {
@@ -692,11 +691,11 @@ class GeneratePdfReport implements ShouldQueue
                     'incident_request' => $ticket['data']['ticketType']['category']['is_problem'] == 1 ? 'Incident' : 'Request',
                     'category' => $ticket['data']['ticketType']['category']['name'],
                     'type' => $ticket['data']['ticketType']['name'],
-                    "opened_by_initials" => $ticket['data']['user']['is_admin'] == 1
-                        ? "SUP"
+                    'opened_by_initials' => $ticket['data']['user']['is_admin'] == 1
+                        ? 'SUP'
                         : (
-                            (!empty($ticket['data']['user']['name']) && is_string($ticket['data']['user']['name']) ? strtoupper($ticket['data']['user']['name'][0]) . ". " : "") .
-                              (!empty($ticket['data']['user']['surname']) && is_string($ticket['data']['user']['surname']) ? strtoupper($ticket['data']['user']['surname'][0]) . "." : "")
+                            (! empty($ticket['data']['user']['name']) && is_string($ticket['data']['user']['name']) ? strtoupper($ticket['data']['user']['name'][0]).'. ' : '').
+                              (! empty($ticket['data']['user']['surname']) && is_string($ticket['data']['user']['surname']) ? strtoupper($ticket['data']['user']['surname'][0]).'.' : '')
                         ),
                     'opened_by' => $ticket['data']['user']['is_admin'] == 1 ? 'Supporto' : $ticket['data']['user']['name'].' '.$ticket['data']['user']['surname'],
                     'opened_at' => \Carbon\Carbon::createFromFormat('Y-m-d H:i:s', $ticket['data']['created_at'])->format('d/m/Y H:i'),
@@ -720,7 +719,7 @@ class GeneratePdfReport implements ShouldQueue
                     'scheduled_duration' => $ticket['data']['scheduled_duration'],
                     'handler_full_name' => $handlerFullName,
                     'work_mode' => $ticket['data']['work_mode'],
-                    'source' => $ticketSources[$ticket['data']['source']] ?? "N/A",
+                    'source' => $ticketSources[$ticket['data']['source']] ?? 'N/A',
                     'slaves_actual_processing_time_sum' => $ticket['data']['ticketType']['is_master'] ? Ticket::where('master_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
                     'activities_actual_processing_time_sum' => $ticket['data']['ticketType']['is_scheduling'] ? Ticket::where('scheduling_id', $ticket['data']['id'])->sum('actual_processing_time') : null,
                 ];
@@ -1150,12 +1149,12 @@ class GeneratePdfReport implements ShouldQueue
             foreach ($ticketSources as $key => $label) {
                 $source_data[] = [
                     'label' => $label,
-                    'value' => $ticket_by_source[$key] ?? 0
+                    'value' => $ticket_by_source[$key] ?? 0,
                 ];
             }
 
             // Ordina in base a 'value' decrescente
-            usort($source_data, function($a, $b) {
+            usort($source_data, function ($a, $b) {
                 return $b['value'] <=> $a['value'];
             });
 
@@ -1548,7 +1547,6 @@ class GeneratePdfReport implements ShouldQueue
             //     ],
             // ];
 
-
             $tickets_sla_url = $charts_base_url.urlencode($tickets_sla_data);
 
             // 11 - Form non corretto
@@ -1742,7 +1740,7 @@ class GeneratePdfReport implements ShouldQueue
                 'title' => 'Esportazione tickets',
                 'date_from' => $report->start_date ? \Carbon\Carbon::createFromFormat('Y-m-d', $report->start_date) : now()->subMonth(),
                 'date_to' => $report->end_date ? \Carbon\Carbon::createFromFormat('Y-m-d', $report->end_date) : now(),
-                'company' => $company ? $company : (object)['name' => 'Azienda non specificata'],
+                'company' => $company ? $company : (object) ['name' => 'Azienda non specificata'],
                 'request_number' => $total_requests,
                 'incident_number' => $total_incidents,
                 'opened_tickets_count' => $opened_tickets_count,
@@ -1826,8 +1824,8 @@ class GeneratePdfReport implements ShouldQueue
             if ($this->attempts() >= $this->tries) {
                 $this->report->is_failed = true;
 
-                $this->report->error_message = 'Error generating the report at ' . now() .
-                    ' (line ' . $errorLine . ' in ' . $errorFile . '). ' . $shortenedMessage;
+                $this->report->error_message = 'Error generating the report at '.now().
+                    ' (line '.$errorLine.' in '.$errorFile.'). '.$shortenedMessage;
 
                 $this->report->save();
             } else {
