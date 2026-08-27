@@ -1418,6 +1418,19 @@ class TicketController extends Controller
         ], 200);
     }
 
+    public function getTicketCause(Ticket $ticket, Request $request)
+    {
+        if (! $this->canViewTicket($request->user(), $ticket)) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        return response([
+            'cause' => $ticket->ticketCause,
+        ], 200);
+    }
+
     public function updateTicketBlame(Ticket $ticket, Request $request)
     {
         $fields = $request->validate([

@@ -119,7 +119,7 @@ class Ticket extends Model
 
     public function ticketCause()
     {
-        return $this->belongsTo(TicketCause::class);
+        return $this->belongsTo(TicketCause::class)->withTrashed();
     }
 
     /* get the handler */
