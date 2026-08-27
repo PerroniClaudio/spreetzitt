@@ -61,6 +61,7 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     });
     Route::post('/user/{id}/companies', [App\Http\Controllers\UserController::class, 'addCompaniesForUser']);
     Route::post('/onboarding', [App\Http\Controllers\UserController::class, 'onboarding']);
+    Route::patch('/user/preferences', [App\Http\Controllers\UserController::class, 'updatePreferences']);
     Route::patch('/user/profile', [App\Http\Controllers\UserController::class, 'updateProfile']);
     Route::patch('/user/password', [App\Http\Controllers\UserController::class, 'passwordUpdate']);
     Route::get('/user/all', [App\Http\Controllers\UserController::class, 'allUsers']);

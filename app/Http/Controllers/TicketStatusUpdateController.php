@@ -11,9 +11,18 @@ class TicketStatusUpdateController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index($id)
+    public function index($id, Request $request)
     {
         $ticketStatusUpdates = TicketStatusUpdate::where('ticket_id', $id)->with(['user'])->get();
+
+        if (! $request->user()->is_admin) {
+            foreach ($ticketStatusUpdates as $ticketStatusUpdate) {
+                if ($ticketStatusUpdate->user->is_admin) {
+                    $ticketStatusUpdate->makeHidden(['user_id']);
+                    $ticketStatusUpdate->user->makeHidden(['id', 'name', 'surname', 'email']);
+                }
+            }
+        }
 
         return response([
             'statusUpdates' => $ticketStatusUpdates,

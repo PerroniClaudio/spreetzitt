@@ -38,6 +38,7 @@ class User extends Authenticatable
         'email_verified_at',
         'can_open_scheduling',
         'can_open_project',
+        'support_author_display',
     ];
 
     /**
@@ -120,7 +121,7 @@ class User extends Authenticatable
 
         return $tickets;
     }
-    
+
     /**
      * get user's tickets as referer IT (seen in the webform message)
      */
@@ -282,15 +283,16 @@ class User extends Authenticatable
      */
     public function getUserLevel()
     {
-        if (!!$this->is_superadmin) {
+        if ((bool) $this->is_superadmin) {
             return 'superadmin';
         }
-        if (!!$this->is_admin) {
+        if ((bool) $this->is_admin) {
             return 'admin';
         }
-        if (!!$this->is_company_admin) {
+        if ((bool) $this->is_company_admin) {
             return 'company_admin';
         }
+
         return 'user';
     }
 
@@ -309,7 +311,7 @@ class User extends Authenticatable
     {
         return config("permissions.access_levels.{$level}", 999);
     }
-    
+
     /**
      * Ottiene il valore numerico del livello di accesso dell'utente
      */

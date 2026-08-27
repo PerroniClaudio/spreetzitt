@@ -41,10 +41,8 @@ class TicketMessageController extends Controller
         if (! $request->user()->is_admin) {
             foreach ($tickemessages as $message) {
                 if ($message->user->is_admin) {
-                    $message->user->id = 1;
-                    $message->user->name = 'Supporto';
-                    $message->user->surname = '';
-                    $message->user->email = 'Supporto';
+                    $message->makeHidden(['user_id']);
+                    $message->user->makeHidden(['id', 'name', 'surname', 'email']);
                 }
             }
         }

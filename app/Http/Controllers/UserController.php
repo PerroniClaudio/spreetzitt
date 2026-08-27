@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -132,6 +133,27 @@ class UserController extends Controller
 
         return response([
             'user' => $user,
+        ], 200);
+    }
+
+    public function updatePreferences(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user->is_admin) {
+            return response([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+
+        $fields = $request->validate([
+            'support_author_display' => ['required', Rule::in(['id', 'full_name'])],
+        ]);
+
+        $user->update($fields);
+
+        return response([
+            'user' => $user->fresh(),
         ], 200);
     }
 

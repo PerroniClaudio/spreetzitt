@@ -17,7 +17,7 @@ class TicketLogController extends Controller
         $selectedCompanyId = $this->getSelectedCompanyId($user);
 
         // Controllo autorizzazioni
-        if ($user['is_admin'] != 1 && 
+        if ($user['is_admin'] != 1 &&
             (! $selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
             return response([
                 'message' => 'Unauthorized',
@@ -33,6 +33,13 @@ class TicketLogController extends Controller
         // Filtra i log se l'utente non è admin
         if ($user['is_admin'] != 1) {
             $ticketLogs = $ticketLogs->where('show_to_user', true);
+
+            foreach ($ticketLogs as $ticketLog) {
+                if ($ticketLog->user->is_admin) {
+                    $ticketLog->makeHidden(['user_id']);
+                    $ticketLog->user->makeHidden(['id', 'name', 'surname', 'email']);
+                }
+            }
         }
 
         return response([
@@ -53,7 +60,7 @@ class TicketLogController extends Controller
 
         // Verifica che l'utente possa accedere a questo log
         $ticketCompanyIds = $ticketLog->tickets->pluck('company_id')->unique();
-        
+
         if ($user['is_admin'] != 1) {
             // L'utente deve appartenere a una delle aziende dei ticket collegati
             if (! $selectedCompanyId || ! $ticketCompanyIds->contains($selectedCompanyId)) {
@@ -67,6 +74,11 @@ class TicketLogController extends Controller
                 return response([
                     'message' => 'Log not visible to users',
                 ], 403);
+            }
+
+            if ($ticketLog->user->is_admin) {
+                $ticketLog->makeHidden(['user_id']);
+                $ticketLog->user->makeHidden(['id', 'name', 'surname', 'email']);
             }
         }
 

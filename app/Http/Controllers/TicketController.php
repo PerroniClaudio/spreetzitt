@@ -2318,7 +2318,7 @@ class TicketController extends Controller
             ]);
             $slaveTicket->user_full_name =
                 $slaveTicket->user->is_admin == 1
-                ? ('Supporto'.($user['is_admin'] != 1 ? ' - '.$slaveTicket->user->id : ''))
+                ? $this->supportUserDisplayName($slaveTicket->user, $user)
                 : ($slaveTicket->user->surname
                     ? $slaveTicket->user->surname.' '.strtoupper(substr($slaveTicket->user->name, 0, 1)).'.'
                     : $slaveTicket->user->name
@@ -2454,7 +2454,7 @@ class TicketController extends Controller
         $schedulingTickets->each(function ($schedulingTicket) use ($user) {
             $schedulingTicket->user_full_name =
                 $schedulingTicket->user->is_admin == 1
-                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$schedulingTicket->user->id : ''))
+                ? $this->supportUserDisplayName($schedulingTicket->user, $user)
                 : ($schedulingTicket->user->surname
                     ? $schedulingTicket->user->surname.' '.strtoupper(substr($schedulingTicket->user->name, 0, 1)).'.'
                     : $schedulingTicket->user->name
@@ -2796,7 +2796,7 @@ class TicketController extends Controller
             ]);
             $connectedTicket->user_full_name =
                 $connectedTicket->user->is_admin == 1
-                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$connectedTicket->user->id : ''))
+                ? $this->supportUserDisplayName($connectedTicket->user, $user)
                 : ($connectedTicket->user->surname
                     ? $connectedTicket->user->surname.' '.strtoupper(substr($connectedTicket->user->name, 0, 1)).'.'
                     : $connectedTicket->user->name
@@ -2996,7 +2996,7 @@ class TicketController extends Controller
         $projectTickets->each(function ($projectTicket) use ($user) {
             $projectTicket->user_full_name =
                 $projectTicket->user->is_admin == 1
-                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$projectTicket->user->id : ''))
+                ? $this->supportUserDisplayName($projectTicket->user, $user)
                 : ($projectTicket->user->surname
                     ? $projectTicket->user->surname.' '.strtoupper(substr($projectTicket->user->name, 0, 1)).'.'
                     : $projectTicket->user->name
@@ -3361,7 +3361,7 @@ class TicketController extends Controller
             ]);
             $connectedTicket->user_full_name =
                 $connectedTicket->user->is_admin == 1
-                ? ('Supporto'.($user['is_admin'] == 1 ? ' - '.$connectedTicket->user->id : ''))
+                ? $this->supportUserDisplayName($connectedTicket->user, $user)
                 : ($connectedTicket->user->surname
                     ? $connectedTicket->user->surname.' '.strtoupper(substr($connectedTicket->user->name, 0, 1)).'.'
                     : $connectedTicket->user->name
@@ -4181,11 +4181,21 @@ class TicketController extends Controller
     private function maskSupportUserIfNeeded($user, $ticket): void
     {
         if (! $user->is_admin && $ticket->user->is_admin) {
-            $ticket->user->id = 1;
-            $ticket->user->name = 'Supporto';
-            $ticket->user->surname = '';
-            $ticket->user->email = 'Supporto';
+            $ticket->user->makeHidden(['id', 'name', 'surname', 'email']);
         }
+    }
+
+    private function supportUserDisplayName(User $supportUser, User $viewer): string
+    {
+        if (! $viewer->is_admin) {
+            return 'Supporto';
+        }
+
+        if ($viewer->support_author_display === 'full_name') {
+            return trim($supportUser->name.' '.($supportUser->surname ?? '')) ?: 'Supporto';
+        }
+
+        return 'Supporto - '.$supportUser->id;
     }
 
     /**
