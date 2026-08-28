@@ -478,8 +478,8 @@ class GeneratePdfReport implements ShouldQueue
             $sla_data = [
                 'less_than_30_minutes' => 0,
                 'less_than_1_hour' => 0,
-                'less_than_2_hours' => 0,
-                'more_than_2_hours' => 0,
+                'less_than_4_hours' => 0,
+                'more_than_4_hours' => 0,
             ];
 
             $dates_are_more_than_one_month_apart = \Carbon\Carbon::createFromFormat('Y-m-d', $report->start_date)->diffInMonths(\Carbon\Carbon::createFromFormat('Y-m-d', $report->end_date)) > 0;
@@ -626,10 +626,10 @@ class GeneratePdfReport implements ShouldQueue
                     $sla_data['less_than_30_minutes']++;
                 } elseif ($elapsed_minutes < 60) {
                     $sla_data['less_than_1_hour']++;
-                } elseif ($elapsed_minutes < 120) {
-                    $sla_data['less_than_2_hours']++;
+                } elseif ($elapsed_minutes < 240) {
+                    $sla_data['less_than_4_hours']++;
                 } else {
-                    $sla_data['more_than_2_hours']++;
+                    $sla_data['more_than_4_hours']++;
                 }
 
                 // Stato attuale del ticket
@@ -1444,15 +1444,15 @@ class GeneratePdfReport implements ShouldQueue
             $sla_total = array_sum([
                 $sla_data['less_than_30_minutes'],
                 $sla_data['less_than_1_hour'],
-                $sla_data['less_than_2_hours'],
-                $sla_data['more_than_2_hours'],
+                $sla_data['less_than_4_hours'],
+                $sla_data['more_than_4_hours'],
             ]) ?: 1;
 
             $sla_percentages = [
                 round($sla_data['less_than_30_minutes'] / $sla_total * 100, 1),
                 round($sla_data['less_than_1_hour'] / $sla_total * 100, 1),
-                round($sla_data['less_than_2_hours'] / $sla_total * 100, 1),
-                round($sla_data['more_than_2_hours'] / $sla_total * 100, 1),
+                round($sla_data['less_than_4_hours'] / $sla_total * 100, 1),
+                round($sla_data['more_than_4_hours'] / $sla_total * 100, 1),
             ];
 
             // Converte i valori in stringa JSON per l'inserimento nel chart config
@@ -1462,11 +1462,11 @@ class GeneratePdfReport implements ShouldQueue
                 {
                     "type": "horizontalBar",
                     "data": {
-                        "labels": ["Meno di 30 minuti", "Meno di 1 ora", "Meno di 2 ore", "Più di 2 ore"],
+                        "labels": ["Meno di 30 minuti", "Meno di 1 ora", "Meno di 4 ore", "Più di 4 ore"],
                         "datasets": [{
                         "label": "Percentuale",
                         "data": $sla_data_json,
-                        "backgroundColor": ["#28a745", "#ffc107", "#fd7e14", "#dc3545"],
+                        "backgroundColor": ["#198754", "#52b788", "#95d5b2", "#dc3545"],
                         "maxBarThickness": 40
                         }]
                     },
@@ -1510,15 +1510,15 @@ class GeneratePdfReport implements ShouldQueue
             //         'labels' => [
             //             'Meno di 30 minuti',
             //             'Meno di 1 ora',
-            //             'Meno di 2 ore',
-            //             'Più di 2 ore',
+            //             'Meno di 4 ore',
+            //             'Più di 4 ore',
             //         ],
             //         'datasets' => [[
             //             'data' => [
             //                 $sla_data['less_than_30_minutes'],
             //                 $sla_data['less_than_1_hour'],
-            //                 $sla_data['less_than_2_hours'],
-            //                 $sla_data['more_than_2_hours'],
+            //                 $sla_data['less_than_4_hours'],
+            //                 $sla_data['more_than_4_hours'],
             //             ],
             //             'backgroundColor' => $this->getColorShades(4, true, true, false),
             //             'maxBarThickness' => 40,
