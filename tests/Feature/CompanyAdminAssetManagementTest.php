@@ -173,6 +173,58 @@ it('allows a company admin to create hardware only for assignable users in their
         ->assertForbidden();
 });
 
+it('keeps hardware assignments unchanged when updating only hardware data', function () {
+    $company = Company::factory()->create();
+    $admin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $responsibleUser = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $assignedUser = User::factory()->create(['password' => Hash::make('password')]);
+
+    $responsibleUser->companies()->attach($company);
+    $assignedUser->companies()->attach($company);
+
+    $hardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'DATA-UPDATE-'.uniqid(),
+        'company_asset_number' => 'ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+
+    $hardware->users()->attach($assignedUser->id, [
+        'created_by' => $admin->id,
+        'responsible_user_id' => $responsibleUser->id,
+    ]);
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/hardware/{$hardware->id}", [
+        'make' => 'Acme Updated',
+        'model' => $hardware->model,
+        'serial_number' => $hardware->serial_number,
+        'is_accessory' => false,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => $hardware->status_at_purchase,
+        'status' => $hardware->status,
+        'position' => $hardware->position,
+        'company_asset_number' => $hardware->company_asset_number,
+        'support_label' => $hardware->support_label,
+        'purchase_date' => $hardware->purchase_date,
+        'hardware_type_id' => $hardware->hardware_type_id,
+        'ownership_type' => $hardware->ownership_type,
+        'ownership_type_note' => $hardware->ownership_type_note,
+        'notes' => $hardware->notes,
+    ])->assertCreated();
+
+    $assignedHardwareUser = $hardware->fresh()->users()->whereKey($assignedUser->id)->first();
+
+    expect($assignedHardwareUser)->not->toBeNull()
+        ->and($assignedHardwareUser->pivot->responsible_user_id)->toBe($responsibleUser->id);
+});
+
 it('allows a company admin to view trashed assets only for their company', function () {
     $company = Company::factory()->create();
     $otherCompany = Company::factory()->create();

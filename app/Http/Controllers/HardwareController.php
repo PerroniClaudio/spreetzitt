@@ -531,7 +531,9 @@ class HardwareController extends Controller
             }
         }
 
-        if (! $hardware->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
+        $hasUsers = array_key_exists('users', $data);
+
+        if ($hasUsers && ! $hardware->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
             return response([
                 'message' => 'Exclusive use hardware can be associated to no more than one user. Hardware not updated.',
             ], 400);
@@ -564,27 +566,29 @@ class HardwareController extends Controller
         // Non so perchè ma non crea i log in automatico, quindi devo aggiungerli manualmente
         // $hardware->users()->attach($data['users']);
 
-        $usersToRemove = $hardware->users->pluck('id')->diff($users);
-        $usersToAdd = collect($users)->diff($hardware->users->pluck('id'));
+        if ($hasUsers) {
+            $usersToRemove = $hardware->users->pluck('id')->diff($users);
+            $usersToAdd = collect($users)->diff($hardware->users->pluck('id'));
 
-        foreach ($usersToAdd as $userId) {
-            $hardware->users()->attach($userId, [
-                'created_by' => $authUser->id,
-                'responsible_user_id' => $responsibleUserId,
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ]);
-        }
+            foreach ($usersToAdd as $userId) {
+                $hardware->users()->attach($userId, [
+                    'created_by' => $authUser->id,
+                    'responsible_user_id' => $responsibleUserId,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
 
-        if ($hasResponsibleUserId) {
-            $hardware->users()->updateExistingPivot($users, [
-                'responsible_user_id' => $responsibleUserId,
-                'updated_at' => Carbon::now(),
-            ]);
-        }
+            if ($hasResponsibleUserId) {
+                $hardware->users()->updateExistingPivot($users, [
+                    'responsible_user_id' => $responsibleUserId,
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
 
-        foreach ($usersToRemove as $userId) {
-            $hardware->users()->detach($userId);
+            foreach ($usersToRemove as $userId) {
+                $hardware->users()->detach($userId);
+            }
         }
 
         return response([
