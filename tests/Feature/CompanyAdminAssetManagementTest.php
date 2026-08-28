@@ -225,6 +225,55 @@ it('keeps hardware assignments unchanged when updating only hardware data', func
         ->and($assignedHardwareUser->pivot->responsible_user_id)->toBe($responsibleUser->id);
 });
 
+it('keeps software assignments unchanged when updating only software data', function () {
+    $company = Company::factory()->create();
+    $admin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $responsibleUser = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $assignedUser = User::factory()->create(['password' => Hash::make('password')]);
+
+    $responsibleUser->companies()->attach($company);
+    $assignedUser->companies()->attach($company);
+
+    $software = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Suite',
+        'company_asset_number' => 'SOFTWARE-ASSET-'.uniqid(),
+        'company_id' => $company->id,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+
+    $software->users()->attach($assignedUser->id, [
+        'created_by' => $admin->id,
+        'responsible_user_id' => $responsibleUser->id,
+    ]);
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/software/{$software->id}", [
+        'vendor' => 'Acme Updated',
+        'product_name' => $software->product_name,
+        'version' => $software->version,
+        'activation_key' => $software->activation_key,
+        'company_asset_number' => $software->company_asset_number,
+        'is_exclusive_use' => false,
+        'license_type' => $software->license_type,
+        'max_installations' => $software->max_installations,
+        'purchase_date' => $software->purchase_date,
+        'expiration_date' => $software->expiration_date,
+        'support_expiration_date' => $software->support_expiration_date,
+        'status' => $software->status,
+        'notes' => $software->notes,
+        'company_id' => $software->company_id,
+        'software_type_id' => $software->software_type_id,
+    ])->assertOk();
+
+    $assignedSoftwareUser = $software->fresh()->users()->whereKey($assignedUser->id)->first();
+
+    expect($assignedSoftwareUser)->not->toBeNull()
+        ->and($assignedSoftwareUser->pivot->responsible_user_id)->toBe($responsibleUser->id);
+});
+
 it('allows a company admin to view trashed assets only for their company', function () {
     $company = Company::factory()->create();
     $otherCompany = Company::factory()->create();

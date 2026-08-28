@@ -419,7 +419,9 @@ class SoftwareController extends Controller
             }
         }
 
-        if (! $software->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
+        $hasUsers = array_key_exists('users', $data);
+
+        if ($hasUsers && ! $software->is_exclusive_use && $data['is_exclusive_use'] && count($data['users']) > 1) {
             return response([
                 'message' => 'Exclusive use software can be associated to no more than one user. Software not updated.',
             ], 400);
@@ -449,27 +451,29 @@ class SoftwareController extends Controller
         }
 
         // Aggiorna gli utenti associati
-        $usersToRemove = $software->users->pluck('id')->diff($users);
-        $usersToAdd = collect($users)->diff($software->users->pluck('id'));
+        if ($hasUsers) {
+            $usersToRemove = $software->users->pluck('id')->diff($users);
+            $usersToAdd = collect($users)->diff($software->users->pluck('id'));
 
-        foreach ($usersToAdd as $userId) {
-            $software->users()->attach($userId, [
-                'created_by' => $authUser->id,
-                'responsible_user_id' => $responsibleUserId,
-                'created_at' => Carbon::now(),
-                'updated_at' => Carbon::now(),
-            ]);
-        }
+            foreach ($usersToAdd as $userId) {
+                $software->users()->attach($userId, [
+                    'created_by' => $authUser->id,
+                    'responsible_user_id' => $responsibleUserId,
+                    'created_at' => Carbon::now(),
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
 
-        if ($hasResponsibleUserId) {
-            $software->users()->updateExistingPivot($users, [
-                'responsible_user_id' => $responsibleUserId,
-                'updated_at' => Carbon::now(),
-            ]);
-        }
+            if ($hasResponsibleUserId) {
+                $software->users()->updateExistingPivot($users, [
+                    'responsible_user_id' => $responsibleUserId,
+                    'updated_at' => Carbon::now(),
+                ]);
+            }
 
-        foreach ($usersToRemove as $userId) {
-            $software->users()->detach($userId);
+            foreach ($usersToRemove as $userId) {
+                $software->users()->detach($userId);
+            }
         }
 
         return response([
