@@ -36,8 +36,7 @@ class GeneratePdfReport implements ShouldQueue
      */
     public function __construct(TicketReportPdfExport $report, bool $isRegeneration = false)
     {
-        //
-        $ticket->makeHidden(['admin_user_id', 'group_id', 'priority', 'actual_processing_time']);
+        $this->report = $report;
         $this->isRegeneration = $isRegeneration;
 
         // Aumenta il limite di memoria a 512MB per questo job
