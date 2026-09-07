@@ -17,11 +17,13 @@ it('allows a company admin to create hardware only for assignable users in their
     $companyAdmin = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
     $companyUser = User::factory()->create(['password' => Hash::make('password')]);
     $supportAdmin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $otherCompanyAdmin = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
     $externalUser = User::factory()->create(['password' => Hash::make('password')]);
 
     $companyAdmin->companies()->attach($company);
     $companyUser->companies()->attach($company);
     $supportAdmin->companies()->attach($company);
+    $otherCompanyAdmin->companies()->attach($otherCompany);
     $externalUser->companies()->attach($otherCompany);
     Sanctum::actingAs($companyAdmin);
 
@@ -37,12 +39,19 @@ it('allows a company admin to create hardware only for assignable users in their
         'support_label' => 'LABEL-'.uniqid(),
         'company_id' => $company->id,
         'users' => [$companyUser->id],
+        'responsible_user_id' => $companyAdmin->id,
     ];
 
     $hardwareId = $this->postJson('/api/hardware', $payload)
         ->assertCreated()
         ->assertJsonPath('hardware.company_id', $company->id)
         ->json('hardware.id');
+
+    expect(Hardware::findOrFail($hardwareId)->users()->first()->pivot->responsible_user_id)
+        ->toBe($companyAdmin->id);
+
+    $this->postJson('/api/hardware', [...$payload, 'serial_number' => 'INVALID-RESPONSIBLE-'.uniqid(), 'responsible_user_id' => $otherCompanyAdmin->id])
+        ->assertUnprocessable();
 
     $this->postJson('/api/hardware', [...$payload, 'serial_number' => 'ADMIN-'.uniqid(), 'users' => [$supportAdmin->id]])
         ->assertBadRequest();
@@ -66,12 +75,19 @@ it('allows a company admin to create hardware only for assignable users in their
         'status' => 'active',
         'company_id' => $company->id,
         'users' => [$companyUser->id],
+        'responsible_user_id' => $companyAdmin->id,
     ];
 
     $softwareId = $this->postJson('/api/software', $softwarePayload)
         ->assertCreated()
         ->assertJsonPath('software.company_id', $company->id)
         ->json('software.id');
+
+    expect(Software::findOrFail($softwareId)->users()->first()->pivot->responsible_user_id)
+        ->toBe($companyAdmin->id);
+
+    $this->postJson('/api/software', [...$softwarePayload, 'company_asset_number' => 'INVALID-RESPONSIBLE-'.uniqid(), 'responsible_user_id' => $otherCompanyAdmin->id])
+        ->assertUnprocessable();
 
     $this->postJson('/api/software', [...$softwarePayload, 'company_asset_number' => 'SOFTWARE-ADMIN-'.uniqid(), 'users' => [$supportAdmin->id]])
         ->assertBadRequest();
@@ -171,6 +187,58 @@ it('allows a company admin to create hardware only for assignable users in their
         ->assertForbidden();
     $this->deleteJson("/api/software/{$otherSoftware->id}")
         ->assertForbidden();
+});
+
+it('allows an admin to select an admin as the responsible user when creating hardware', function () {
+    $company = Company::factory()->create();
+    $admin = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $companyAdmin = User::factory()->create(['is_company_admin' => true, 'password' => Hash::make('password')]);
+    $companyUser = User::factory()->create(['password' => Hash::make('password')]);
+
+    $companyAdmin->companies()->attach($company);
+    $companyUser->companies()->attach($company);
+    Sanctum::actingAs($admin);
+
+    $this->getJson("/api/companies/{$company->id}/admins")
+        ->assertOk()
+        ->assertJsonFragment(['id' => $admin->id])
+        ->assertJsonFragment(['id' => $companyAdmin->id]);
+
+    $hardwareId = $this->postJson('/api/hardware', [
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => 'ADMIN-RESPONSIBLE-'.uniqid(),
+        'is_accessory' => false,
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+        'support_label' => 'LABEL-'.uniqid(),
+        'company_id' => $company->id,
+        'users' => [$companyUser->id],
+        'responsible_user_id' => $admin->id,
+    ])
+        ->assertCreated()
+        ->json('hardware.id');
+
+    expect(Hardware::findOrFail($hardwareId)->users()->first()->pivot->responsible_user_id)
+        ->toBe($admin->id);
+
+    $softwareId = $this->postJson('/api/software', [
+        'vendor' => 'Acme',
+        'product_name' => 'Admin Suite',
+        'company_asset_number' => 'ADMIN-SOFTWARE-'.uniqid(),
+        'is_exclusive_use' => false,
+        'status' => 'active',
+        'company_id' => $company->id,
+        'users' => [$companyUser->id],
+        'responsible_user_id' => $admin->id,
+    ])
+        ->assertCreated()
+        ->json('software.id');
+
+    expect(Software::findOrFail($softwareId)->users()->first()->pivot->responsible_user_id)
+        ->toBe($admin->id);
 });
 
 it('keeps hardware assignments unchanged when updating only hardware data', function () {

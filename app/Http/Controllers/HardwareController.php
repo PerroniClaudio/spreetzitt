@@ -292,6 +292,7 @@ class HardwareController extends Controller
             'ownership_type_note' => 'nullable|string',
             'notes' => 'nullable|string',
             'users' => 'nullable|array',
+            'responsible_user_id' => 'nullable|integer|exists:users,id',
         ]);
 
         if ($authUser->is_company_admin && ! $authUser->companies()->where('companies.id', $data['company_id'] ?? null)->exists()) {
@@ -312,6 +313,41 @@ class HardwareController extends Controller
             return response([
                 'message' => 'Company not found',
             ], 404);
+        }
+
+        if (! empty($data['users']) && (empty($data['company_id']) || empty($data['responsible_user_id']))) {
+            return response([
+                'message' => 'An assigned company and a responsible user are required when assigning users',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && empty($data['company_id'])) {
+            return response([
+                'message' => 'A company is required to assign a responsible user',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && ! User::query()
+            ->whereKey($data['responsible_user_id'])
+            ->where(function ($query) use ($authUser, $data) {
+                $query->where(function ($query) use ($data) {
+                    $query->where('is_company_admin', true)
+                        ->whereHas('companies', function ($query) use ($data) {
+                            $query->where('companies.id', $data['company_id']);
+                        });
+                });
+
+                if ($authUser->is_admin) {
+                    $query->orWhere('is_admin', true);
+                } else {
+                    $query->where('is_admin', false)
+                        ->where('is_superadmin', false);
+                }
+            })
+            ->exists()) {
+            return response([
+                'message' => 'The responsible user is not available for the assigned company',
+            ], 422);
         }
 
         // Aggiungere le associazioni utenti
@@ -339,6 +375,9 @@ class HardwareController extends Controller
             }
         }
 
+        $responsibleUserId = $data['responsible_user_id'] ?? $authUser->id;
+        unset($data['responsible_user_id']);
+
         $hardware = Hardware::create($data);
 
         if ($hardware->company_id) {
@@ -358,7 +397,7 @@ class HardwareController extends Controller
             foreach ($data['users'] as $userId) {
                 $hardware->users()->attach($userId, [
                     'created_by' => $authUser->id,
-                    'responsible_user_id' => $authUser->id,
+                    'responsible_user_id' => $responsibleUserId,
                     'created_at' => Carbon::now(),
                     'updated_at' => Carbon::now(),
                 ]);

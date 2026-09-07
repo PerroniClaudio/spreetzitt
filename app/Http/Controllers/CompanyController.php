@@ -239,11 +239,24 @@ class CompanyController extends Controller
 
     public function admins(Company $company, Request $request)
     {
-        $users = $company->users()
-            ->where('is_company_admin', true)
-            ->when($request->user()->is_company_admin, function ($query) {
-                $query->where('is_admin', false)
-                    ->where('is_superadmin', false);
+        $authUser = $request->user();
+
+        $users = User::query()
+            ->where('is_deleted', false)
+            ->where(function ($query) use ($authUser, $company) {
+                $query->where(function ($query) use ($company) {
+                    $query->where('is_company_admin', true)
+                        ->whereHas('companies', function ($query) use ($company) {
+                            $query->where('companies.id', $company->id);
+                        });
+                });
+
+                if ($authUser->is_admin) {
+                    $query->orWhere('is_admin', true);
+                } else {
+                    $query->where('is_admin', false)
+                        ->where('is_superadmin', false);
+                }
             })
             ->get();
 

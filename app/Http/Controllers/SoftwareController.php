@@ -249,12 +249,48 @@ class SoftwareController extends Controller
             'company_id' => 'nullable|int|exists:companies,id',
             'software_type_id' => 'nullable|int|exists:software_types,id',
             'users' => 'nullable|array',
+            'responsible_user_id' => 'nullable|integer|exists:users,id',
         ]);
 
         if ($authUser->is_company_admin && ! $authUser->companies()->where('companies.id', $data['company_id'] ?? null)->exists()) {
             return response([
                 'message' => 'You can only create software for your company',
             ], 403);
+        }
+
+        if (! empty($data['users']) && (empty($data['company_id']) || empty($data['responsible_user_id']))) {
+            return response([
+                'message' => 'An assigned company and a responsible user are required when assigning users',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && empty($data['company_id'])) {
+            return response([
+                'message' => 'A company is required to assign a responsible user',
+            ], 422);
+        }
+
+        if (! empty($data['responsible_user_id']) && ! User::query()
+            ->whereKey($data['responsible_user_id'])
+            ->where(function ($query) use ($authUser, $data) {
+                $query->where(function ($query) use ($data) {
+                    $query->where('is_company_admin', true)
+                        ->whereHas('companies', function ($query) use ($data) {
+                            $query->where('companies.id', $data['company_id']);
+                        });
+                });
+
+                if ($authUser->is_admin) {
+                    $query->orWhere('is_admin', true);
+                } else {
+                    $query->where('is_admin', false)
+                        ->where('is_superadmin', false);
+                }
+            })
+            ->exists()) {
+            return response([
+                'message' => 'The responsible user is not available for the assigned company',
+            ], 422);
         }
 
         // Verificare le associazioni utenti
@@ -283,7 +319,8 @@ class SoftwareController extends Controller
         }
 
         $users = $data['users'] ?? [];
-        unset($data['users']);
+        $responsibleUserId = $data['responsible_user_id'] ?? $authUser->id;
+        unset($data['users'], $data['responsible_user_id']);
 
         $software = Software::create($data);
 
@@ -291,7 +328,7 @@ class SoftwareController extends Controller
         if (! empty($users)) {
             $software->users()->attach($users, [
                 'created_by' => $authUser->id,
-                'responsible_user_id' => $authUser->id,
+                'responsible_user_id' => $responsibleUserId,
                 'created_at' => Carbon::now(),
                 'updated_at' => Carbon::now(),
             ]);
