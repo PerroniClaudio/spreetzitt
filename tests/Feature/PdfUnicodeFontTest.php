@@ -18,3 +18,15 @@ it('uses a consistent size for every ticket heading', function () {
     expect($template)->toContain("<h2 class=\"main-header\" style=\"font-family: 'DejaVu Sans'; font-size:1rem; line-height:1rem;\">Ticket")
         ->toContain("<h1 class=\"main-header\" style=\"font-family: 'DejaVu Sans'; font-size:1rem; line-height:1rem;\">Ticket #");
 });
+
+it('wraps long webform values within the available PDF space', function () {
+    $template = file_get_contents(resource_path('views/pdf/exportpdf.blade.php'));
+    $styles = file_get_contents(resource_path('views/components/style.blade.php'));
+
+    expect($template)->toContain('class="ticket-webform-table"')
+        ->toContain('class="ticket-webform-hardware-table"')
+        ->toContain('style="width: 33.33%;"')
+        ->and($styles)->toContain('table-layout: fixed;')
+        ->toContain('overflow-wrap: break-word;')
+        ->toContain('word-break: break-all;');
+});

@@ -1104,7 +1104,7 @@
                     <div class="ticket-webform-{{ strtolower($ticket['incident_request']) }}-section">
                         <p class="box-heading"><b>Dati webform</b></p>
                         @if (!is_null($ticket['webform_data']))
-                            <table style="width:100%">
+                            <table class="ticket-webform-table" style="width:100%">
 
                                 @php
                                     unset($ticket['webform_data']->description);
@@ -1156,7 +1156,7 @@
                                         <tr>
                                             <td colspan="3">
                                                 <span><b>{{ $key }}</b></span>
-                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <table class="ticket-webform-hardware-table" style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
                                                     <thead>
                                                         <tr>
                                                             <th style="border: 1px solid #ddd; padding: 0.25rem; text-align: left;">ID</th>
@@ -1189,7 +1189,7 @@
                                         @if ($loop->index % 3 == 0)
                                             <tr>
                                         @endif
-                                        <td>
+                                        <td style="width: 33.33%;">
                                             @switch($key)
                                                 @case('description')
                                                 @break
@@ -1244,7 +1244,7 @@
                                 @continue
                             @endif
 
-                            <table style="width:100%">
+                            <table class="ticket-webform-table" style="width:100%">
                                 <tr>
                                     <td class="ticket-messages-author">
                                         {{ $value['user'] }}
@@ -1487,7 +1487,7 @@
                                         <tr>
                                             <td colspan="3">
                                                 <span><b>{{ $key }}</b></span>
-                                                <table style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
+                                                    <table class="ticket-webform-hardware-table" style="width: 100%; margin-top: 0.3rem; font-size: 0.6rem; border-collapse: collapse;">
                                                     <thead>
                                                         <tr>
                                                             <th style="border: 1px solid #ddd; padding: 0.2rem; text-align: left;">ID</th>
@@ -1520,7 +1520,7 @@
                                         @if ($loop->index % 3 == 0)
                                             <tr>
                                         @endif
-                                        <td>
+                                        <td style="width: 33.33%;">
                                             @switch($key)
                                                 @case('description')
                                                 @break

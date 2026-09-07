@@ -99,6 +99,18 @@
         background: #82aec5;
     }
 
+    .ticket-webform-table,
+    .ticket-webform-hardware-table {
+        table-layout: fixed;
+    }
+
+    .ticket-webform-table td,
+    .ticket-webform-hardware-table th,
+    .ticket-webform-hardware-table td {
+        overflow-wrap: break-word;
+        word-break: break-all;
+    }
+
     .ticket-messages {
         background: #fff3e0;
         padding: 10px;
