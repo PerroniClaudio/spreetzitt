@@ -2117,7 +2117,7 @@ class TicketController extends Controller
             $ticketsQuery = Ticket::with('stage')->with('invoice');
         } else {
             $groups = $user->groups;
-            $ticketsQuery = Ticket::with('stage')->whereIn('group_id', $groups->pluck('id'));
+            $ticketsQuery = Ticket::with('stage')->with('invoice')->whereIn('group_id', $groups->pluck('id'));
         }
 
         if (! $withSet) {
