@@ -3,18 +3,17 @@
 namespace App\Jobs;
 
 use App\Models\Company;
-use App\Models\TicketProFormaBill;
 use App\Models\Ticket;
+use App\Models\TicketProFormaBill;
 use App\Models\User;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\View;
-use Barryvdh\DomPDF\Facade\Pdf;
-use Exception;
 
 class GenerateTicketProFormaBillJob implements ShouldQueue
 {
@@ -41,10 +40,10 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
             $company = Company::find($proFormaBill->company_id);
             $queryTo = \Carbon\Carbon::parse($proFormaBill->end_date)->endOfDay()->toDateTimeString();
 
-            if(! $user || ! $company) {
+            if (! $user || ! $company) {
                 throw new Exception('User or Company not found');
             }
-            if(! $user->is_superadmin) {
+            if (! $user->is_superadmin) {
                 throw new Exception('User is not superadmin');
             }
 
@@ -69,7 +68,7 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
 
             Pdf::setOptions([
                 'dpi' => 150,
-                'defaultFont' => 'sans-serif',
+                'defaultFont' => 'DejaVu Sans',
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
             ]);
@@ -107,8 +106,8 @@ class GenerateTicketProFormaBillJob implements ShouldQueue
             if ($this->attempts() >= $this->tries) {
                 $proFormaBill->is_failed = true;
 
-                $proFormaBill->error_message = 'Error generating the pro forma at ' . now() .
-                    ' (line ' . $errorLine . ' in ' . $errorFile . '). ' . $shortenedMessage;
+                $proFormaBill->error_message = 'Error generating the pro forma at '.now().
+                    ' (line '.$errorLine.' in '.$errorFile.'). '.$shortenedMessage;
 
                 $proFormaBill->save();
             } else {

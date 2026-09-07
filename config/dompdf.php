@@ -194,7 +194,7 @@ return [
      * Default font: force a known-good bundled font. Can be overridden via
      * the DOMPDF_DEFAULT_FONT env var if needed.
      */
-        'default_font' => env('DOMPDF_DEFAULT_FONT', 'DejaVuSans'),
+        'default_font' => env('DOMPDF_DEFAULT_FONT', 'DejaVu Sans'),
 
         /**
          * Image DPI setting

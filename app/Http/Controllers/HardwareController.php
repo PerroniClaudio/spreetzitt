@@ -1439,7 +1439,7 @@ class HardwareController extends Controller
 
         Pdf::setOptions([
             'dpi' => 150,
-            'defaultFont' => 'sans-serif',
+            'defaultFont' => 'DejaVu Sans',
             'isHtml5ParserEnabled' => true,
             'isRemoteEnabled' => true, // ✅ Abilita il caricamento di immagini da URL esterni
         ]);

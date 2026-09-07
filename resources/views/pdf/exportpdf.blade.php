@@ -28,12 +28,12 @@
         </div>
 
 
-        <h1 class="main-header" style="font-size:2rem;line-height: 1;margin-top: 0.5rem; margin-bottom: 0.5rem;">
+        <h1 class="main-header" style="font-family: 'DejaVu Sans'; font-size:1.5rem;line-height: 1;margin-top: 0.5rem; margin-bottom: 0.5rem;">
             Report attività eseguite
         </h1>
 
         <div class="card">
-            <h2 class="main-header" style="font-size:1.5rem;line-height: 1;margin-bottom: 0.5rem;">
+            <h2 class="main-header" style="font-family: 'DejaVu Sans'; font-size:1rem;line-height: 1;margin-bottom: 0.5rem;">
                 {{ $company ? (is_array($company) ? $company['name'] : $company->name) : 'Azienda non selezionata' }}</h2>
 
             <table style="margin: auto; font-size: 0.75rem; width: fit-content;">
@@ -924,7 +924,7 @@
                     <table style="width:100%">
                         <tr>
                             <td style="vertical-align: middle;">
-                                <h2 class="main-header" style="font-size:1.75rem; line-height:1.75rem;">Ticket
+                                <h2 class="main-header" style="font-family: 'DejaVu Sans'; font-size:1rem; line-height:1rem;">Ticket
                                     #{{ $ticket['id'] }}</h2>
                             </td>
                             <td style="vertical-align: middle;">
@@ -1281,7 +1281,7 @@
                     <table style="width:100%">
                         <tr>
                             <td style="vertical-align: middle;">
-                                <h1 class="main-header">Ticket #{{ $ticket['id'] }}</h1>
+                                <h1 class="main-header" style="font-family: 'DejaVu Sans'; font-size:1rem; line-height:1rem;">Ticket #{{ $ticket['id'] }}</h1>
                             </td>
                             <td style="vertical-align: middle;">
                                 <div class="ticket-pill"

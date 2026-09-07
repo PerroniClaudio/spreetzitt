@@ -1,8 +1,15 @@
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-
-    * {
-        font-family: "Inter", sans-serif;
+    html,
+    body,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    b,
+    strong {
+        font-family: "DejaVu Sans", sans-serif !important;
     }
 
     p {
@@ -29,7 +36,7 @@
     }
 
     .main-header {
-        font-weight: 600;
+        font-weight: bold;
         font-size: 2.25rem;
         font-size: 2.25rem;
         margin: 0;

@@ -2,8 +2,17 @@
 
 <style>
     /* FONT OVERRIDE AGGRESSIVO PER DOMPDF */
-    * {
-        font-family: "Inter", sans-serif !important;
+    html,
+    body,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    b,
+    strong {
+        font-family: "DejaVu Sans", sans-serif !important;
     }
     
     /* Ticket container specifico per project reports */

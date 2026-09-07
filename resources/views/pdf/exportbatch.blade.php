@@ -17,7 +17,7 @@
             style="width: 192px; height: 38px;">
 
 
-        <h1 class="main-header" style="font-size:3rem;line-height: 1;margin-top: 4rem;margin-bottom: 4rem;">
+        <h1 class="main-header" style="font-family: 'DejaVu Sans'; font-size:3rem;line-height: 1;margin-top: 4rem;margin-bottom: 4rem;">
             {{ $company['name'] }}</h1>
 
         {{-- @php

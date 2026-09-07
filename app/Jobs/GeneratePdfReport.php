@@ -1784,7 +1784,7 @@ class GeneratePdfReport implements ShouldQueue
 
             Pdf::setOptions([
                 'dpi' => 150,
-                'defaultFont' => 'sans-serif',
+                'defaultFont' => 'DejaVu Sans',
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
             ]);
