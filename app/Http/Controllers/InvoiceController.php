@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\InvoiceTemplateExport;
+use App\Exports\InvoiceTicketsExport;
 use App\Exports\TicketInvoiceAssociationTemplateExport;
 use App\Imports\InvoiceImport;
 use App\Imports\TicketInvoiceAssociationsImport;
@@ -93,12 +94,43 @@ class InvoiceController extends Controller
             ], 403);
         }
 
-        $invoice->load(['company', 'paymentStage']);
+        $invoice->load([
+            'company',
+            'paymentStage',
+            'tickets' => function ($query): void {
+                $query->orderBy('created_at');
+            },
+            'tickets.company:id,name',
+            'tickets.ticketType.category:id,name',
+            'tickets.user:id,name,surname,is_admin,is_superadmin,is_company_admin',
+            'tickets.statusUpdates' => function ($query): void {
+                $query->where('type', 'closing')->orderBy('created_at', 'desc');
+            },
+        ]);
 
         return response()->json([
             'invoice' => $invoice,
             'message' => 'Invoice retrieved successfully',
         ]);
+    }
+
+    public function exportTickets(Request $request, Invoice $invoice)
+    {
+        $authUser = $request->user();
+        $isAdmin = $authUser['is_admin'] == 1;
+
+        if (! $isAdmin) {
+            return response()->json([
+                'message' => 'Only admins can export invoice tickets.',
+            ], 403);
+        }
+
+        $safeInvoiceNumber = preg_replace('/[^A-Za-z0-9_-]+/', '_', $invoice->number);
+
+        return Excel::download(
+            new InvoiceTicketsExport($invoice),
+            'fattura_'.$safeInvoiceNumber.'_ticket.xlsx'
+        );
     }
 
     /**
