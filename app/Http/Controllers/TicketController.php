@@ -537,9 +537,6 @@ class TicketController extends Controller
             if ($ticketType->is_scheduling == 1) {
                 throw new \Exception('Non si può collegare un\'attività pianificata a un\'operazione strutturata. Tipo: '.$ticketType->name);
             }
-            if ($ticketType->is_grouping == 1) {
-                throw new \Exception('Non si può collegare un\'ticket di raggruppamento a un\'operazione strutturata. Tipo: '.$ticketType->name);
-            }
 
             $newSlaveTicket = Ticket::create([
                 'description' => $slaveTicketToStore['description'],

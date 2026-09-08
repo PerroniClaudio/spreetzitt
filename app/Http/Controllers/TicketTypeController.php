@@ -15,11 +15,12 @@ class TicketTypeController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
 
         // Si può decidere di non filtrarli prima, nel caso si dovessero vedere in qualche caso nel frontend.
-        $ticketTypes = TicketType::where("is_deleted", false)->with('category')->get();
-        if($request->user()->is_superadmin == false){
+        $ticketTypes = TicketType::where('is_deleted', false)->with('category')->get();
+        if ($request->user()->is_superadmin == false) {
             $ticketTypes->makeHidden(['hourly_cost', 'hourly_cost_expires_at']);
         }
         // $ticketTypes = TicketType::with('category')->get();
@@ -82,7 +83,6 @@ class TicketTypeController extends Controller
             'default_sla_take' => 'required|numeric',
             'is_master' => 'required|boolean',
             'is_scheduling' => 'required|boolean',
-            'is_grouping' => 'required|boolean',
             'is_project' => 'required|boolean',
         ]);
 
@@ -151,21 +151,21 @@ class TicketTypeController extends Controller
 
         // $request['company_id'] = $request['company_id'] ? $request['company_id'] : null;
         // controllo ticket della compagnia precedente. se non ce ne sono si può modificare la compagnia, altrimenti no.
-        if ($ticketType['company_id'] && $ticketType['company_id'] != $request['company_id'] ) {
-            if($ticketType->countRelatedTickets() > 0){
+        if ($ticketType['company_id'] && $ticketType['company_id'] != $request['company_id']) {
+            if ($ticketType->countRelatedTickets() > 0) {
                 return response([
                     'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché ci sono ticket associati con l\'attuale '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')),
                 ], 400);
             }
 
             // Se è un'operazione strutturata si può cambiare solo se non ha tipi collegati.
-            if($ticketType->slaveTypes()->count() > 0){
+            if ($ticketType->slaveTypes()->count() > 0) {
                 return response([
                     'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché quest\'operazione strutturata ha uno o più tipi collegati nell\'azienda attuale.',
                 ], 400);
             }
             // Se è collegato a uno o più tipi "operazione strutturata", non si può cambiare azienda.
-            if($ticketType->masterTypes()->count() > 0){
+            if ($ticketType->masterTypes()->count() > 0) {
                 return response([
                     'message' => 'Nessuna modifica effettuata. Non è possibile modificare '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'l\'azienda')).' perché questo tipo di ticket è collegato a uno o più operazioni strutturate nell\'azienda attuale.',
                 ], 400);
@@ -177,11 +177,11 @@ class TicketTypeController extends Controller
         //     ], 400);
         // }
 
-        if($request->user()->is_superadmin){
+        if ($request->user()->is_superadmin) {
             $fillableFields = array_merge(
                 $request->only((new TicketType)->getFillable())
             );
-        } else {        
+        } else {
             $fillableFields = array_merge(
                 $request->only(array_diff((new TicketType)->getFillable(), ['hourly_cost', 'hourly_cost_expires_at']))
             );
@@ -199,12 +199,13 @@ class TicketTypeController extends Controller
             });
             if ($hasLimitedSlave) {
                 // Per sicurezza, nel caso non fosse già a 1 lo si corregge.
-                if($ticketType->it_referer_limited != 1) {
+                if ($ticketType->it_referer_limited != 1) {
                     $ticketType->it_referer_limited = 1;
                     $ticketType->save();
                 }
+
                 return response([
-                    'message' => 'Non puoi disattivare la limitazione ai referenti IT: uno dei tipi slave obbligatori è limitato ai referenti IT.'
+                    'message' => 'Non puoi disattivare la limitazione ai referenti IT: uno dei tipi slave obbligatori è limitato ai referenti IT.',
                 ], 400);
             }
         }
@@ -221,10 +222,11 @@ class TicketTypeController extends Controller
     /**
      * Update hourly cost and expiration date for a ticket type.
      */
-    public function updateHourlyCost(Request $request, TicketType $ticketType) {
+    public function updateHourlyCost(Request $request, TicketType $ticketType)
+    {
         $user = $request->user();
-        
-        if (!$user->is_superadmin) {
+
+        if (! $user->is_superadmin) {
             return response(['message' => 'Unauthorized'], 401);
         }
 
@@ -253,11 +255,11 @@ class TicketTypeController extends Controller
             return response(['message' => 'Unauthorized'], 401);
         }
 
-        $ticketType = TicketType::where('id', $ticketType["id"])->first();
+        $ticketType = TicketType::where('id', $ticketType['id'])->first();
 
-        if($ticketType->masterTypes()->count() > 0){
+        if ($ticketType->masterTypes()->count() > 0) {
             return response([
-                'message' => 'Non è possibile eliminare questo tipo di ticket perché è collegato a uno o più operazioni strutturate. Rimuovere prima quelle associazioni.'
+                'message' => 'Non è possibile eliminare questo tipo di ticket perché è collegato a uno o più operazioni strutturate. Rimuovere prima quelle associazioni.',
             ], 400);
         }
 
@@ -438,7 +440,7 @@ class TicketTypeController extends Controller
             'placeholder' => 'required',
             'hardware_limit' => 'required_if:field_type,hardware|integer',
             'include_no_type_hardware' => 'required_if:field_type,hardware|boolean',
-            'hardware_accessory_include' => 'required_if:field_type,hardware|string|in:' . implode(',', $hardware_accessory_include_values),
+            'hardware_accessory_include' => 'required_if:field_type,hardware|string|in:'.implode(',', $hardware_accessory_include_values),
             'hardware_types' => 'array|exists:hardware_types,id|nullable',
             'property_limit' => 'required_if:field_type,property|integer',
             'include_no_type_property' => 'required_if:field_type,property|boolean',
@@ -654,7 +656,8 @@ class TicketTypeController extends Controller
         ], 200);
     }
 
-    function getSlaveTypes(TicketType $ticketType) {
+    public function getSlaveTypes(TicketType $ticketType)
+    {
         $slaveTypes = $ticketType->slaveTypes()->with('category')->get();
 
         return response([
@@ -662,7 +665,8 @@ class TicketTypeController extends Controller
         ], 200);
     }
 
-    function editSlaveTypes(TicketType $ticketType, Request $request) {
+    public function editSlaveTypes(TicketType $ticketType, Request $request)
+    {
         /**
          * Expected structure:
          * slave_types = '[{"id": 1, "is_required": true}, {"id": 2, "is_required": false}]'
@@ -673,25 +677,25 @@ class TicketTypeController extends Controller
             $fields = $request->validate([
                 'slave_types' => 'required|json',
             ]);
-    
+
             $slave_types = json_decode($fields['slave_types'], true);
-    
+
             $pivotData = [];
             foreach ($slave_types as $slave) {
                 $tempTicketType = TicketType::find($slave['id']);
-                if(!$tempTicketType) {
+                if (! $tempTicketType) {
                     throw new \Exception('Uno dei tipi di ticket selezionati non esiste.');
                 }
-                if($tempTicketType->is_master || $tempTicketType->is_scheduling || $tempTicketType->is_grouping) {
-                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non si può collegare. (es. è un tipo operazione strutturata, attività programmata o raggruppamento/master)');
+                if ($tempTicketType->is_master || $tempTicketType->is_scheduling) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non si può collegare. (es. è un tipo operazione strutturata o attività programmata/master)');
                 }
-                if($tempTicketType->company_id != $ticketType->company_id) {
-                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non appartiene alla stessa ' . strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')) . '.');
+                if ($tempTicketType->company_id != $ticketType->company_id) {
+                    throw new \Exception('Nessun collegamento effettuato, perchè uno dei tipi di ticket selezionati non appartiene alla stessa '.strtolower(\App\Models\TenantTerm::getCurrentTenantTerm('azienda', 'azienda')).'.');
                 }
                 $pivotData[$slave['id']] = ['is_required' => $slave['is_required']];
             }
             $ticketType->slaveTypes()->sync($pivotData);
-    
+
             // Se uno degli slave associati ha is_required=1 nella pivot e it_referer_limited=1, aggiorna il master
             $updatedSlaves = $ticketType->slaveTypes()->get();
             $refererLimited = false;
@@ -708,9 +712,9 @@ class TicketTypeController extends Controller
                 $ticketType->save();
                 $warning = 'Attenzione: Il tipo principale è stato impostato come "Limitato ai referenti IT", perchè uno dei tipi associati è sia obbligatorio che limitato ai referenti IT.';
             }
-    
+
             $slaveTypes = $ticketType->slaveTypes()->get();
-    
+
             DB::commit();
 
             return response([
@@ -719,16 +723,18 @@ class TicketTypeController extends Controller
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return response([
                 'message' => $e->getMessage(),
             ], 400);
         }
     }
 
-    // Prende tutti i possibili tipi di ticket slave 
+    // Prende tutti i possibili tipi di ticket slave
     // che si possono associare a questo master type (compresi quelli già associati)
-    function getAvailableSlaveTypes(TicketType $ticketType) {
-        if (!$ticketType->is_master || !$ticketType->company()) {
+    public function getAvailableSlaveTypes(TicketType $ticketType)
+    {
+        if (! $ticketType->is_master || ! $ticketType->company()) {
             return response([
                 'availableTypes' => [],
             ], 200);
@@ -739,14 +745,12 @@ class TicketTypeController extends Controller
             ['id', '!=', $ticketType->id],
             ['is_master', false],
             ['is_scheduling', false],
-            ['is_grouping', false],
         ])
-        ->with('category')
-        ->get();
+            ->with('category')
+            ->get();
 
         // $availableSlaveTypes = $ticketType->slaveTypes()->get();
         // $availableTypes = $allTypes->diff($availableSlaveTypes);
-
 
         return response([
             'availableSlaveTypes' => $allTypes,

@@ -27,7 +27,6 @@ class TicketType extends Model
         'is_custom_group_exclusive',
         'is_master',
         'is_scheduling',
-        'is_grouping',
         'hourly_cost',
         'hourly_cost_expires_at',
         'is_project',
@@ -105,7 +104,7 @@ class TicketType extends Model
         )->withPivot('is_required');
     }
 
-        /**
+    /**
      * TicketType master (operazione strutturata) di cui questo tipo è uno slave.
      */
     public function masterTypes()
@@ -117,6 +116,4 @@ class TicketType extends Model
             'master_type_id' // foreign key sulla tabella master
         );
     }
-
-    
 }
