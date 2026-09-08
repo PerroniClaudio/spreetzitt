@@ -14,24 +14,24 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')->hourly();
 
-        $schedule->job(new \App\Jobs\TicketStats)->everyFiveMinutes(); //ogni 5 min
+        $schedule->job(new \App\Jobs\TicketStats)->everyFiveMinutes()->onOneServer(); //ogni 5 min
 
         foreach (['08:00', '12:00', '16:00'] as $time) {
-            $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt($time);
+            $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt($time)->onOneServer();
         }
 
         $isAutoAssignEnabled = config('app.auto_assign_ticket');
 
         if ($isAutoAssignEnabled) {
-            $schedule->job(new \App\Jobs\AutoAssignTicket)->everyThirtyMinutes();
+            $schedule->job(new \App\Jobs\AutoAssignTicket)->everyThirtyMinutes()->onOneServer();
         }
 
         //Send billing reminders
-        $schedule->job(new \App\Jobs\SendBillingReminders)->dailyAt('06:00');
+        $schedule->job(new \App\Jobs\SendBillingReminders)->dailyAt('06:00')->onOneServer();
 
         // Check hourly cost expiration weekly (every Monday at 08:00)
-        $schedule->job(new \App\Jobs\CheckHourlyCostExpiration)->weeklyOn(1, '08:00');
-            
+        $schedule->job(new \App\Jobs\CheckHourlyCostExpiration)->weeklyOn(1, '08:00')->onOneServer();
+
         // Esegui FetchNewsForSource per ogni NewsSource ogni giorno alle 6:00 - Da Fixare
         // $schedule->job(new \App\Jobs\FetchNewsForAllSources)->dailyAt('06:00');
     }
