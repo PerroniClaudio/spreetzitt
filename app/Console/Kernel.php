@@ -14,7 +14,7 @@ class Kernel extends ConsoleKernel
     {
         // $schedule->command('inspire')->hourly();
 
-        $schedule->job(new \App\Jobs\TicketStats)->everyFiveMinutes()->onOneServer(); //ogni 5 min
+        $schedule->job(new \App\Jobs\TicketStats)->everyFifteenMinutes()->onOneServer(); //ogni 15 min
 
         foreach (['08:00', '12:00', '16:00'] as $time) {
             $schedule->job(new \App\Jobs\PlatformActivity)->dailyAt($time)->onOneServer();
