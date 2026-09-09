@@ -113,6 +113,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/old-ticket-search', [App\Http\Controllers\OldTicketController::class, 'search']);
     Route::get('/ticket-search', [App\Http\Controllers\TicketController::class, 'search']);
     Route::get('/data-owner/ticket/{ticket}', [App\Http\Controllers\TicketController::class, 'show']);
+    Route::get('/main-ticket-access/{ticket}', [App\Http\Controllers\TicketController::class, 'showMainTicketForCompanyAdmin']);
+    Route::get('/ticket/{ticket}/user-main-ticket-connections', [App\Http\Controllers\TicketController::class, 'getUserMainTicketConnections']);
     Route::post('/ticketmassive', [App\Http\Controllers\TicketController::class, 'storeMassive']);
     Route::get('/ticket/{ticket}/hardware', [App\Http\Controllers\TicketController::class, 'hardware']);
     Route::get('/ticket/{ticket}/files', [App\Http\Controllers\TicketController::class, 'files']);
@@ -153,6 +155,15 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket/{ticket}/connected-to-scheduling', [App\Http\Controllers\TicketController::class, 'getTicketsConnectedToScheduling']);
     Route::post('/ticket/{ticket}/connect-to-scheduling', [App\Http\Controllers\TicketController::class, 'connectToSchedulingTicket']);
     Route::post('/ticket/{ticket}/remove-scheduling-connection', [App\Http\Controllers\TicketController::class, 'removeSchedulingConnection']);
+    // Main tickets Routes (admin only in the controller)
+    Route::get('/ticket/{ticket}/available-main-tickets', [App\Http\Controllers\TicketController::class, 'getAvailableMainTickets']);
+    Route::get('/ticket/{ticket}/main-ticket-connections', [App\Http\Controllers\TicketController::class, 'getMainTicketConnections']);
+    Route::post('/ticket/{ticket}/make-main', [App\Http\Controllers\TicketController::class, 'makeMain']);
+    Route::post('/ticket/{ticket}/remove-main', [App\Http\Controllers\TicketController::class, 'removeMain']);
+    Route::post('/ticket/{ticket}/connect-to-main', [App\Http\Controllers\TicketController::class, 'connectToMain']);
+    Route::post('/ticket/{ticket}/remove-main-connection', [App\Http\Controllers\TicketController::class, 'removeMainConnection']);
+    Route::get('/ticket/{ticket}/main-access-companies', [App\Http\Controllers\TicketController::class, 'getMainAccessCompanies']);
+    Route::put('/ticket/{ticket}/main-access-companies', [App\Http\Controllers\TicketController::class, 'updateMainAccessCompanies']);
     Route::get('/ticket/{ticket}/scheduling-ticket-recap-data', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketRecapData']);
     Route::get('/scheduling-tickets-time', [App\Http\Controllers\TicketController::class, 'getSchedulingTicketsWithTimes']);
     Route::post('/ticket/{ticket}/approve-scheduling-time', [App\Http\Controllers\TicketController::class, 'approveSchedulingTime']);

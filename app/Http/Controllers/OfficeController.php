@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Office;
+use App\Models\Ticket;
 use Illuminate\Http\Request;
 
 class OfficeController extends Controller
@@ -65,7 +66,21 @@ class OfficeController extends Controller
     {
         $user = $request->user();
 
-        if ($user['is_admin'] != 1 && ! $user->companies()->where('companies.id', $office['company_id'])->exists() && ($office->company->data_owner_email != $request->user()->email)) {
+        $mainTicketId = $request->query('main_ticket_id');
+        $mainTicket = $mainTicketId ? Ticket::find($mainTicketId) : null;
+        // Only the office actually referenced in this specific main ticket's webform may be resolved this way.
+        $hasMainTicketAccess = $mainTicket
+            && $mainTicket->isViewableAsMainTicketBy($user)
+            && $mainTicket->messages()->get()->contains(function ($message) use ($office) {
+                $webformData = json_decode($message->message);
+
+                return isset($webformData->office) && (int) $webformData->office === $office->id;
+            });
+
+        if ($user['is_admin'] != 1
+            && ! $user->companies()->where('companies.id', $office['company_id'])->exists()
+            && ($office->company->data_owner_email != $request->user()->email)
+            && ! $hasMainTicketAccess) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);

@@ -16,8 +16,11 @@ class IsAdminOrHasSelectedCompany
     public function handle(Request $request, Closure $next): Response
     {
         $authUser = $request->user();
-        // Check if the user is admin or has a selected company
-        if (! $authUser || ! ($authUser->is_admin || $authUser->selectedCompany())) {
+        // Company admins may open a direct link before a company has been selected.
+        // Their company memberships are still checked by the endpoint authorization.
+        $hasCompanyAdminAccess = $authUser?->is_company_admin && $authUser->companies()->exists();
+
+        if (! $authUser || ! ($authUser->is_admin || $authUser->selectedCompany() || $hasCompanyAdminAccess)) {
             return response()->json(['message' => 'No company selected, nor admin user'], 403);
         }
 

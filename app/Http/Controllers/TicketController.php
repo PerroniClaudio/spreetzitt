@@ -2264,7 +2264,9 @@ class TicketController extends Controller
         $user = $request->user();
         $selectedCompanyId = $this->getSelectedCompanyId($user);
 
-        if ($user['is_admin'] != 1 && (! $selectedCompanyId || $selectedCompanyId != $ticket->company_id)) {
+        if ($user['is_admin'] != 1
+            && (! $selectedCompanyId || $selectedCompanyId != $ticket->company_id)
+            && ! $this->canAccessMainTicket($user, $ticket)) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);
@@ -2829,6 +2831,221 @@ class TicketController extends Controller
         return response([
             'connected_tickets' => $connectedTickets,
         ], 200);
+    }
+
+    public function getAvailableMainTickets(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $query = Ticket::query()
+            ->where('is_main', true)
+            ->where('id', '!=', $ticket->id)
+            ->with(['company:id,name', 'ticketType:id,name', 'stage:id,name,admin_color']);
+
+        if ($request->query('all') !== '1') {
+            $query->where('company_id', $ticket->company_id);
+        }
+
+        return response(['main_tickets' => $query->orderByDesc('id')->get()], 200);
+    }
+
+    public function getMainTicketConnections(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $ticket->load([
+            'mainTicket.company:id,name',
+            'mainTicket.stage:id,name,admin_color',
+            'mainTickets.company:id,name',
+            'mainTickets.stage:id,name,admin_color',
+            'ticketType:id,name',
+        ]);
+
+        return response([
+            'main_ticket' => $ticket->main_id ? $ticket->mainTicket : null,
+            'connected_tickets' => $ticket->is_main ? $ticket->mainTickets : [],
+            'is_main' => (bool) $ticket->is_main,
+        ], 200);
+    }
+
+    public function getMainAccessCompanies(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $ticket->is_main) {
+            return response(['message' => 'Il ticket non è principale.'], 400);
+        }
+
+        return response([
+            'companies' => \App\Models\Company::query()
+                ->whereIn('id', $ticket->mainTickets()->select('company_id')->distinct())
+                ->where('id', '!=', $ticket->company_id)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'enabled_company_ids' => $ticket->mainAccessCompanies()->pluck('companies.id'),
+        ], 200);
+    }
+
+    public function updateMainAccessCompanies(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        if (! $ticket->is_main) {
+            return response(['message' => 'Il ticket non è principale.'], 400);
+        }
+
+        $fields = $request->validate([
+            'company_ids' => ['present', 'array'],
+            'company_ids.*' => ['integer', 'exists:companies,id'],
+        ]);
+
+        $companyIds = array_values(array_unique(array_map('intval', $fields['company_ids'])));
+        $companyIds = array_values(array_diff($companyIds, [$ticket->company_id]));
+        $ticket->mainAccessCompanies()->sync($companyIds);
+
+        return response([
+            'enabled_company_ids' => $ticket->mainAccessCompanies()->pluck('companies.id'),
+        ], 200);
+    }
+
+    public function showMainTicketForCompanyAdmin(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        if (! $this->canAccessMainTicket($user, $ticket)) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $ticket->load([
+            'ticketType.category',
+            'company:id,name,logo_url',
+            'user:id,name,surname,email,is_admin',
+            'stage:id,name,description,admin_color,user_color,is_sla_pause,system_key',
+            'files',
+        ]);
+        $this->maskSupportUserIfNeeded($user, $ticket);
+        $this->addVirtualFields($ticket);
+
+        return response(['ticket' => $ticket, 'from' => time()], 200);
+    }
+
+    public function getUserMainTicketConnections(Ticket $ticket, Request $request)
+    {
+        $user = $request->user();
+
+        $canViewTicketConnections = $ticket->is_main
+            ? $this->canAccessMainTicket($user, $ticket)
+            : $this->userBelongsToAnyTicketCompany($user, $ticket);
+
+        if (! $user->is_company_admin || ! $canViewTicketConnections) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+
+        $companyIds = $user->companies()->pluck('companies.id');
+        $mainTicket = $ticket->mainTicket;
+        $canSeeMain = $mainTicket && $this->canAccessMainTicket($user, $mainTicket);
+        if ($canSeeMain) {
+            $mainTicket->setAttribute(
+                'open_with_main_ticket_path',
+                ! $user->companies()->whereKey($mainTicket->company_id)->exists()
+            );
+        }
+        $visibleMainTickets = $ticket->is_main
+            ? $ticket->mainTickets()->whereIn('company_id', $companyIds)->with(['company:id,name', 'stage:id,name,user_color'])->get()
+            : collect();
+
+        return response([
+            'main_ticket' => $canSeeMain ? $mainTicket->load(['company:id,name', 'stage:id,name,user_color']) : null,
+            'connected_tickets' => $visibleMainTickets,
+        ], 200);
+    }
+
+    public function makeMain(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+        if ($ticket->is_main || $ticket->mainTickets()->exists()) {
+            return response(['message' => 'Questo ticket è già principale o ha ticket associati.'], 400);
+        }
+        if ($ticket->main_id) {
+            return response(['message' => "Rimuovi prima l'associazione al ticket principale."], 400);
+        }
+
+        $ticket->update(['is_main' => true]);
+
+        return response(['ticket' => $ticket->fresh()], 200);
+    }
+
+    public function removeMain(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+        if (! $ticket->is_main) {
+            return response(['message' => 'Questo ticket non è principale.'], 400);
+        }
+
+        $disassociatedCount = $ticket->mainTickets()->count();
+        DB::transaction(function () use ($ticket) {
+            $ticket->mainTickets()->update(['main_id' => null]);
+            $ticket->mainAccessCompanies()->detach();
+            $ticket->update(['is_main' => false]);
+        });
+
+        return response(['ticket' => $ticket->fresh(), 'disassociated_count' => $disassociatedCount], 200);
+    }
+
+    public function connectToMain(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+        $fields = $request->validate(['main_id' => ['required', 'integer']]);
+        $mainTicket = Ticket::find($fields['main_id']);
+
+        if ($mainTicket && $mainTicket->id === $ticket->id) {
+            return response(['message' => 'Un ticket non può essere associato a se stesso.'], 400);
+        }
+        if (! $mainTicket || ! $mainTicket->is_main) {
+            return response(['message' => 'Ticket principale non trovato.'], 404);
+        }
+        if ($ticket->is_main) {
+            return response(['message' => 'Un ticket principale non può essere associato a un altro ticket principale.'], 400);
+        }
+
+        $ticket->update(['main_id' => $mainTicket->id]);
+
+        return response(['ticket' => $ticket->fresh(), 'main_ticket' => $mainTicket], 200);
+    }
+
+    public function removeMainConnection(Ticket $ticket, Request $request)
+    {
+        if ($request->user()->is_admin != 1) {
+            return response(['message' => 'Unauthorized'], 401);
+        }
+        if (! $ticket->main_id) {
+            return response(['message' => 'Questo ticket non è associato a un ticket principale.'], 400);
+        }
+
+        $mainTicketId = $ticket->main_id;
+        $ticketCompanyId = $ticket->company_id;
+        $ticket->update(['main_id' => null]);
+
+        $mainTicket = Ticket::find($mainTicketId);
+        if ($mainTicket && ! $mainTicket->mainTickets()->where('company_id', $ticketCompanyId)->exists()) {
+            $mainTicket->mainAccessCompanies()->detach($ticketCompanyId);
+        }
+
+        return response(['ticket' => $ticket->fresh()], 200);
     }
 
     // Prende i dati di riepilogo dell'attività programmata
@@ -4125,6 +4342,16 @@ class TicketController extends Controller
                $this->hasAssignmentHistory($user, $ticket) ||
                $this->isReferer($user, $ticket) ||
                $this->isDataOwner($user, $ticket);
+    }
+
+    private function canAccessMainTicket($user, $ticket): bool
+    {
+        return $ticket->isViewableAsMainTicketBy($user);
+    }
+
+    private function userBelongsToAnyTicketCompany($user, $ticket): bool
+    {
+        return $user->companies()->where('companies.id', $ticket->company_id)->exists();
     }
 
     /**

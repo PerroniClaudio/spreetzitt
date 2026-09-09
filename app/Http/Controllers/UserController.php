@@ -9,6 +9,7 @@ use App\Jobs\SendWelcomeEmail;
 use App\Models\ActivationToken;
 use App\Models\Company;
 use App\Models\Supplier;
+use App\Models\Ticket;
 use App\Models\User;
 use App\Models\UserLog;
 use Illuminate\Http\Request;
@@ -659,9 +660,17 @@ class UserController extends Controller
         $authUserSelectedCompanyId = $authUser->selectedCompany()->id ?? null;
         $company = Company::find($authUserSelectedCompanyId);
 
+        $mainTicketId = $request->query('main_ticket_id');
+        $mainTicket = $mainTicketId ? Ticket::find($mainTicketId) : null;
+        // Only the exact referer/referer IT of this specific main ticket may be resolved this way.
+        $hasMainTicketAccess = $mainTicket
+            && $mainTicket->isViewableAsMainTicketBy($authUser)
+            && in_array((int) $id, [(int) $mainTicket->referer_id, (int) $mainTicket->referer_it_id], true);
+
         if (! $request->user()['is_admin']
             && ! $user->hasCompany($authUserSelectedCompanyId)
-            && ! $user->companies()->where('data_owner_email', $authUser->email)->exists()) {
+            && ! $user->companies()->where('data_owner_email', $authUser->email)->exists()
+            && ! $hasMainTicketAccess) {
             return response([
                 'message' => 'Unauthorized',
             ], 401);

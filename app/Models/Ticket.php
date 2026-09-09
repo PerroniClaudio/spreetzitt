@@ -44,6 +44,8 @@ class Ticket extends Model
         'is_billing_validated',
         'master_id',
         'scheduling_id',
+        'is_main',
+        'main_id',
         'grouping_id',
         'reopen_parent_id',
         'no_user_response',
@@ -64,6 +66,7 @@ class Ticket extends Model
 
     protected $casts = [
         'assigned' => 'boolean',
+        'is_main' => 'boolean',
         'bill_date' => 'date:Y-m-d',
         'project_start' => 'date:Y-m-d',
         'project_end' => 'date:Y-m-d',
@@ -425,6 +428,43 @@ class Ticket extends Model
     public function schedulingSlaves()
     {
         return $this->hasMany(Ticket::class, 'scheduling_id');
+    }
+
+    public function mainTicket()
+    {
+        return $this->belongsTo(Ticket::class, 'main_id');
+    }
+
+    public function mainTickets()
+    {
+        return $this->hasMany(Ticket::class, 'main_id');
+    }
+
+    public function mainAccessCompanies()
+    {
+        return $this->belongsToMany(Company::class, 'ticket_main_company')
+            ->withTimestamps();
+    }
+
+    /**
+     * Whether a company admin can view this specific main ticket, either because it belongs
+     * to one of their companies or because that company was explicitly granted access to it.
+     */
+    public function isViewableAsMainTicketBy(User $user): bool
+    {
+        if (! $this->is_main || ! $user->is_company_admin) {
+            return false;
+        }
+
+        $userCompanyIds = $user->companies()->pluck('companies.id');
+
+        if ($userCompanyIds->contains($this->company_id)) {
+            return true;
+        }
+
+        return $this->mainAccessCompanies()
+            ->whereIn('companies.id', $userCompanyIds)
+            ->exists();
     }
 
     public function reopenedParent()
