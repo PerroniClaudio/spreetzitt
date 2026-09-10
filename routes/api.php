@@ -47,6 +47,9 @@ Route::post('/upload-file', [App\Http\Controllers\FileUploadController::class, '
 Route::get('/features', [App\Http\Controllers\FeatureFlagController::class, 'getFeatures']);
 Route::post('/features/flush', [App\Http\Controllers\FeatureFlagController::class, 'flushFeatureFlags']);
 
+// App Version Route (Public)
+Route::get('/app-version', [App\Http\Controllers\AppVersionController::class, 'getCurrentVersion']);
+
 // AUTHENTICATION ROUTES
 
 Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
@@ -612,5 +615,4 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::put('/contracts/{contract}/invoices/sync', [App\Http\Controllers\ContractController::class, 'syncInvoices']);
     Route::patch('/contracts/{contract}/invoices/{invoice}', [App\Http\Controllers\ContractController::class, 'updateInvoicePivot']);
 
-    Route::get('/app-version', [App\Http\Controllers\AppVersionController::class, 'getCurrentVersion']);
 });
