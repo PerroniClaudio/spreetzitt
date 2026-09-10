@@ -611,4 +611,6 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::delete('/contracts/{contract}/invoices/{invoice}', [App\Http\Controllers\ContractController::class, 'detachInvoice']);
     Route::put('/contracts/{contract}/invoices/sync', [App\Http\Controllers\ContractController::class, 'syncInvoices']);
     Route::patch('/contracts/{contract}/invoices/{invoice}', [App\Http\Controllers\ContractController::class, 'updateInvoicePivot']);
+
+    Route::get('/app-version', [App\Http\Controllers\AppVersionController::class, 'getCurrentVersion']);
 });
