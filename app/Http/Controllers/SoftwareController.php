@@ -232,6 +232,13 @@ class SoftwareController extends Controller
             ], 403);
         }
 
+        $companyAssetNumber = $request->input('company_asset_number');
+        if (is_string($companyAssetNumber) && $companyAssetNumber !== '' && Software::withTrashed()->where('company_asset_number', $companyAssetNumber)->exists()) {
+            return response([
+                'message' => 'Esiste già un software con cespite aziendale '.$companyAssetNumber.'.',
+            ], 409);
+        }
+
         $data = $request->validate([
             'vendor' => 'required|string',
             'product_name' => 'required|string',

@@ -107,7 +107,7 @@ class HardwareImport implements ToCollection, WithMultipleSheets
 
                 $isPresent = null;
                 if (! empty($serial)) {
-                    $isPresent = Hardware::where('serial_number', $serial)->first();
+                    $isPresent = Hardware::withTrashed()->where('serial_number', $serial)->first();
                     if ($isPresent) {
                         throw new \Exception('Hardware con seriale '.$serial.' già presente. ID: '.$isPresent->id);
                     }

@@ -162,6 +162,40 @@ it('creates hardware from a filled template row', function () {
         ->hardware_type_id->toBe($hardwareType->id);
 });
 
+it('reports duplicate hardware and software values from trashed records during import', function () {
+    $authUser = User::factory()->create(['is_admin' => true, 'password' => Hash::make('password')]);
+    $serialNumber = 'TRASHED-HW-'.uniqid();
+    $hardware = Hardware::query()->create([
+        'make' => 'Acme',
+        'model' => 'Notebook',
+        'serial_number' => $serialNumber,
+        'company_asset_number' => 'TRASHED-ASSET-'.uniqid(),
+        'is_exclusive_use' => false,
+        'status_at_purchase' => 'new',
+        'status' => 'original_condition',
+        'position' => 'company',
+    ]);
+    $hardware->delete();
+
+    expect(fn () => (new HardwareImport($authUser))->collection(collect([
+        collect(['Acme', 'Notebook', $serialNumber, null, null, null, null, 'ANOTHER-ASSET-'.uniqid()]),
+    ])))->toThrow(Exception::class, 'Hardware con seriale '.$serialNumber.' già presente. ID: '.$hardware->id);
+
+    $companyAssetNumber = 'TRASHED-SW-'.uniqid();
+    $software = Software::query()->create([
+        'vendor' => 'Acme',
+        'product_name' => 'Suite',
+        'company_asset_number' => $companyAssetNumber,
+        'is_exclusive_use' => false,
+        'status' => 'active',
+    ]);
+    $software->delete();
+
+    expect(fn () => (new SoftwareImport($authUser))->collection(collect([
+        collect(['Acme', 'Suite', null, null, $companyAssetNumber]),
+    ])))->toThrow(Exception::class, 'Software con cespite aziendale '.$companyAssetNumber.' già presente. ID: '.$software->id);
+});
+
 it('creates users from a filled template row and ignores empty dropdown rows', function () {
     Queue::fake();
 

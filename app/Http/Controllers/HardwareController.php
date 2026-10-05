@@ -270,6 +270,13 @@ class HardwareController extends Controller
             ], 403);
         }
 
+        $serialNumber = $request->input('serial_number');
+        if (is_string($serialNumber) && $serialNumber !== '' && Hardware::withTrashed()->where('serial_number', $serialNumber)->exists()) {
+            return response([
+                'message' => 'Esiste già un hardware con seriale '.$serialNumber.'.',
+            ], 409);
+        }
+
         $allowedStatuses = array_keys(config('app.hardware_statuses'));
         $allowedPositions = array_keys(config('app.hardware_positions'));
         $allowedStatusesAtPurchase = array_keys(config('app.hardware_statuses_at_purchase'));

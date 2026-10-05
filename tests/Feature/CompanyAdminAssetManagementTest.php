@@ -50,6 +50,10 @@ it('allows a company admin to create hardware only for assignable users in their
     expect(Hardware::findOrFail($hardwareId)->users()->first()->pivot->responsible_user_id)
         ->toBe($companyAdmin->id);
 
+    $this->postJson('/api/hardware', $payload)
+        ->assertConflict()
+        ->assertJsonPath('message', 'Esiste già un hardware con seriale '.$payload['serial_number'].'.');
+
     $this->postJson('/api/hardware', [...$payload, 'serial_number' => 'INVALID-RESPONSIBLE-'.uniqid(), 'responsible_user_id' => $otherCompanyAdmin->id])
         ->assertUnprocessable();
 
@@ -85,6 +89,10 @@ it('allows a company admin to create hardware only for assignable users in their
 
     expect(Software::findOrFail($softwareId)->users()->first()->pivot->responsible_user_id)
         ->toBe($companyAdmin->id);
+
+    $this->postJson('/api/software', $softwarePayload)
+        ->assertConflict()
+        ->assertJsonPath('message', 'Esiste già un software con cespite aziendale '.$softwarePayload['company_asset_number'].'.');
 
     $this->postJson('/api/software', [...$softwarePayload, 'company_asset_number' => 'INVALID-RESPONSIBLE-'.uniqid(), 'responsible_user_id' => $otherCompanyAdmin->id])
         ->assertUnprocessable();

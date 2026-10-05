@@ -77,7 +77,7 @@ class SoftwareImport implements ToCollection, WithMultipleSheets
 
                 // Verifica unicità cespite aziendale se presente
                 if (! empty($row[4])) {
-                    $isPresent = Software::where('company_asset_number', $row[4])->first();
+                    $isPresent = Software::withTrashed()->where('company_asset_number', $row[4])->first();
                     if ($isPresent) {
                         throw new \Exception('Software con cespite aziendale '.$row[4].' già presente. ID: '.$isPresent->id);
                     }
