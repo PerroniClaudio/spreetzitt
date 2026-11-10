@@ -56,8 +56,28 @@ support-api/
 make up
 
 # L'API sarà disponibile su:
-# http://localhost/api (via Nginx)
+# https://preprodapi.ifortech.com/api (via Nginx)
 ```
+
+Il frontend locale è disponibile su `https://preprod.ifortech.com/support/admin`.
+Entrambi i domini devono puntare a `127.0.0.1` nel file `/etc/hosts` del PC.
+Il login Microsoft ritorna al browser che ha aperto il popup; il telefono può
+essere usato per approvare la richiesta con Authenticator.
+
+`make up` controlla le porte TCP pubblicate da Compose, inclusa Redis sulla 6379,
+e arresta i processi o i container di altri progetti che le occupano. I container
+del progetto connessi alla rete vengono conservati; quelli accesi senza rete
+vengono ricreati conservando i volumi. Servono Python 3, `lsof` e `ss` (iproute2).
+Per processi appartenenti ad altri utenti può essere richiesta la password sudo.
+
+Per HTTPS servono `mkcert`, `openssl` e `libnss3-tools` (su Ubuntu:
+`sudo apt install mkcert libnss3-tools openssl lsof iproute2`). L'avvio genera
+certificati locali quando mancano o scadono entro 30 giorni, conserva una copia
+dei precedenti in `docker/ssl/backups/` e ricarica Nginx. La CA locale viene
+registrata nei profili NSS dei browser, incluso Firefox Snap: dopo la prima
+generazione occorre riavviare il browser. Certificati e chiavi restano esclusi
+da Git. Per rendere attendibile la CA anche agli strumenti che usano il trust
+store di sistema, eseguire `mkcert -install` con accesso sudo.
 
 ### Comandi Backend
 

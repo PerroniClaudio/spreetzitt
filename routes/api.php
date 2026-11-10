@@ -142,6 +142,8 @@ Route::middleware(['auth:sanctum', 'admin.or.company'])->group(function () {
     Route::get('/ticket/file/{id}/temporary_url', [App\Http\Controllers\TicketController::class, 'generatedSignedUrlForFile']);
     Route::post('/ticket/file/{id}/delete', [App\Http\Controllers\TicketController::class, 'deleteFile']);
     Route::post('/ticket/file/{id}/recover', [App\Http\Controllers\TicketController::class, 'recoverFile']);
+    Route::get('/ticket-admin-activity', [App\Http\Controllers\AdminTicketActivityController::class, 'index']);
+    Route::get('/ticket/{ticket}/processing-time-history', App\Http\Controllers\TicketProcessingTimeHistoryController::class);
     Route::get('/ticket-admin', [App\Http\Controllers\TicketController::class, 'adminGroupsTickets']);
     Route::get('/ticket-admin-billing', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingTickets']);
     Route::get('/ticket-admin-billing-counters', [App\Http\Controllers\TicketController::class, 'adminGroupsBillingCounters']);

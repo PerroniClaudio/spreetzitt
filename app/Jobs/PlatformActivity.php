@@ -28,13 +28,13 @@ class PlatformActivity implements ShouldQueue
     public function handle(): void
     {
         //
-        $tickets = Ticket::where('status', '!=', 5)->with('company', 'ticketType')->orderBy('created_at', 'desc')->get();
+        $tickets = Ticket::where('status', '!=', 7)->with('company', 'ticketType')->orderBy('created_at', 'desc')->get();
         $supportMail = env('MAIL_TO_ADDRESS');
         Mail::to($supportMail)->send(new \App\Mail\PlatformActivityMail($tickets));
 
         // Hardcodate
         Mail::to('p.massafra@ifortech.com')->send(new \App\Mail\PlatformActivityMail($tickets));
-        Mail::to('a.fumagalli@ifortech.com')->send(new \App\Mail\PlatformActivityMail($tickets));
+        // Mail::to('a.fumagalli@ifortech.com')->send(new \App\Mail\PlatformActivityMail($tickets));
         Mail::to('e.salsano@ifortech.com')->send(new \App\Mail\PlatformActivityMail($tickets));
         Mail::to('c.perroni@ifortech.com')->send(new \App\Mail\PlatformActivityMail($tickets));
     }
