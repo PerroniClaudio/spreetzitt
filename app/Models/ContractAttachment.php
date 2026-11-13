@@ -113,7 +113,7 @@ class ContractAttachment extends Model
             'ResponseContentDisposition' => 'attachment; filename="'.$this->downloadFilename().'"',
         ];
 
-        return FileUploadController::generateSignedUrlForFile($this->file_path, $minutesValid, $options);
+        return FileUploadController::generateSignedUrlForFile($this->file_path, $minutesValid, $options, false);
     }
 
     /**
@@ -125,7 +125,7 @@ class ContractAttachment extends Model
             'ResponseContentDisposition' => 'inline; filename="'.$this->downloadFilename().'"',
         ];
 
-        return FileUploadController::generateSignedUrlForFile($this->file_path, $minutesValid, $options);
+        return FileUploadController::generateSignedUrlForFile($this->file_path, $minutesValid, $options, false);
     }
 
     /**

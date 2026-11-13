@@ -49,7 +49,7 @@ class FileUploadController extends Controller
      * Genera un URL temporaneo per scaricare un file
      * basandosi sul disco configurato
      */
-    public static function generateSignedUrlForFile(string $filePath, int $minutesValid = 65, array $options = []): string
+    public static function generateSignedUrlForFile(string $filePath, int $minutesValid = 65, array $options = [], bool $addStoragePrefix = true): string
     {
         $disk = self::getStorageDisk();
 
@@ -64,7 +64,9 @@ class FileUploadController extends Controller
             /**
              * @disregard Intelephense non rileva il metodo temporaryUrl
              */
-            return Storage::disk($disk)->temporaryUrl(self::storagePathPrefix().$filePath, now()->addMinutes($minutesValid), $options);
+            $path = ($addStoragePrefix ? self::storagePathPrefix() : '').$filePath;
+
+            return Storage::disk($disk)->temporaryUrl($path, now()->addMinutes($minutesValid), $options);
         } else {
             // Per il disco locale, ritorna il path diretto
             // In produzione potresti voler implementare una logica diversa
