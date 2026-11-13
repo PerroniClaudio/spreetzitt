@@ -1,3 +1,10 @@
+# CalculateTicketSLA: bozza archiviata
+
+Questa è una bozza non testata e non attiva del comando Artisan `tickets:calculate-sla`. È conservata come documentazione e non viene caricata da Composer o Laravel.
+
+Per ripristinarla, copiare il codice PHP seguente in `app/Console/Commands/CalculateTicketSLA.php`, mantenendo il namespace `App\Console\Commands`. Laravel potrà così rilevare il comando; prima di eseguirlo, verificare le regole SLA e le unità di misura, i campi del database e la compatibilità con la logica esistente, quindi aggiungere test adeguati. Il ripristino non lo schedula automaticamente.
+
+```php
 <?php
 
 // MAI PROVATO. DA MODIFICARE E TESTARE.
@@ -430,3 +437,4 @@ class CalculateTicketSLA extends Command
         return max(0, $totalWorkingTime - $totalSpecialTime);
     }
 }
+```
